@@ -54,6 +54,9 @@ class AINewsAutoPoster {
      */
     public function init() {
         load_plugin_textdomain('ai-news-autoposter', false, dirname(plugin_basename(__FILE__)) . '/languages/');
+        
+        // 動的Cronフックを登録
+        $this->register_dynamic_cron_hooks();
     }
     
     /**
@@ -273,8 +276,11 @@ class AINewsAutoPoster {
             update_option('ai_news_autoposter_settings', $settings);
             
             // Cronスケジュール更新
-            wp_clear_scheduled_hook('ai_news_autoposter_daily_cron');
+            $this->clear_all_cron_schedules();
             $this->setup_multiple_schedules($settings['schedule_times']);
+            
+            // 設定確認ログ
+            $this->log('info', 'Cronスケジュールを更新しました。開始時刻: ' . $settings['schedule_time'] . ', 最大投稿数: ' . $settings['max_posts_per_day']);
             
             echo '<div class="notice notice-success"><p>設定を保存しました。</p></div>';
         }
@@ -679,10 +685,21 @@ class AINewsAutoPoster {
             wp_die('Security check failed');
         }
         
-        // 実際のCron処理を実行
-        $this->execute_daily_post_generation();
-        
-        wp_send_json_success('Cron実行テストが完了しました。ログを確認してください。');
+        try {
+            // タイムアウトを延長
+            set_time_limit(300); // 5分
+            
+            $this->log('info', 'Cron実行テストを開始しました。');
+            
+            // 実際のCron処理を実行
+            $this->execute_daily_post_generation();
+            
+            wp_send_json_success('Cron実行テストが完了しました。ログを確認してください。');
+            
+        } catch (Exception $e) {
+            $this->log('error', 'Cron実行テストでエラーが発生: ' . $e->getMessage());
+            wp_send_json_error('Cron実行テストでエラーが発生しました: ' . $e->getMessage());
+        }
     }
     
     /**
@@ -700,6 +717,8 @@ class AINewsAutoPoster {
      * 毎日のCron実行
      */
     public function execute_daily_post_generation() {
+        $this->log('info', 'Cron実行を開始しました。現在時刻: ' . current_time('Y-m-d H:i:s'));
+        
         $settings = get_option('ai_news_autoposter_settings', array());
         
         if (!$settings['auto_publish']) {
@@ -710,11 +729,14 @@ class AINewsAutoPoster {
         $posts_today = $this->get_posts_count_today();
         $max_posts = $settings['max_posts_per_day'] ?? 1;
         
+        $this->log('info', "本日の投稿数: {$posts_today}, 最大投稿数: {$max_posts}");
+        
         if ($posts_today >= $max_posts) {
             $this->log('info', '本日の投稿上限に達しているため、スキップしました。');
             return;
         }
         
+        $this->log('info', '記事生成を開始します...');
         $result = $this->generate_and_publish_article();
         
         if (is_wp_error($result)) {
@@ -1314,6 +1336,23 @@ class AINewsAutoPoster {
     }
     
     /**
+     * 動的Cronフックを登録
+     */
+    private function register_dynamic_cron_hooks() {
+        $settings = get_option('ai_news_autoposter_settings', array());
+        $start_time = $settings['schedule_time'] ?? '06:00';
+        $max_posts = $settings['max_posts_per_day'] ?? 1;
+        $schedule_times = $this->generate_hourly_schedule($start_time, $max_posts);
+        
+        foreach ($schedule_times as $index => $time) {
+            $hook_name = 'ai_news_autoposter_daily_cron' . ($index > 0 ? '_' . $index : '');
+            if (!has_action($hook_name, array($this, 'execute_daily_post_generation'))) {
+                add_action($hook_name, array($this, 'execute_daily_post_generation'));
+            }
+        }
+    }
+    
+    /**
      * 1時間おきのスケジュールを生成
      */
     private function generate_hourly_schedule($start_time, $max_posts) {
@@ -1333,11 +1372,25 @@ class AINewsAutoPoster {
     }
     
     /**
+     * 全Cronスケジュールをクリア
+     */
+    private function clear_all_cron_schedules() {
+        // メインフックをクリア
+        wp_clear_scheduled_hook('ai_news_autoposter_daily_cron');
+        
+        // 追加フックもクリア（最大24個まで）
+        for ($i = 1; $i < 24; $i++) {
+            $hook_name = 'ai_news_autoposter_daily_cron_' . $i;
+            wp_clear_scheduled_hook($hook_name);
+        }
+    }
+    
+    /**
      * 複数スケジュールを設定
      */
     private function setup_multiple_schedules($schedule_times) {
         // 既存のスケジュールをクリア
-        wp_clear_scheduled_hook('ai_news_autoposter_daily_cron');
+        $this->clear_all_cron_schedules();
         
         foreach ($schedule_times as $index => $time) {
             if (empty($time)) continue;
@@ -1349,10 +1402,20 @@ class AINewsAutoPoster {
                 $timestamp += DAY_IN_SECONDS;
             }
             
-            wp_schedule_event($timestamp, 'daily', $hook_name);
+            $result = wp_schedule_event($timestamp, 'daily', $hook_name);
             
-            // 各スケジュールのフックを追加
-            add_action($hook_name, array($this, 'execute_daily_post_generation'));
+            // スケジュール設定ログ
+            $next_run = date('Y-m-d H:i:s', $timestamp);
+            if ($result === false) {
+                $this->log('error', "Cronスケジュール設定失敗: {$hook_name} ({$time})");
+            } else {
+                $this->log('info', "Cronスケジュール設定: {$hook_name} - 次回実行: {$next_run}");
+            }
+            
+            // 各スケジュールのフックを追加（動的フック登録）
+            if (!has_action($hook_name, array($this, 'execute_daily_post_generation'))) {
+                add_action($hook_name, array($this, 'execute_daily_post_generation'));
+            }
         }
     }
     
