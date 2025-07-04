@@ -1244,7 +1244,7 @@ class AINewsAutoPoster {
         
         return array(
             'title' => $title ?: '最新AIニュース: ' . date('Y年m月d日'),
-            'content' => trim($content),
+            'content' => $this->post_process_content(trim($content)),
             'tags' => array_filter($tags)
         );
     }
@@ -1278,11 +1278,15 @@ class AINewsAutoPoster {
         
         return array(
             'title' => $title ?: '最新AIニュース: ' . date('Y年m月d日'),
-            'content' => trim($content),
+            'content' => $this->post_process_content(trim($content)),
             'tags' => array_filter($tags)
         );
     }
-        
+    
+    /**
+     * 記事内容の後処理（免責事項追加など）
+     */
+    private function post_process_content($content) {
         // 免責事項を追加
         $settings = get_option('ai_news_autoposter_settings', array());
         $enable_disclaimer = $settings['enable_disclaimer'] ?? true;
@@ -1292,11 +1296,7 @@ class AINewsAutoPoster {
             $content = trim($content) . "\n\n<div style=\"margin-top: 20px; padding: 10px; background-color: #f0f0f0; border-left: 4px solid #ccc; font-size: 14px; color: #666;\">" . esc_html($disclaimer_text) . "</div>";
         }
         
-        return array(
-            'title' => $title ?: '最新AIニュース: ' . date('Y年m月d日'),
-            'content' => trim($content),
-            'tags' => array_filter($tags)
-        );
+        return trim($content);
     }
     
     /**
