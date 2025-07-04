@@ -958,74 +958,32 @@ class AINewsAutoPoster {
      */
     private function build_direct_article_prompt($settings) {
         $search_keywords = $settings['search_keywords'] ?? 'AI ニュース, 人工知能, 機械学習, ChatGPT, OpenAI';
-        $focus_keyword = $settings['seo_focus_keyword'] ?? 'AI ニュース';
-        $writing_style = $settings['writing_style'] ?? '夏目漱石';
         $selected_languages = $settings['news_languages'] ?? array('japanese', 'english');
-        $output_language = $settings['output_language'] ?? 'japanese';
         $word_count = $settings['article_word_count'] ?? 500;
+        $writing_style = $settings['writing_style'] ?? '夏目漱石';
         
-        // 出力言語の指定
-        $language_instructions = array(
-            'japanese' => '日本語で',
-            'english' => 'in English',
-            'chinese' => '用中文'
-        );
+        // 言語指定を作成
+        $language_names = array_map(array($this, 'get_language_name'), $selected_languages);
+        $language_text = implode('と', $language_names);
         
-        $current_date = current_time('Y年m月d日');
-        $current_time = current_time('H:i');
+        $prompt = "【{$language_text}】のニュースから、【{$search_keywords}】に関する最新のニュースを送ってください。5本ぐらいが理想です。\n";
+        $prompt .= "ニュースの背景や文脈を簡単にまとめ、かつ、上記の最新ニュースのリンク先を参考情報元として記事のタイトルとリンクを記載し、なぜ今、これが起こっているのか、という背景情報を踏まえて、今後どのような影響をあたえるのか、推察もしてください。\n";
+        $prompt .= "全部で【{$word_count}文字】程度にまとめてください。充実した内容で。\n";
+        $prompt .= "文体は{$writing_style}風でお願いします。\n\n";
         
-        $prompt = "あなたは優秀なAIジャーナリストです。以下の指示に従って最新のニュース記事を作成してください。\n\n";
-        
-        $prompt .= "## 指示内容\n";
-        $prompt .= "以下の手順で記事を作成してください：\n\n";
-        $prompt .= "1. まず、「{$search_keywords}」に関して参考にする情報源を列挙してください\n";
-        $prompt .= "2. 次に、それらの情報源から得られる最新の技術動向・市場動向を整理してください\n";
-        $prompt .= "3. 最後に、整理した情報を基に{$writing_style}風の文体で記事を{$language_instructions[$output_language]}作成してください\n\n";
-        
-        $prompt .= "## 記事の要件\n";
-        $prompt .= "- 文字数: 約{$word_count}文字\n";
-        $prompt .= "- 文体: {$writing_style}風の文学的表現\n";
-        $prompt .= "- 言語: {$language_instructions[$output_language]}\n";
-        $prompt .= "- SEOキーワード「{$focus_keyword}」を自然に含める\n";
-        $prompt .= "- 見出し（H2、H3タグ）を適切に使用\n";
-        $prompt .= "- 読者にとって有益で興味深い内容\n";
-        $prompt .= "- 客観的で信頼性の高い情報\n\n";
-        
-        if (count($selected_languages) > 1) {
-            $language_names = array_map(array($this, 'get_language_name'), $selected_languages);
-            $prompt .= "- 対象地域: " . implode('、', $language_names) . "からの情報を統合\n";
-            $prompt .= "- グローバルな視点での分析\n";
-            $prompt .= "- 各地域の動向の違いや共通点に言及\n\n";
-        }
-        
-        $prompt .= "## 重要な注意事項\n";
-        $prompt .= "- 知識ベースから最新の技術動向や業界トレンドを活用してください\n";
-        $prompt .= "- 事実に基づいた信頼性の高い情報のみを使用してください\n";
-        $prompt .= "- 現在日時: {$current_date} {$current_time}\n\n";
-        
-        $prompt .= "## 参考情報源の重要な指示\n";
-        $prompt .= "- **必須**: 参考情報源は必ず以下の正確な形式で記載してください\n";
-        $prompt .= "- **形式**: <a href=\"サイトURL\" target=\"_blank\">「具体的な記事タイトル」(YYYY年MM月DD日) - メディア名</a>\n";
-        $prompt .= "- **禁止**: メディア名だけの記載は絶対に禁止です\n";
-        $prompt .= "- **必須**: 必ず具体的な記事タイトルと日付を含めてください\n";
-        $prompt .= "- **例**: <a href=\"https://www.nikkei.com/\" target=\"_blank\">「ChatGPT-4、企業向け新機能を発表」(2024年1月15日) - 日経新聞</a>\n\n";
-        
-        $prompt .= "## 出力形式\n";
-        $prompt .= "以下の形式で段階的に回答してください：\n\n";
-        $prompt .= "SOURCES: [参考情報源の名前をカンマ区切りで列挙]\n";
-        $prompt .= "[例: TechCrunch, MIT Technology Review, 日経ビジネス]\n\n";
+        $prompt .= "以下の構造で出力してください：\n\n";
         $prompt .= "TITLE: [記事タイトル]\n";
         $prompt .= "TAGS: [関連タグ,カンマ区切り]\n";
         $prompt .= "CONTENT:\n";
-        $prompt .= "[記事本文（HTMLタグ使用可、見出しはH2・H3タグを使用）]\n\n";
+        $prompt .= "[リード文]\n";
+        $prompt .= "<h2>[見出し1]</h2>\n";
+        $prompt .= "[本文1（適時、参照元リンクを本文中にいれてください）]\n";
+        $prompt .= "<h2>[見出し2]</h2>\n";
+        $prompt .= "[本文2（適時、参照元リンクを本文中にいれてください）]\n";
+        $prompt .= "...\n\n";
         $prompt .= "## 参考情報源\n";
-        $prompt .= "**重要**: 以下の形式を厳守してください。メディア名だけの記載は禁止です。\n";
-        $prompt .= "**必須形式**: <a href=\"サイトURL\" target=\"_blank\">「具体的な記事タイトル」(YYYY年MM月DD日) - メディア名</a>\n";
-        $prompt .= "**例1**: <a href=\"https://www.nikkei.com/\" target=\"_blank\">「ChatGPT-4、企業向け新機能を発表」(2024年1月10日) - 日経新聞</a>\n";
-        $prompt .= "**例2**: <a href=\"https://techcrunch.com/\" target=\"_blank\">\"OpenAI Announces Revolutionary AI Update\"(January 12, 2024) - TechCrunch</a>\n";
-        $prompt .= "**例3**: <a href=\"https://www.itmedia.co.jp/\" target=\"_blank\">「AI業界の最新動向レポート」(2024年1月8日) - ITmedia</a>\n\n";
+        $prompt .= "[参考にした記事のタイトルとリンクを記載してください。形式: <a href=\"URL\" target=\"_blank\">記事タイトル</a>]\n\n";
         
-        $prompt .= "**最重要**: 参考情報源は必ず「記事タイトル」+「日付」+「メディア名」の完全な形式で記載してください。メディア名だけの記載は絶対に禁止です。\n\n";
         $prompt .= "記事を作成してください。";
         
         return $prompt;
