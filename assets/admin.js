@@ -69,6 +69,9 @@
             
             // ダッシュボード統計更新
             this.updateDashboardStats();
+            
+            // スケジュール入力フィールドの初期化
+            this.initScheduleInputs();
         },
         
         createNotificationContainer: function() {
@@ -211,7 +214,6 @@
         
         validateSettings: function(e) {
             const apiKey = $('#claude_api_key').val().trim();
-            const scheduleTime = $('#schedule_time').val();
             const maxPosts = parseInt($('#max_posts_per_day').val());
             
             let errors = [];
@@ -228,8 +230,17 @@
                 errors.push('1日の最大投稿数は1-24の範囲で設定してください。');
             }
             
-            // 時刻検証
-            if (!scheduleTime) {
+            // 時刻検証 - schedule_timesの最初の値をチェック
+            const scheduleTimesInputs = $('input[name="schedule_times[]"]');
+            let hasValidTime = false;
+            scheduleTimesInputs.each(function() {
+                if ($(this).val() && $(this).is(':visible')) {
+                    hasValidTime = true;
+                    return false; // break
+                }
+            });
+            
+            if (!hasValidTime) {
                 errors.push('投稿時刻を設定してください。');
             }
             
@@ -633,8 +644,18 @@
             });
         },
         
+        initScheduleInputs: function() {
+            // ページロード時に現在の最大投稿数に応じてフィールドを初期化
+            const maxPosts = parseInt($('input[name="max_posts_per_day"]').val()) || 1;
+            this.updateScheduleInputsForCount(maxPosts);
+        },
+        
         updateScheduleInputs: function() {
             const maxPosts = parseInt($(this).val()) || 1;
+            AINewsAutoPoster.updateScheduleInputsForCount(maxPosts);
+        },
+        
+        updateScheduleInputsForCount: function(maxPosts) {
             const $container = $('#schedule-times-container');
             const $rows = $container.find('.schedule-time-row');
             

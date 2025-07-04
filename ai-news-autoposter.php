@@ -311,10 +311,10 @@ class AINewsAutoPoster {
                                 $schedule_times = $settings['schedule_times'] ?? array('06:00');
                                 $max_posts = $settings['max_posts_per_day'] ?? 1;
                                 
+                                // 最大投稿数分の入力フィールドを生成
                                 for ($i = 0; $i < $max_posts; $i++) {
                                     $time_value = isset($schedule_times[$i]) ? $schedule_times[$i] : '';
-                                    $display_style = $i >= count($schedule_times) ? 'style="display:none;"' : '';
-                                    echo '<div class="schedule-time-row" ' . $display_style . '>';
+                                    echo '<div class="schedule-time-row">';
                                     echo '<label>投稿時刻 ' . ($i + 1) . ':</label> ';
                                     echo '<input type="time" name="schedule_times[]" value="' . esc_attr($time_value) . '" />';
                                     echo '</div>';
