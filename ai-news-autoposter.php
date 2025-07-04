@@ -1011,7 +1011,13 @@ class AINewsAutoPoster {
         $prompt .= "本文\n";
         $prompt .= "・・・\n";
         $prompt .= "---------------------------------\n";
-        $prompt .= "適時、参照元リンクを本文中にいれてください。\n";
+        $prompt .= "適時、参照元リンクを本文中にいれてください。\n\n";
+        
+        $prompt .= "**重要**: 記事の最後に必ず参考情報源セクションを含めてください：\n";
+        $prompt .= "## 参考情報源\n";
+        $prompt .= "- 実際のニュース記事のタイトルとリンクを記載\n";
+        $prompt .= "- 例: [OpenAI、Claude-4の新機能を発表](https://example.com/news/openai-claude4)\n";
+        $prompt .= "- 例: [Google AI研究チーム、新技術を開発](https://example.com/news/google-ai)\n\n";
         
         return $prompt;
     }
