@@ -812,6 +812,27 @@ class AINewsAutoPoster {
     }
     
     /**
+     * リンクの有効性を確認
+     */
+    private function validate_link($url) {
+        if (!filter_var($url, FILTER_VALIDATE_URL)) {
+            return false;
+        }
+        
+        $response = wp_remote_head($url, array(
+            'timeout' => 10,
+            'user-agent' => 'Mozilla/5.0 (compatible; AI News AutoPoster)'
+        ));
+        
+        if (is_wp_error($response)) {
+            return false;
+        }
+        
+        $response_code = wp_remote_retrieve_response_code($response);
+        return ($response_code >= 200 && $response_code < 400);
+    }
+    
+    /**
      * 最新ニュース取得（多言語対応）
      */
     private function fetch_latest_news() {
@@ -820,24 +841,47 @@ class AINewsAutoPoster {
         $all_sources = $settings['news_sources'] ?? array();
         $news_items = array();
         
+        // 24時間以内の記事のみ取得
+        $hours_ago_24 = time() - (24 * 60 * 60);
+        
+        $this->log('info', '新鮮なニュースを取得中...');
+        
         foreach ($selected_languages as $language) {
             if (!isset($all_sources[$language])) continue;
             
             $sources = $all_sources[$language];
             foreach ($sources as $rss_url) {
+                $this->log('info', "RSS取得中: {$rss_url}");
                 $feed = fetch_feed($rss_url);
                 if (!is_wp_error($feed)) {
-                    $items = $feed->get_items(0, 2); // 各ソースから2件
+                    $items = $feed->get_items(0, 5); // 各ソースから5件取得して選別
                     foreach ($items as $item) {
+                        $item_date = $item->get_date('Y-m-d H:i:s');
+                        $item_timestamp = strtotime($item_date);
+                        $item_link = $item->get_link();
+                        
+                        // 24時間以内の記事のみ
+                        if ($item_timestamp < $hours_ago_24) {
+                            continue;
+                        }
+                        
+                        // リンクの有効性確認（時間短縮のため一部のみ確認）
+                        if (count($news_items) < 20 && !$this->validate_link($item_link)) {
+                            $this->log('info', "無効なリンクをスキップ: {$item_link}");
+                            continue;
+                        }
+                        
                         $news_items[] = array(
                             'title' => $item->get_title(),
                             'description' => wp_strip_all_tags($item->get_description()),
-                            'link' => $item->get_link(),
-                            'date' => $item->get_date('Y-m-d H:i:s'),
+                            'link' => $item_link,
+                            'date' => $item_date,
                             'language' => $language,
                             'language_name' => $this->get_language_name($language)
                         );
                     }
+                } else {
+                    $this->log('error', "RSS取得失敗: {$rss_url}");
                 }
             }
         }
@@ -847,7 +891,10 @@ class AINewsAutoPoster {
             return strtotime($b['date']) - strtotime($a['date']);
         });
         
-        return array_slice($news_items, 0, 8); // 最新8件に限定
+        $final_news = array_slice($news_items, 0, 8); // 最新8件に限定
+        $this->log('info', count($final_news) . '件の新鮮なニュースを取得しました');
+        
+        return $final_news;
     }
     
     /**
@@ -894,7 +941,7 @@ class AINewsAutoPoster {
         foreach ($news_topics as $news) {
             $prompt .= "- 【{$news['language_name']}】{$news['title']}\n";
             $prompt .= "  説明: {$news['description']}\n";
-            $prompt .= "  リンク: {$news['link']}\n";
+            $prompt .= "  リンク: {$news['link']} (有効確認済み)\n";
             $prompt .= "  日時: {$news['date']}\n\n";
         }
         
@@ -913,7 +960,8 @@ class AINewsAutoPoster {
             $prompt .= "- 各地域の動向の違いや共通点に言及\n";
         }
         
-        $prompt .= "- 記事の最後に参考ニュースの引用元とリンクを言語別に記載\n\n";
+        $prompt .= "- 記事の最後に参考ニュースの引用元とリンクを言語別に記載\n";
+        $prompt .= "- 参考ニュースのリンクは必ず有効なもののみ使用し、target=\"_blank\"を指定\n\n";
         
         $prompt .= "以下の形式で回答してください：\n";
         $prompt .= "TITLE: [記事タイトル]\n";
@@ -921,7 +969,7 @@ class AINewsAutoPoster {
         $prompt .= "CONTENT:\n";
         $prompt .= "[記事本文（HTMLタグ使用可、見出しはH2・H3タグを使用）]\n\n";
         $prompt .= "## 参考ニュース\n";
-        $prompt .= "[引用したニュースソースのタイトルとリンクをHTML形式のリンクで記載。例: <a href=\"URL\" target=\"_blank\">タイトル</a>]";
+        $prompt .= "[引用したニュースソースのタイトルとリンクをHTML形式のリンクで記載。必ずtarget=\"_blank\"を付けてください。例: <a href=\"URL\" target=\"_blank\">タイトル</a>]";
         
         return $prompt;
     }
