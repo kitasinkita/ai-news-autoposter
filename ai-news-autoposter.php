@@ -5,6 +5,7 @@
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。
  * Version: 1.0.0
  * Author: kitasinkita
+ * GitHub Plugin URI: kitasinkita/ai-news-autoposter
  * License: GPL v2 or later
  * Text Domain: ai-news-autoposter
  */
