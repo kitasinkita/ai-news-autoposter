@@ -1003,11 +1003,12 @@ class AINewsAutoPoster {
         $prompt .= "- 事実に基づいた信頼性の高い情報のみを使用してください\n";
         $prompt .= "- 現在日時: {$current_date} {$current_time}\n\n";
         
-        $prompt .= "## 参考情報源の指示\n";
-        $prompt .= "- 実際に参考にした情報源を具体的に記載してください\n";
-        $prompt .= "- 以下の形式で記載：「記事タイトル」(発行日) - 情報源名\n";
-        $prompt .= "- リンクは情報源のトップページを使用し、target=\"_blank\"を付けてください\n";
-        $prompt .= "- 例：<a href=\"https://www.nikkei.com/\" target=\"_blank\">「AI技術の最新動向について」(2024年1月15日) - 日経新聞</a>\n\n";
+        $prompt .= "## 参考情報源の重要な指示\n";
+        $prompt .= "- **必須**: 参考情報源は必ず以下の正確な形式で記載してください\n";
+        $prompt .= "- **形式**: <a href=\"サイトURL\" target=\"_blank\">「具体的な記事タイトル」(YYYY年MM月DD日) - メディア名</a>\n";
+        $prompt .= "- **禁止**: メディア名だけの記載は絶対に禁止です\n";
+        $prompt .= "- **必須**: 必ず具体的な記事タイトルと日付を含めてください\n";
+        $prompt .= "- **例**: <a href=\"https://www.nikkei.com/\" target=\"_blank\">「ChatGPT-4、企業向け新機能を発表」(2024年1月15日) - 日経新聞</a>\n\n";
         
         $prompt .= "## 出力形式\n";
         $prompt .= "以下の形式で段階的に回答してください：\n\n";
@@ -1018,10 +1019,13 @@ class AINewsAutoPoster {
         $prompt .= "CONTENT:\n";
         $prompt .= "[記事本文（HTMLタグ使用可、見出しはH2・H3タグを使用）]\n\n";
         $prompt .= "## 参考情報源\n";
-        $prompt .= "[実際に参考にした記事を具体的に記載（記事タイトル・発行日・情報源名）]\n";
-        $prompt .= "[例: <a href=\"https://www.nikkei.com/\" target=\"_blank\">「ChatGPT-4の新機能発表」(2024年1月10日) - 日経新聞</a>]\n";
-        $prompt .= "[例: <a href=\"https://techcrunch.com/\" target=\"_blank\">\"OpenAI Launches New AI Model\"(Jan 12, 2024) - TechCrunch</a>]\n\n";
+        $prompt .= "**重要**: 以下の形式を厳守してください。メディア名だけの記載は禁止です。\n";
+        $prompt .= "**必須形式**: <a href=\"サイトURL\" target=\"_blank\">「具体的な記事タイトル」(YYYY年MM月DD日) - メディア名</a>\n";
+        $prompt .= "**例1**: <a href=\"https://www.nikkei.com/\" target=\"_blank\">「ChatGPT-4、企業向け新機能を発表」(2024年1月10日) - 日経新聞</a>\n";
+        $prompt .= "**例2**: <a href=\"https://techcrunch.com/\" target=\"_blank\">\"OpenAI Announces Revolutionary AI Update\"(January 12, 2024) - TechCrunch</a>\n";
+        $prompt .= "**例3**: <a href=\"https://www.itmedia.co.jp/\" target=\"_blank\">「AI業界の最新動向レポート」(2024年1月8日) - ITmedia</a>\n\n";
         
+        $prompt .= "**最重要**: 参考情報源は必ず「記事タイトル」+「日付」+「メディア名」の完全な形式で記載してください。メディア名だけの記載は絶対に禁止です。\n\n";
         $prompt .= "記事を作成してください。";
         
         return $prompt;
