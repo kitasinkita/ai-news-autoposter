@@ -406,7 +406,7 @@ class AINewsAutoPoster {
                         <th scope="row">文体スタイル</th>
                         <td>
                             <input type="text" name="writing_style" value="<?php echo esc_attr($settings['writing_style'] ?? '夏目漱石'); ?>" class="regular-text ai-news-autosave" />
-                            <p class="ai-news-form-description">記事の文体スタイルを指定してください（例：夏目漱石、村上春樹、新聞記事風など）。</p>
+                            <p class="ai-news-form-description">記事の文体スタイルを指定してください（例：夏目漱石、森鴎外、新聞記事風など）。</p>
                         </td>
                     </tr>
                     

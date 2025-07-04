@@ -1,47 +1,50 @@
 # AI News AutoPoster
 
-🤖 **Claude AIを使用してAIニュースを自動生成・投稿するWordPressプラグイン**
+🤖 **Claude Sonnet 4を使用してAIニュースを自動生成・投稿するWordPressプラグイン**
 
-[![WordPress](https://img.shields.io/badge/WordPress-5.8+-blue.svg)](https://wordpress.org)
+[![WordPress](https://img.shields.io/badge/WordPress-5.0+-blue.svg)](https://wordpress.org)
 [![PHP](https://img.shields.io/badge/PHP-7.4+-purple.svg)](https://php.net)
 [![License](https://img.shields.io/badge/License-GPL%20v2-green.svg)](LICENSE)
-[![Claude AI](https://img.shields.io/badge/AI-Claude%203-orange.svg)](https://anthropic.com)
+[![Claude AI](https://img.shields.io/badge/AI-Claude%20Sonnet%204-orange.svg)](https://anthropic.com)
+[![Version](https://img.shields.io/badge/Version-1.0.4-green.svg)](https://github.com/kitasinkita/ai-news-autoposter/releases)
 
 ## 📖 概要
 
-AI News AutoPosterは、Anthropic Claude AIを活用して最新のAIニュースを自動収集・生成し、WordPressサイトに定期投稿する包括的なプラグインです。村上春樹風の文学的な文体で、高品質なAI記事を毎日自動生成します。
+AI News AutoPosterは、最新の**Claude Sonnet 4**を活用してAI関連ニュースを自動生成・投稿するWordPressプラグインです。RSS依存を排除し、Claudeの知識ベースを活用して高品質な記事を1時間間隔で自動投稿します。多言語対応、カスタムプロンプト、SEO最適化機能を備えた完全自動システムです。
 
 ## ✨ 主な機能
 
 ### 🤖 AI記事自動生成
-- **Claude 3 Sonnet** による高品質記事生成
-- **村上春樹風文体** での文学的表現
-- **複数RSSソース** からのニュース自動収集
-- **自動タグ・カテゴリ** 設定
+- **Claude Sonnet 4** による最新AI技術活用
+- **多言語対応** (日本語・英語・中国語)
+- **RSS不要** - Claudeの内蔵知識ベース活用
+- **カスタムプロンプト** 対応
+- **自動参考リンク** 生成とクリック可能化
 
-### ⏰ 高度なスケジューリング
-- **毎日指定時刻** での自動投稿
-- **投稿数制限** (1日最大24記事)
-- **Cronジョブ** による確実な実行
-- **手動実行・テスト** 機能
+### ⏰ 完全自動スケジューリング
+- **1時間間隔** 自動投稿システム
+- **開始時刻指定** + 最大投稿数設定
+- **WordPress Cron** による確実な実行
+- **手動実行・テスト** 機能完備
 
-### 🚀 SEO最適化
-- **フォーカスキーワード** 自動挿入
-- **メタディスクリプション** 自動生成
+### 🚀 SEO・コンテンツ最適化
+- **カスタマイズ可能な文字数** (デフォルト500文字)
+- **カテゴリ・タグ** 自動設定
 - **Yoast SEO / RankMath** 対応
-- **アイキャッチ画像** 自動生成
+- **プレースホルダー画像** 自動生成
+- **免責事項** 自動追加機能
 
 ### 📊 包括的な管理機能
 - **リアルタイム統計** ダッシュボード
-- **詳細ログ機能**
+- **詳細ログ機能** とエラー追跡
 - **API接続状況** 監視
-- **記事生成状況** 追跡
+- **Cron実行テスト** 機能
 
-### 🔧 開発者向け機能
-- **REST API** エンドポイント
-- **ウィジェット・ショートコード**
-- **カスタムフック・フィルター**
-- **多言語対応**
+### 🌐 多言語・カスタマイズ機能
+- **ニュース収集言語** 選択 (日本語・英語・中国語)
+- **出力言語** カスタマイズ
+- **文体・スタイル** 設定 (デフォルト：夏目漱石風)
+- **カスタムプロンプト** 対応
 
 ## 🚀 クイックスタート
 
@@ -50,10 +53,10 @@ AI News AutoPosterは、Anthropic Claude AIを活用して最新のAIニュー�
 ```bash
 # WordPressプラグインディレクトリに配置
 cd /wp-content/plugins/
-git clone https://github.com/YOUR_USERNAME/ai-news-autoposter.git
+git clone https://github.com/kitasinkita/ai-news-autoposter.git
 ```
 
-または[リリースページ](https://github.com/YOUR_USERNAME/ai-news-autoposter/releases)からZIPをダウンロード
+または[リリースページ](https://github.com/kitasinkita/ai-news-autoposter/releases)からZIPをダウンロード
 
 ### 2. 有効化
 
@@ -69,10 +72,12 @@ WordPress管理画面の「プラグイン」でAI News AutoPosterを有効化
 
 ```
 ✅ 自動投稿: 有効
-✅ 投稿時刻: 06:00
-✅ 投稿数: 1日1記事
-✅ カテゴリ: 任意選択
-✅ SEOキーワード: AI ニュース
+✅ 開始時刻: 06:00
+✅ 最大投稿数: 1時間間隔で自動調整
+✅ ニュース収集言語: 日本語・英語
+✅ 出力言語: 日本語
+✅ 文体: 夏目漱石風
+✅ 記事文字数: 500文字
 ```
 
 ### 5. 動作確認
@@ -81,25 +86,25 @@ WordPress管理画面の「プラグイン」でAI News AutoPosterを有効化
 
 ## 📋 システム要件
 
-- **WordPress**: 5.8以上
+- **WordPress**: 5.0以上 (WordPress 6.4まで対応確認済み)
 - **PHP**: 7.4以上  
-- **MySQL**: 5.7以上
-- **Claude API**: Anthropicアカウント必須
+- **Claude API**: Anthropicアカウント必須 (Sonnet 4対応)
 - **メモリ**: 最低256MB推奨
+- **ネットワーク**: 安定したインターネット接続
 
 ## 💰 費用
 
 ### プラグイン
 - **無料** (GPL v2ライセンス)
 
-### Claude API利用料
+### Claude Sonnet 4 API利用料
 - **入力**: $3/百万トークン
 - **出力**: $15/百万トークン
 
-### 月間コスト例
-- **1日1記事**: ~$5
-- **1日3記事**: ~$15
-- **1日10記事**: ~$50
+### 月間コスト例（1時間間隔投稿）
+- **1日24記事**: ~$120-150
+- **12時間運用**: ~$60-75
+- **6時間運用**: ~$30-40
 
 ## 🎯 使用方法
 
@@ -117,16 +122,19 @@ WordPress管理画面の「プラグイン」でAI News AutoPosterを有効化
 
 「外観」→「ウィジェット」→「AI News: 最新記事」を追加
 
-### REST API
+### 管理機能
 
-```bash
-# 記事生成
-curl -X POST https://yoursite.com/wp-json/ai-news-autoposter/v1/generate \
-  -H "X-WP-Nonce: YOUR_NONCE"
+**ダッシュボード統計**
+- 今日の投稿数
+- 総投稿数  
+- 最終実行時刻
+- 次回実行予定
 
-# ステータス確認  
-curl https://yoursite.com/wp-json/ai-news-autoposter/v1/status
-```
+**手動操作**
+- API接続テスト
+- テスト記事生成
+- 今すぐ投稿
+- Cron実行テスト
 
 ## 🔧 カスタマイズ
 
@@ -149,13 +157,16 @@ add_filter('ai_news_autoposter_prompt', function($prompt, $news_topics, $setting
 }, 10, 3);
 ```
 
-### 設定カスタマイズ
+### 詳細設定
 
-```php
-// wp-config.phpに追加
-define('AI_NEWS_AUTOPOSTER_DEBUG', true);
-define('AI_NEWS_AUTOPOSTER_MAX_RETRIES', 3);
-```
+**プロンプトのカスタマイズ**
+- カスタムプロンプトで記事の方向性を調整
+- プレースホルダー (`{keyword}`, `{language}`, `{style}`) 対応
+- 2025年の最新情報を重視する設定
+
+**免責事項の管理**
+- カスタマイズ可能な免責事項テキスト
+- 自動追加の有効/無効切り替え
 
 ## 📁 プロジェクト構成
 
@@ -191,15 +202,16 @@ ai-news-autoposter/
 
 ### バグ報告
 
-[Issues](https://github.com/YOUR_USERNAME/ai-news-autoposter/issues)で以下を含めて報告：
+[Issues](https://github.com/kitasinkita/ai-news-autoposter/issues)で以下を含めて報告：
 
 - 再現手順の詳細
-- エラーログ
+- エラーログ（ログ機能でエクスポート可能）
 - 環境情報（WordPress/PHP/プラグインバージョン）
+- Claude API接続状況
 
 ### 機能要望
 
-[Issues](https://github.com/YOUR_USERNAME/ai-news-autoposter/issues)で提案：
+[Issues](https://github.com/kitasinkita/ai-news-autoposter/issues)で提案：
 
 - 機能の説明
 - 使用ケース
@@ -218,40 +230,39 @@ ai-news-autoposter/
 
 **API接続エラー**
 ```bash
-原因: APIキー設定ミス
-解決: Anthropicコンソールで有効なAPIキーを再取得
+原因: APIキー設定ミス、または Claude Sonnet 4 モデルへのアクセス権限
+解決: Anthropicコンソールで有効なAPIキーを再取得し、モデルアクセスを確認
 ```
 
 **記事が生成されない**
 ```bash
-原因: Cron設定問題
-解決: wp-config.phpでWP_CRON設定を確認
+原因: Cron設定問題、またはネットワークタイムアウト
+解決: Cron実行テストボタンで診断、タイムアウト設定を6分に調整済み
 ```
 
-**管理画面エラー**
+**ネットワークエラー**
 ```bash
-原因: ファイル権限問題
-解決: プラグインファイルの権限を644に設定
+原因: 長時間のAPI処理によるタイムアウト
+解決: プログレス表示機能でユーザーへの待機時間案内、リトライ機能
 ```
 
 詳細は[トラブルシューティングガイド](docs/troubleshooting.md)を参照
 
-## 🔄 ロードマップ
+## 🔄 バージョン履歴
 
-### v1.1.0 (予定)
-- [ ] OpenAI GPT対応
-- [ ] 多言語記事生成
-- [ ] 高度な画像生成
+### v1.0.4 (現在) ✅
+- ✅ Claude Sonnet 4 モデル対応
+- ✅ 1時間間隔自動投稿システム
+- ✅ 多言語ニュース収集 (日本語・英語・中国語)
+- ✅ RSS依存排除 - Claude知識ベース活用
+- ✅ カスタムプロンプト機能
+- ✅ ネットワークタイムアウト対策 (360秒)
+- ✅ 参考リンク自動生成・クリック可能化
 
-### v1.2.0 (予定)  
+### 今後の予定
+- [ ] 外部ニュースAPI統合（複雑性を避け現在見送り中）
 - [ ] SNS自動投稿機能
-- [ ] カスタム投稿タイプ対応
-- [ ] 詳細分析ダッシュボード
-
-### v2.0.0 (予定)
-- [ ] マルチサイト対応
-- [ ] エンタープライズ機能
-- [ ] 高度なワークフロー
+- [ ] より高度な画像生成オプション
 
 ## 📄 ライセンス
 
@@ -259,20 +270,19 @@ GPL v2 or later - 詳細は[LICENSE](LICENSE)ファイルを参照
 
 ## 👥 貢献者
 
-- [@YOUR_USERNAME](https://github.com/YOUR_USERNAME) - 開発者
+- [@kitasinkita](https://github.com/kitasinkita) - 開発者
 
 ## 🙏 謝辞
 
-- [Anthropic](https://anthropic.com) - Claude AI提供
+- [Anthropic](https://anthropic.com) - Claude Sonnet 4 AI提供
 - [WordPress](https://wordpress.org) - 素晴らしいCMSプラットフォーム
-- 村上春樹氏 - 文体インスピレーション
+- 夏目漱石 - デフォルト文体インスピレーション
 
 ## 📞 サポート
 
-- 📧 **Email**: support@example.com
-- 🐛 **Issues**: [GitHub Issues](https://github.com/YOUR_USERNAME/ai-news-autoposter/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/YOUR_USERNAME/ai-news-autoposter/discussions)
-- 📖 **WordPress.org**: [サポートフォーラム](https://wordpress.org/support/plugin/ai-news-autoposter/)
+- 🐛 **Issues**: [GitHub Issues](https://github.com/kitasinkita/ai-news-autoposter/issues)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/kitasinkita/ai-news-autoposter/discussions)
+- 📖 **リリース**: [GitHub Releases](https://github.com/kitasinkita/ai-news-autoposter/releases)
 
 ---
 

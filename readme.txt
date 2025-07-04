@@ -1,31 +1,31 @@
 === AI News AutoPoster ===
-Contributors: yourname
+Contributors: kitasinkita
 Tags: ai, automation, news, claude, seo, auto-post, artificial intelligence
-Requires at least: 5.8
+Requires at least: 5.0
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.0.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Claude AIを使用してAIニュースを自動生成・投稿するプラグイン。完全自動化、スケジューリング、SEO最適化機能付き。
+Claude Sonnet 4を使用してAIニュースを自動生成・投稿するプラグイン。1時間間隔自動投稿、多言語対応、SEO最適化機能付き。
 
 == Description ==
 
-AI News AutoPosterは、Claude AIを使用して最新のAIニュースを自動収集・生成し、WordPressサイトに定期投稿する包括的なプラグインです。村上春樹風の文学的な文体で、高品質なAI記事を毎日自動生成します。
+AI News AutoPosterは、Claude Sonnet 4を使用して最新のAIニュースを自動生成・投稿するWordPressプラグインです。夏目漱石風の文学的な文体で、高品質なAI記事を1時間間隔で自動生成します。
 
 = 主な機能 =
 
 **🤖 AI記事自動生成**
-* Claude AI（Anthropic）による高品質記事生成
-* 村上春樹風の文学的文体対応
-* 複数のRSSソースからニュース収集
+* Claude Sonnet 4による高品質記事生成
+* 夏目漱石風の文学的文体対応
+* RSS不要 - Claude知識ベース活用
 * 自動タグ・カテゴリ設定
 
-**⏰ 高度なスケジューリング**
-* 毎日指定時刻の自動投稿
-* 投稿数制限（1日最大24記事）
-* Cronジョブによる確実な実行
+**⏰ 完全自動スケジューリング**
+* 1時間間隔自動投稿システム
+* 開始時刻指定 + 最大投稿数設定
+* WordPress Cronによる確実な実行
 * 手動実行・テスト機能
 
 **🚀 SEO最適化**
@@ -113,7 +113,7 @@ Yoast SEO、RankMath、All in One SEOに対応済みです。
 
 = 記事の品質はどうですか？ =
 
-Claude 3の高度な言語能力により、人間レベルの自然な記事を生成できます。
+Claude Sonnet 4の高度な言語能力により、人間レベルの自然な記事を生成できます。
 
 = サーバー要件はありますか？ =
 
@@ -125,7 +125,7 @@ Claude 3の高度な言語能力により、人間レベルの自然な記事を
 2. 設定画面 - API設定とスケジューリング
 3. ログ画面 - 詳細な実行ログ
 4. ウィジェット - サイドバーでの最新記事表示
-5. 生成された記事例 - 村上春樹風文体
+5. 生成された記事例 - 夏目漱石風文体
 
 == Changelog ==
 
@@ -152,7 +152,7 @@ Claude 3の高度な言語能力により、人間レベルの自然な記事を
 
 = サポート =
 
-* GitHub: https://github.com/yourname/ai-news-autoposter
+* GitHub: https://github.com/kitasinkita/ai-news-autoposter
 * サポートフォーラム: WordPress.org
 * メール: support@example.com
 
