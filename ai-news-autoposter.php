@@ -75,13 +75,24 @@ class AINewsAutoPoster {
                 'enable_tags' => true,
                 'search_keywords' => 'AI ニュース, 人工知能, 機械学習, ChatGPT, OpenAI',
                 'writing_style' => '夏目漱石',
+                'news_languages' => array('japanese', 'english'), // english, japanese, chinese
                 'image_generation_type' => 'placeholder', // placeholder, dalle, unsplash
                 'dalle_api_key' => '',
                 'unsplash_access_key' => '',
                 'news_sources' => array(
-                    'https://www.artificialintelligence-news.com/feed/',
-                    'https://ai.googleblog.com/feeds/posts/default',
-                    'https://openai.com/blog/rss/'
+                    'japanese' => array(
+                        'https://www.itmedia.co.jp/rss/2.0/news_ai.xml',
+                        'https://japan.zdnet.com/rss/news/'
+                    ),
+                    'english' => array(
+                        'https://www.artificialintelligence-news.com/feed/',
+                        'https://ai.googleblog.com/feeds/posts/default',
+                        'https://openai.com/blog/rss/'
+                    ),
+                    'chinese' => array(
+                        'https://www.36kr.com/feed',
+                        'https://www.ithome.com/rss/'
+                    )
                 )
             );
             update_option('ai_news_autoposter_settings', $default_settings);
@@ -241,10 +252,11 @@ class AINewsAutoPoster {
                 'enable_tags' => isset($_POST['enable_tags']),
                 'search_keywords' => sanitize_text_field($_POST['search_keywords']),
                 'writing_style' => sanitize_text_field($_POST['writing_style']),
+                'news_languages' => isset($_POST['news_languages']) ? array_map('sanitize_text_field', $_POST['news_languages']) : array(),
                 'image_generation_type' => sanitize_text_field($_POST['image_generation_type']),
                 'dalle_api_key' => sanitize_text_field($_POST['dalle_api_key']),
                 'unsplash_access_key' => sanitize_text_field($_POST['unsplash_access_key']),
-                'news_sources' => array_filter(array_map('esc_url_raw', explode("\n", $_POST['news_sources'])))
+                'news_sources' => $this->parse_news_sources($_POST)
             );
             
             update_option('ai_news_autoposter_settings', $settings);
@@ -381,6 +393,16 @@ class AINewsAutoPoster {
                     </tr>
                     
                     <tr>
+                        <th scope="row">ニュース言語</th>
+                        <td>
+                            <label><input type="checkbox" name="news_languages[]" value="japanese" <?php checked(in_array('japanese', $settings['news_languages'] ?? array())); ?> /> 日本語</label><br>
+                            <label><input type="checkbox" name="news_languages[]" value="english" <?php checked(in_array('english', $settings['news_languages'] ?? array())); ?> /> 英語</label><br>
+                            <label><input type="checkbox" name="news_languages[]" value="chinese" <?php checked(in_array('chinese', $settings['news_languages'] ?? array())); ?> /> 中国語</label>
+                            <p class="ai-news-form-description">収集するニュースの言語を選択してください。複数選択可能です。</p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
                         <th scope="row">画像生成方式</th>
                         <td>
                             <select name="image_generation_type">
@@ -411,8 +433,23 @@ class AINewsAutoPoster {
                     <tr>
                         <th scope="row">ニュースソース（RSS）</th>
                         <td>
-                            <textarea name="news_sources" rows="5" class="large-text"><?php echo esc_textarea(implode("\n", $settings['news_sources'] ?? array())); ?></textarea>
-                            <p class="ai-news-form-description">1行につき1つのRSSフィードURLを入力してください。</p>
+                            <div class="ai-news-sources-container">
+                                <div class="ai-news-source-group">
+                                    <h4>日本語ニュースソース</h4>
+                                    <textarea name="news_sources_japanese" rows="3" class="large-text"><?php echo esc_textarea(implode("\n", $settings['news_sources']['japanese'] ?? array())); ?></textarea>
+                                </div>
+                                
+                                <div class="ai-news-source-group">
+                                    <h4>英語ニュースソース</h4>
+                                    <textarea name="news_sources_english" rows="3" class="large-text"><?php echo esc_textarea(implode("\n", $settings['news_sources']['english'] ?? array())); ?></textarea>
+                                </div>
+                                
+                                <div class="ai-news-source-group">
+                                    <h4>中国語ニュースソース</h4>
+                                    <textarea name="news_sources_chinese" rows="3" class="large-text"><?php echo esc_textarea(implode("\n", $settings['news_sources']['chinese'] ?? array())); ?></textarea>
+                                </div>
+                            </div>
+                            <p class="ai-news-form-description">各言語のRSSフィードURLを1行につき1つ入力してください。</p>
                         </td>
                     </tr>
                 </table>
@@ -603,6 +640,17 @@ class AINewsAutoPoster {
     }
     
     /**
+     * ニュースソース設定の解析
+     */
+    private function parse_news_sources($post_data) {
+        return array(
+            'japanese' => array_filter(array_map('esc_url_raw', explode("\n", $post_data['news_sources_japanese'] ?? ''))),
+            'english' => array_filter(array_map('esc_url_raw', explode("\n", $post_data['news_sources_english'] ?? ''))),
+            'chinese' => array_filter(array_map('esc_url_raw', explode("\n", $post_data['news_sources_chinese'] ?? '')))
+        );
+    }
+    
+    /**
      * 毎日のCron実行
      */
     public function execute_daily_post_generation() {
@@ -695,29 +743,54 @@ class AINewsAutoPoster {
     }
     
     /**
-     * 最新ニュース取得
+     * 最新ニュース取得（多言語対応）
      */
     private function fetch_latest_news() {
         $settings = get_option('ai_news_autoposter_settings', array());
-        $sources = $settings['news_sources'] ?? array();
+        $selected_languages = $settings['news_languages'] ?? array('japanese', 'english');
+        $all_sources = $settings['news_sources'] ?? array();
         $news_items = array();
         
-        foreach ($sources as $rss_url) {
-            $feed = fetch_feed($rss_url);
-            if (!is_wp_error($feed)) {
-                $items = $feed->get_items(0, 3); // 最新3件
-                foreach ($items as $item) {
-                    $news_items[] = array(
-                        'title' => $item->get_title(),
-                        'description' => wp_strip_all_tags($item->get_description()),
-                        'link' => $item->get_link(),
-                        'date' => $item->get_date('Y-m-d H:i:s')
-                    );
+        foreach ($selected_languages as $language) {
+            if (!isset($all_sources[$language])) continue;
+            
+            $sources = $all_sources[$language];
+            foreach ($sources as $rss_url) {
+                $feed = fetch_feed($rss_url);
+                if (!is_wp_error($feed)) {
+                    $items = $feed->get_items(0, 2); // 各ソースから2件
+                    foreach ($items as $item) {
+                        $news_items[] = array(
+                            'title' => $item->get_title(),
+                            'description' => wp_strip_all_tags($item->get_description()),
+                            'link' => $item->get_link(),
+                            'date' => $item->get_date('Y-m-d H:i:s'),
+                            'language' => $language,
+                            'language_name' => $this->get_language_name($language)
+                        );
+                    }
                 }
             }
         }
         
-        return array_slice($news_items, 0, 5); // 最新5件に限定
+        // 日付順でソート
+        usort($news_items, function($a, $b) {
+            return strtotime($b['date']) - strtotime($a['date']);
+        });
+        
+        return array_slice($news_items, 0, 8); // 最新8件に限定
+    }
+    
+    /**
+     * 言語名取得
+     */
+    private function get_language_name($language) {
+        $names = array(
+            'japanese' => '日本語',
+            'english' => '英語',
+            'chinese' => '中国語'
+        );
+        return $names[$language] ?? $language;
     }
     
     /**
@@ -728,13 +801,20 @@ class AINewsAutoPoster {
         $search_keywords = $settings['search_keywords'] ?? 'AI ニュース, 人工知能, 機械学習, ChatGPT, OpenAI';
         
         $writing_style = $settings['writing_style'] ?? '夏目漱石';
+        $selected_languages = $settings['news_languages'] ?? array('japanese', 'english');
         
         $prompt = "以下のキーワードに関連する最新ニュースから1つの記事を{$writing_style}風の文体で作成してください。\n";
-        $prompt .= "検索キーワード: {$search_keywords}\n\n";
-        $prompt .= "以下のニュースを参考にしてください：\n";
+        $prompt .= "検索キーワード: {$search_keywords}\n";
+        
+        if (count($selected_languages) > 1) {
+            $language_names = array_map(array($this, 'get_language_name'), $selected_languages);
+            $prompt .= "対象言語圏: " . implode('、', $language_names) . "のニュースを統合して分析\n";
+        }
+        
+        $prompt .= "\n以下の多言語ニュースを参考にしてください：\n";
         
         foreach ($news_topics as $news) {
-            $prompt .= "- タイトル: {$news['title']}\n";
+            $prompt .= "- 【{$news['language_name']}】{$news['title']}\n";
             $prompt .= "  説明: {$news['description']}\n";
             $prompt .= "  リンク: {$news['link']}\n";
             $prompt .= "  日時: {$news['date']}\n\n";
@@ -748,7 +828,13 @@ class AINewsAutoPoster {
         $prompt .= "- {$writing_style}風の文学的表現\n";
         $prompt .= "- 読者にとって有益で興味深い内容\n";
         $prompt .= "- 適切な見出し（H2、H3タグ）を使用\n";
-        $prompt .= "- 記事の最後に参考ニュースの引用元とリンクを記載\n\n";
+        
+        if (count($selected_languages) > 1) {
+            $prompt .= "- 複数言語圏の情報を統合し、グローバルな視点で分析\n";
+            $prompt .= "- 各地域の動向の違いや共通点に言及\n";
+        }
+        
+        $prompt .= "- 記事の最後に参考ニュースの引用元とリンクを言語別に記載\n\n";
         
         $prompt .= "以下の形式で回答してください：\n";
         $prompt .= "TITLE: [記事タイトル]\n";

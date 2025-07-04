@@ -538,6 +538,44 @@
     box-shadow: 0 0 0 1px #00a32a !important;
 }
 
+/* Multi-language news sources */
+.ai-news-sources-container {
+    margin-top: 10px;
+}
+
+.ai-news-source-group {
+    margin-bottom: 20px;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #f9f9f9;
+}
+
+.ai-news-source-group h4 {
+    margin: 0 0 10px 0;
+    color: #0073aa;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.ai-news-source-group textarea {
+    width: 100%;
+    resize: vertical;
+    min-height: 60px;
+}
+
+/* Language selection */
+.ai-news-form-table input[type="checkbox"] {
+    margin-right: 8px;
+}
+
+.ai-news-form-table label {
+    display: inline-block;
+    margin-right: 20px;
+    margin-bottom: 5px;
+    font-weight: normal;
+}
+
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {
     .ai-news-status-card {
