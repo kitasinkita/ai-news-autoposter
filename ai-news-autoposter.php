@@ -758,30 +758,10 @@ class AINewsAutoPoster {
             return new WP_Error('no_api_key', 'Claude API キーが設定されていません。');
         }
         
-        // 最新ニュースを取得
-        $news_topics = $this->fetch_latest_news();
+        $this->log('info', 'Claude AIに最新ニュース検索と記事生成を依頼します');
         
-        // 空の場合はエラー
-        if (empty($news_topics)) {
-            return new WP_Error('no_news', '有効なニュースが取得できませんでした。RSS フィードを確認してください。');
-        }
-        
-        // 取得したニュースの有効性を再確認
-        $verified_news = array();
-        foreach ($news_topics as $news) {
-            if ($this->validate_link($news['link'])) {
-                $verified_news[] = $news;
-            }
-        }
-        
-        if (empty($verified_news)) {
-            return new WP_Error('no_valid_links', '有効なリンクを持つニュースが見つかりませんでした。');
-        }
-        
-        $this->log('info', count($verified_news) . '件の検証済みニュースで記事を生成します');
-        
-        // 記事生成プロンプト（検証済みニュースを使用）
-        $prompt = $this->build_article_prompt($verified_news, $settings);
+        // Claude AI に直接ニュース検索と記事生成を依頼
+        $prompt = $this->build_direct_article_prompt($settings);
         
         // Claude APIを呼び出し
         $ai_response = $this->call_claude_api($prompt, $api_key);
@@ -946,6 +926,72 @@ class AINewsAutoPoster {
             'chinese' => '中国語'
         );
         return $names[$language] ?? $language;
+    }
+    
+    /**
+     * 直接記事生成プロンプト構築（Claude AIがニュースを検索）
+     */
+    private function build_direct_article_prompt($settings) {
+        $search_keywords = $settings['search_keywords'] ?? 'AI ニュース, 人工知能, 機械学習, ChatGPT, OpenAI';
+        $focus_keyword = $settings['seo_focus_keyword'] ?? 'AI ニュース';
+        $writing_style = $settings['writing_style'] ?? '夏目漱石';
+        $selected_languages = $settings['news_languages'] ?? array('japanese', 'english');
+        $output_language = $settings['output_language'] ?? 'japanese';
+        $word_count = $settings['article_word_count'] ?? 500;
+        
+        // 出力言語の指定
+        $language_instructions = array(
+            'japanese' => '日本語で',
+            'english' => 'in English',
+            'chinese' => '用中文'
+        );
+        
+        $current_date = current_time('Y年m月d日');
+        $current_time = current_time('H:i');
+        
+        $prompt = "あなたは優秀なAIジャーナリストです。以下の指示に従って最新のニュース記事を作成してください。\n\n";
+        
+        $prompt .= "## 指示内容\n";
+        $prompt .= "1. あなたの知識ベースから「{$search_keywords}」に関する最新の情報・トレンドを活用してください\n";
+        $prompt .= "2. 現在進行中の技術動向、市場動向、注目すべき発展を含めてください\n";
+        $prompt .= "3. これらの情報を基に、{$writing_style}風の文体で記事を{$language_instructions[$output_language]}作成してください\n\n";
+        
+        $prompt .= "## 記事の要件\n";
+        $prompt .= "- 文字数: 約{$word_count}文字\n";
+        $prompt .= "- 文体: {$writing_style}風の文学的表現\n";
+        $prompt .= "- 言語: {$language_instructions[$output_language]}\n";
+        $prompt .= "- SEOキーワード「{$focus_keyword}」を自然に含める\n";
+        $prompt .= "- 見出し（H2、H3タグ）を適切に使用\n";
+        $prompt .= "- 読者にとって有益で興味深い内容\n";
+        $prompt .= "- 客観的で信頼性の高い情報\n\n";
+        
+        if (count($selected_languages) > 1) {
+            $language_names = array_map(array($this, 'get_language_name'), $selected_languages);
+            $prompt .= "- 対象地域: " . implode('、', $language_names) . "からの情報を統合\n";
+            $prompt .= "- グローバルな視点での分析\n";
+            $prompt .= "- 各地域の動向の違いや共通点に言及\n\n";
+        }
+        
+        $prompt .= "## 重要な注意事項\n";
+        $prompt .= "- 知識ベースから最新の技術動向や業界トレンドを活用してください\n";
+        $prompt .= "- 事実に基づいた信頼性の高い情報のみを使用してください\n";
+        $prompt .= "- 参考情報として一般的な業界サイトや技術サイトを想定したリンクを作成してください\n";
+        $prompt .= "- リンクには必ずtarget=\"_blank\"を指定してください\n";
+        $prompt .= "- 現在日時: {$current_date} {$current_time}\n\n";
+        
+        $prompt .= "## 出力形式\n";
+        $prompt .= "以下の形式で回答してください：\n\n";
+        $prompt .= "TITLE: [記事タイトル]\n";
+        $prompt .= "TAGS: [関連タグ,カンマ区切り]\n";
+        $prompt .= "CONTENT:\n";
+        $prompt .= "[記事本文（HTMLタグ使用可、見出しはH2・H3タグを使用）]\n\n";
+        $prompt .= "## 参考情報源\n";
+        $prompt .= "[業界の主要なニュースサイトや技術サイトを想定した参考リンクをHTML形式で記載]\n";
+        $prompt .= "[例: <a href=\"https://example-tech-news.com/article\" target=\"_blank\">AI技術の最新動向</a>]\n\n";
+        
+        $prompt .= "記事を作成してください。";
+        
+        return $prompt;
     }
     
     /**
