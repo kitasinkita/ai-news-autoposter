@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.0.2
+ * Version: 1.0.3
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.0.2');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.0.3');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -76,6 +76,8 @@ class AINewsAutoPoster {
                 'search_keywords' => 'AI ニュース, 人工知能, 機械学習, ChatGPT, OpenAI',
                 'writing_style' => '夏目漱石',
                 'news_languages' => array('japanese', 'english'), // english, japanese, chinese
+                'output_language' => 'japanese', // japanese, english, chinese
+                'article_word_count' => 500,
                 'image_generation_type' => 'placeholder', // placeholder, dalle, unsplash
                 'dalle_api_key' => '',
                 'unsplash_access_key' => '',
@@ -253,6 +255,8 @@ class AINewsAutoPoster {
                 'search_keywords' => sanitize_text_field($_POST['search_keywords']),
                 'writing_style' => sanitize_text_field($_POST['writing_style']),
                 'news_languages' => isset($_POST['news_languages']) ? array_map('sanitize_text_field', $_POST['news_languages']) : array(),
+                'output_language' => sanitize_text_field($_POST['output_language']),
+                'article_word_count' => intval($_POST['article_word_count']),
                 'image_generation_type' => sanitize_text_field($_POST['image_generation_type']),
                 'dalle_api_key' => sanitize_text_field($_POST['dalle_api_key']),
                 'unsplash_access_key' => sanitize_text_field($_POST['unsplash_access_key']),
@@ -393,12 +397,33 @@ class AINewsAutoPoster {
                     </tr>
                     
                     <tr>
-                        <th scope="row">ニュース言語</th>
+                        <th scope="row">ニュース収集言語</th>
                         <td>
                             <label><input type="checkbox" name="news_languages[]" value="japanese" <?php checked(in_array('japanese', $settings['news_languages'] ?? array())); ?> /> 日本語</label><br>
                             <label><input type="checkbox" name="news_languages[]" value="english" <?php checked(in_array('english', $settings['news_languages'] ?? array())); ?> /> 英語</label><br>
                             <label><input type="checkbox" name="news_languages[]" value="chinese" <?php checked(in_array('chinese', $settings['news_languages'] ?? array())); ?> /> 中国語</label>
                             <p class="ai-news-form-description">収集するニュースの言語を選択してください。複数選択可能です。</p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">記事出力言語</th>
+                        <td>
+                            <select name="output_language">
+                                <option value="japanese" <?php selected($settings['output_language'] ?? 'japanese', 'japanese'); ?>>日本語</option>
+                                <option value="english" <?php selected($settings['output_language'] ?? 'japanese', 'english'); ?>>英語</option>
+                                <option value="chinese" <?php selected($settings['output_language'] ?? 'japanese', 'chinese'); ?>>中国語</option>
+                            </select>
+                            <p class="ai-news-form-description">生成される記事の言語を選択してください。</p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">記事文字数</th>
+                        <td>
+                            <input type="number" name="article_word_count" value="<?php echo esc_attr($settings['article_word_count'] ?? 500); ?>" min="100" max="3000" step="50" class="small-text" />
+                            <span>文字程度</span>
+                            <p class="ai-news-form-description">生成する記事の目安文字数を設定してください（100〜3000文字）。</p>
                         </td>
                     </tr>
                     
@@ -802,8 +827,17 @@ class AINewsAutoPoster {
         
         $writing_style = $settings['writing_style'] ?? '夏目漱石';
         $selected_languages = $settings['news_languages'] ?? array('japanese', 'english');
+        $output_language = $settings['output_language'] ?? 'japanese';
+        $word_count = $settings['article_word_count'] ?? 500;
         
-        $prompt = "以下のキーワードに関連する最新ニュースから1つの記事を{$writing_style}風の文体で作成してください。\n";
+        // 出力言語の指定
+        $language_instructions = array(
+            'japanese' => '日本語で',
+            'english' => 'in English',
+            'chinese' => '用中文'
+        );
+        
+        $prompt = "以下のキーワードに関連する最新ニュースから1つの記事を{$writing_style}風の文体で{$language_instructions[$output_language]}作成してください。\n";
         $prompt .= "検索キーワード: {$search_keywords}\n";
         
         if (count($selected_languages) > 1) {
@@ -823,8 +857,9 @@ class AINewsAutoPoster {
         $prompt .= "\n記事の要件：\n";
         $prompt .= "- SEOキーワード「{$focus_keyword}」を自然に含める\n";
         $prompt .= "- 検索キーワード「{$search_keywords}」に関連する内容\n";
-        $prompt .= "- 1500-2000文字程度\n";
+        $prompt .= "- {$word_count}文字程度\n";
         $prompt .= "- 魅力的なタイトル\n";
+        $prompt .= "- 記事全体を{$language_instructions[$output_language]}執筆\n";
         $prompt .= "- {$writing_style}風の文学的表現\n";
         $prompt .= "- 読者にとって有益で興味深い内容\n";
         $prompt .= "- 適切な見出し（H2、H3タグ）を使用\n";
