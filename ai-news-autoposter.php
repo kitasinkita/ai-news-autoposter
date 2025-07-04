@@ -801,34 +801,81 @@ class AINewsAutoPoster {
      * アイキャッチ画像生成
      */
     private function generate_featured_image($post_id, $title) {
-        // プレースホルダー画像URL
-        $default_image_url = 'https://via.placeholder.com/1200x630/0073aa/ffffff?text=' . urlencode('AI News');
-        
-        // 画像をダウンロードしてWordPressメディアライブラリに追加
-        $upload_dir = wp_upload_dir();
-        $image_data = wp_remote_get($default_image_url);
-        
-        if (!is_wp_error($image_data)) {
-            $filename = 'ai-news-' . $post_id . '.jpg';
+        try {
+            // プレースホルダー画像URL（より確実なサービスを使用）
+            $image_text = urlencode('AI News');
+            $default_image_url = "https://placehold.co/1200x630/0073aa/ffffff/png?text={$image_text}";
+            
+            // 画像をダウンロード
+            $image_data = wp_remote_get($default_image_url, array(
+                'timeout' => 30,
+                'user-agent' => 'WordPress/' . get_bloginfo('version')
+            ));
+            
+            if (is_wp_error($image_data)) {
+                $this->log('error', 'アイキャッチ画像ダウンロードに失敗: ' . $image_data->get_error_message());
+                return false;
+            }
+            
+            $response_code = wp_remote_retrieve_response_code($image_data);
+            if ($response_code !== 200) {
+                $this->log('error', 'アイキャッチ画像ダウンロードに失敗: HTTPエラー ' . $response_code);
+                return false;
+            }
+            
+            // アップロードディレクトリ準備
+            $upload_dir = wp_upload_dir();
+            if (!is_dir($upload_dir['path'])) {
+                wp_mkdir_p($upload_dir['path']);
+            }
+            
+            $filename = 'ai-news-' . $post_id . '-' . time() . '.png';
             $file_path = $upload_dir['path'] . '/' . $filename;
             
-            file_put_contents($file_path, wp_remote_retrieve_body($image_data));
+            // ファイルを保存
+            $image_content = wp_remote_retrieve_body($image_data);
+            $file_saved = file_put_contents($file_path, $image_content);
             
+            if ($file_saved === false) {
+                $this->log('error', 'アイキャッチ画像ファイル保存に失敗: ' . $file_path);
+                return false;
+            }
+            
+            // WordPressメディアライブラリに追加
             $attachment = array(
-                'post_mime_type' => 'image/jpeg',
-                'post_title' => sanitize_file_name($title),
+                'post_mime_type' => 'image/png',
+                'post_title' => sanitize_text_field($title),
                 'post_content' => '',
                 'post_status' => 'inherit'
             );
             
             $attachment_id = wp_insert_attachment($attachment, $file_path, $post_id);
             
-            if (!is_wp_error($attachment_id)) {
-                require_once(ABSPATH . 'wp-admin/includes/image.php');
-                $attachment_data = wp_generate_attachment_metadata($attachment_id, $file_path);
-                wp_update_attachment_metadata($attachment_id, $attachment_data);
-                set_post_thumbnail($post_id, $attachment_id);
+            if (is_wp_error($attachment_id)) {
+                $this->log('error', 'アタッチメント登録に失敗: ' . $attachment_id->get_error_message());
+                unlink($file_path); // ファイル削除
+                return false;
             }
+            
+            // メタデータ生成
+            require_once(ABSPATH . 'wp-admin/includes/image.php');
+            $attachment_data = wp_generate_attachment_metadata($attachment_id, $file_path);
+            wp_update_attachment_metadata($attachment_id, $attachment_data);
+            
+            // アイキャッチ画像として設定
+            $thumbnail_set = set_post_thumbnail($post_id, $attachment_id);
+            
+            if ($thumbnail_set) {
+                $this->log('success', 'アイキャッチ画像を設定しました: ID ' . $attachment_id);
+                return $attachment_id;
+            } else {
+                $this->log('error', 'アイキャッチ画像の設定に失敗');
+                return false;
+            }
+            
+        } catch (Exception $e) {
+            $this->log('error', 'アイキャッチ画像生成でエラー: ' . $e->getMessage());
+            return false;
         }
     }
     
