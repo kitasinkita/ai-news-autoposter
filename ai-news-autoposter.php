@@ -967,8 +967,9 @@ class AINewsAutoPoster {
         $language_text = implode('と', $language_names);
         
         $current_date = current_time('Y年n月j日');
+        $current_year = current_time('Y');
         
-        $prompt = "【{$language_text}】のニュースから、【{$search_keywords}】に関する{$current_date}の最新ニュース（できるだけ今日や昨日の新しいニュース）を優先して送ってください。5本ぐらいが理想です。\n";
+        $prompt = "現在は{$current_date}（{$current_year}年）です。【{$language_text}】のニュースから、【{$search_keywords}】に関する最新ニュース（2024年の最新情報を優先）を送ってください。5本ぐらいが理想です。\n";
         $prompt .= "ニュースの背景や文脈を簡単にまとめ、なぜ今、これが起こっているのか、という背景情報を踏まえて、今後どのような影響をあたえるのか、推察もしてください。\n";
         $prompt .= "全部で【{$word_count}文字】程度にまとめてください。充実した内容で。\n";
         $prompt .= "文体は{$writing_style}風でお願いします。\n\n";
@@ -984,13 +985,13 @@ class AINewsAutoPoster {
         $prompt .= "[本文2（適時、参照元を（記事タイトル - メディア名）の形式で本文中に記載してください）]\n";
         $prompt .= "...\n\n";
         $prompt .= "## 参考情報源\n";
-        $prompt .= "[参考にした最新記事の情報を以下の安全なリンクで記載してください]\n";
-        $prompt .= "[形式: <a href=\"メディアトップページURL\" target=\"_blank\">「具体的な記事タイトル」({$current_date}) - メディア名</a>]\n";
-        $prompt .= "[安全なリンク先例]\n";
-        $prompt .= "- 日本語: https://www.nikkei.com/ (日経新聞)\n";
-        $prompt .= "- 英語: https://techcrunch.com/ (TechCrunch)\n";
+        $prompt .= "[参考にした記事の情報を記載してください。リンクは各メディアのトップページを使用]\n";
+        $prompt .= "[形式: <a href=\"メディアトップページURL\" target=\"_blank\">「具体的な記事タイトル」(2024年の日付) - メディア名</a>]\n";
+        $prompt .= "[使用可能なリンク]\n";
+        $prompt .= "- 日本語メディア: https://www.nikkei.com/ (日経新聞), https://www.itmedia.co.jp/ (ITmedia)\n";
+        $prompt .= "- 英語メディア: https://techcrunch.com/ (TechCrunch), https://www.theverge.com/ (The Verge)\n";
         $prompt .= "- AI専門: https://www.artificialintelligence-news.com/ (AI News)\n";
-        $prompt .= "[例: <a href=\"https://www.nikkei.com/\" target=\"_blank\">「ChatGPT-4の新機能発表」(2024年7月4日) - 日経新聞</a>]\n\n";
+        $prompt .= "[例: <a href=\"https://techcrunch.com/\" target=\"_blank\">「OpenAI releases GPT-4 Turbo」(2024年6月15日) - TechCrunch</a>]\n\n";
         
         $prompt .= "記事を作成してください。";
         
