@@ -772,16 +772,23 @@ class AINewsAutoPoster {
         $prompt = $this->build_direct_article_prompt($settings);
         
         // Claude APIを呼び出し
+        $this->log('info', 'Claude APIを呼び出します...');
         $ai_response = $this->call_claude_api($prompt, $api_key);
         
         if (is_wp_error($ai_response)) {
+            $this->log('error', 'Claude API呼び出しに失敗: ' . $ai_response->get_error_message());
             return $ai_response;
         }
         
+        $this->log('info', 'Claude APIから正常にレスポンスを受信しました');
+        
         // AIレスポンスを解析
+        $this->log('info', 'AIレスポンスを解析中...');
         $article_data = $this->parse_ai_response($ai_response);
+        $this->log('info', '記事データ解析完了。タイトル: ' . $article_data['title']);
         
         // 投稿データを準備
+        $this->log('info', 'WordPress投稿データを準備中...');
         $post_data = array(
             'post_title' => $article_data['title'],
             'post_content' => $article_data['content'],
@@ -796,21 +803,26 @@ class AINewsAutoPoster {
         );
         
         // 投稿作成
+        $this->log('info', 'WordPressに投稿を作成中...');
         $post_id = wp_insert_post($post_data);
         
         if (is_wp_error($post_id)) {
+            $this->log('error', '投稿作成に失敗: ' . $post_id->get_error_message());
             return $post_id;
         }
+        
+        $this->log('info', '投稿作成成功。投稿ID: ' . $post_id);
         
         // タグを追加
         if ($settings['enable_tags'] && !empty($article_data['tags'])) {
             wp_set_post_tags($post_id, $article_data['tags']);
         }
         
-        // アイキャッチ画像を生成
-        if ($settings['enable_featured_image']) {
-            $this->generate_featured_image($post_id, $article_data['title'], $article_data['content'], $settings);
-        }
+        // アイキャッチ画像を生成（一時的に無効化してタイムアウト問題を解決）
+        // if ($settings['enable_featured_image']) {
+        //     $this->generate_featured_image($post_id, $article_data['title'], $article_data['content'], $settings);
+        // }
+        $this->log('info', 'アイキャッチ画像生成は一時的に無効化されています（ネットワークエラー対策）');
         
         // SEO設定
         $this->set_seo_data($post_id, $settings['seo_focus_keyword'], $this->generate_meta_description($article_data['title'], $settings));
@@ -1091,7 +1103,7 @@ class AINewsAutoPoster {
         
         $body = array(
             'model' => 'claude-3-5-sonnet-20241022',
-            'max_tokens' => 4000,
+            'max_tokens' => 2000, // トークン数を削減して処理時間短縮
             'messages' => array(
                 array(
                     'role' => 'user',
