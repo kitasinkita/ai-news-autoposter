@@ -1164,6 +1164,7 @@ class AINewsAutoPoster {
         $sources = array();
         $content = '';
         $in_content = false;
+        $in_references = false;
         
         foreach ($lines as $line) {
             if (strpos($line, 'SOURCES:') === 0) {
@@ -1176,6 +1177,12 @@ class AINewsAutoPoster {
                 $tags = array_map('trim', explode(',', $tags_str));
             } elseif (strpos($line, 'CONTENT:') === 0) {
                 $in_content = true;
+                $in_references = false;
+                continue;
+            } elseif (strpos($line, '## 参考情報源') === 0 || strpos($line, '参考情報源') !== false) {
+                $in_content = true; // 参考情報源もcontentに含める
+                $in_references = true;
+                $content .= "\n<h2>参考情報源</h2>\n";
                 continue;
             } elseif ($in_content) {
                 $content .= $line . "\n";
