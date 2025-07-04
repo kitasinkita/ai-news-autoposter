@@ -1005,8 +1005,9 @@ class AINewsAutoPoster {
         
         $prompt .= "## 参考情報源の指示\n";
         $prompt .= "- 実際に参考にした情報源を正確に記載してください\n";
-        $prompt .= "- リンクは提供せず、情報源名のみを記載してください\n";
-        $prompt .= "- 例：日経新聞、TechCrunch、MIT Technology Review、OpenAI公式ブログなど\n\n";
+        $prompt .= "- 各情報源には実在するトップページのURLを付けてください\n";
+        $prompt .= "- 必ずtarget=\"_blank\"を付けて新しいタブで開くようにしてください\n";
+        $prompt .= "- 例：<a href=\"https://www.nikkei.com/\" target=\"_blank\">日経新聞</a>\n\n";
         
         $prompt .= "## 出力形式\n";
         $prompt .= "以下の形式で段階的に回答してください：\n\n";
@@ -1017,8 +1018,8 @@ class AINewsAutoPoster {
         $prompt .= "CONTENT:\n";
         $prompt .= "[記事本文（HTMLタグ使用可、見出しはH2・H3タグを使用）]\n\n";
         $prompt .= "## 参考情報源\n";
-        $prompt .= "[実際に参考にした情報源を名前のみで記載（リンクなし）]\n";
-        $prompt .= "[例: 日経新聞、TechCrunch、MIT Technology Review]\n\n";
+        $prompt .= "[実際に参考にした情報源をHTML形式のリンクで記載]\n";
+        $prompt .= "[例: <a href=\"https://www.nikkei.com/\" target=\"_blank\">日経新聞</a>, <a href=\"https://techcrunch.com/\" target=\"_blank\">TechCrunch</a>]\n\n";
         
         $prompt .= "記事を作成してください。";
         
