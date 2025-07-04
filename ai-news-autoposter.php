@@ -74,6 +74,9 @@ class AINewsAutoPoster {
                 'post_status' => 'publish',
                 'enable_tags' => true,
                 'search_keywords' => 'AI ニュース, 人工知能, 機械学習, ChatGPT, OpenAI',
+                'image_generation_type' => 'placeholder', // placeholder, dalle, unsplash
+                'dalle_api_key' => '',
+                'unsplash_access_key' => '',
                 'news_sources' => array(
                     'https://www.artificialintelligence-news.com/feed/',
                     'https://ai.googleblog.com/feeds/posts/default',
@@ -236,6 +239,9 @@ class AINewsAutoPoster {
                 'post_status' => sanitize_text_field($_POST['post_status']),
                 'enable_tags' => isset($_POST['enable_tags']),
                 'search_keywords' => sanitize_text_field($_POST['search_keywords']),
+                'image_generation_type' => sanitize_text_field($_POST['image_generation_type']),
+                'dalle_api_key' => sanitize_text_field($_POST['dalle_api_key']),
+                'unsplash_access_key' => sanitize_text_field($_POST['unsplash_access_key']),
                 'news_sources' => array_filter(array_map('esc_url_raw', explode("\n", $_POST['news_sources'])))
             );
             
@@ -361,6 +367,34 @@ class AINewsAutoPoster {
                         <td>
                             <input type="text" name="search_keywords" value="<?php echo esc_attr($settings['search_keywords'] ?? 'AI ニュース, 人工知能, 機械学習, ChatGPT, OpenAI'); ?>" class="large-text ai-news-autosave" />
                             <p class="ai-news-form-description">記事生成時に検索するキーワードをカンマ区切りで入力してください。</p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">画像生成方式</th>
+                        <td>
+                            <select name="image_generation_type">
+                                <option value="placeholder" <?php selected($settings['image_generation_type'] ?? 'placeholder', 'placeholder'); ?>>プレースホルダー画像</option>
+                                <option value="dalle" <?php selected($settings['image_generation_type'] ?? 'placeholder', 'dalle'); ?>>DALL-E 3（OpenAI）</option>
+                                <option value="unsplash" <?php selected($settings['image_generation_type'] ?? 'placeholder', 'unsplash'); ?>>Unsplash画像検索</option>
+                            </select>
+                            <p class="ai-news-form-description">アイキャッチ画像の生成方式を選択してください。</p>
+                        </td>
+                    </tr>
+                    
+                    <tr id="dalle-api-key-row" style="display: <?php echo ($settings['image_generation_type'] ?? '') === 'dalle' ? 'table-row' : 'none'; ?>;">
+                        <th scope="row">DALL-E API キー</th>
+                        <td>
+                            <input type="password" name="dalle_api_key" value="<?php echo esc_attr($settings['dalle_api_key'] ?? ''); ?>" class="regular-text" />
+                            <p class="ai-news-form-description">OpenAIのAPIキーを入力してください。</p>
+                        </td>
+                    </tr>
+                    
+                    <tr id="unsplash-access-key-row" style="display: <?php echo ($settings['image_generation_type'] ?? '') === 'unsplash' ? 'table-row' : 'none'; ?>;">
+                        <th scope="row">Unsplash Access Key</th>
+                        <td>
+                            <input type="password" name="unsplash_access_key" value="<?php echo esc_attr($settings['unsplash_access_key'] ?? ''); ?>" class="regular-text" />
+                            <p class="ai-news-form-description">UnsplashのAccess Keyを入力してください。</p>
                         </td>
                     </tr>
                     
@@ -641,7 +675,7 @@ class AINewsAutoPoster {
         
         // アイキャッチ画像を生成
         if ($settings['enable_featured_image']) {
-            $this->generate_featured_image($post_id, $article_data['title']);
+            $this->generate_featured_image($post_id, $article_data['title'], $article_data['content'], $settings);
         }
         
         // SEO設定
@@ -800,7 +834,243 @@ class AINewsAutoPoster {
     /**
      * アイキャッチ画像生成
      */
-    private function generate_featured_image($post_id, $title) {
+    private function generate_featured_image($post_id, $title, $content, $settings) {
+        $image_type = $settings['image_generation_type'] ?? 'placeholder';
+        
+        switch ($image_type) {
+            case 'dalle':
+                return $this->generate_dalle_image($post_id, $title, $content, $settings);
+            case 'unsplash':
+                return $this->generate_unsplash_image($post_id, $title, $content, $settings);
+            default:
+                return $this->generate_placeholder_image($post_id, $title);
+        }
+    }
+    
+    /**
+     * DALL-E画像生成
+     */
+    private function generate_dalle_image($post_id, $title, $content, $settings) {
+        $api_key = $settings['dalle_api_key'] ?? '';
+        if (empty($api_key)) {
+            $this->log('error', 'DALL-E APIキーが設定されていません');
+            return $this->generate_placeholder_image($post_id, $title);
+        }
+        
+        try {
+            // 記事内容から画像プロンプトを生成
+            $image_prompt = $this->create_image_prompt($title, $content);
+            
+            $response = wp_remote_post('https://api.openai.com/v1/images/generations', array(
+                'headers' => array(
+                    'Authorization' => 'Bearer ' . $api_key,
+                    'Content-Type' => 'application/json'
+                ),
+                'body' => json_encode(array(
+                    'model' => 'dall-e-3',
+                    'prompt' => $image_prompt,
+                    'size' => '1024x1024',
+                    'quality' => 'standard',
+                    'n' => 1
+                )),
+                'timeout' => 60
+            ));
+            
+            if (is_wp_error($response)) {
+                $this->log('error', 'DALL-E API呼び出しエラー: ' . $response->get_error_message());
+                return $this->generate_placeholder_image($post_id, $title);
+            }
+            
+            $body = json_decode(wp_remote_retrieve_body($response), true);
+            
+            if (isset($body['error'])) {
+                $this->log('error', 'DALL-E APIエラー: ' . $body['error']['message']);
+                return $this->generate_placeholder_image($post_id, $title);
+            }
+            
+            $image_url = $body['data'][0]['url'] ?? '';
+            if (empty($image_url)) {
+                $this->log('error', 'DALL-E画像URLが取得できませんでした');
+                return $this->generate_placeholder_image($post_id, $title);
+            }
+            
+            return $this->download_and_set_image($post_id, $image_url, $title, 'dalle');
+            
+        } catch (Exception $e) {
+            $this->log('error', 'DALL-E画像生成エラー: ' . $e->getMessage());
+            return $this->generate_placeholder_image($post_id, $title);
+        }
+    }
+    
+    /**
+     * Unsplash画像検索
+     */
+    private function generate_unsplash_image($post_id, $title, $content, $settings) {
+        $access_key = $settings['unsplash_access_key'] ?? '';
+        if (empty($access_key)) {
+            $this->log('error', 'Unsplash Access Keyが設定されていません');
+            return $this->generate_placeholder_image($post_id, $title);
+        }
+        
+        try {
+            // 検索キーワードを生成
+            $search_query = $this->create_search_keywords($title, $content);
+            
+            $response = wp_remote_get('https://api.unsplash.com/search/photos?' . http_build_query(array(
+                'query' => $search_query,
+                'orientation' => 'landscape',
+                'per_page' => 1,
+                'order_by' => 'relevant'
+            )), array(
+                'headers' => array(
+                    'Authorization' => 'Client-ID ' . $access_key
+                ),
+                'timeout' => 30
+            ));
+            
+            if (is_wp_error($response)) {
+                $this->log('error', 'Unsplash API呼び出しエラー: ' . $response->get_error_message());
+                return $this->generate_placeholder_image($post_id, $title);
+            }
+            
+            $body = json_decode(wp_remote_retrieve_body($response), true);
+            
+            if (empty($body['results'])) {
+                $this->log('warning', 'Unsplashで画像が見つかりませんでした: ' . $search_query);
+                return $this->generate_placeholder_image($post_id, $title);
+            }
+            
+            $image_url = $body['results'][0]['urls']['regular'] ?? '';
+            if (empty($image_url)) {
+                $this->log('error', 'Unsplash画像URLが取得できませんでした');
+                return $this->generate_placeholder_image($post_id, $title);
+            }
+            
+            return $this->download_and_set_image($post_id, $image_url, $title, 'unsplash');
+            
+        } catch (Exception $e) {
+            $this->log('error', 'Unsplash画像検索エラー: ' . $e->getMessage());
+            return $this->generate_placeholder_image($post_id, $title);
+        }
+    }
+    
+    /**
+     * 画像プロンプト作成（DALL-E用）
+     */
+    private function create_image_prompt($title, $content) {
+        // 記事内容から重要なキーワードを抽出
+        $keywords = array('AI', 'artificial intelligence', 'technology', 'digital', 'future', 'innovation', 'robot', 'machine learning', 'deep learning');
+        
+        $prompt = "A professional, modern illustration representing: " . $title . ". ";
+        $prompt .= "Style: clean, minimalist, tech-focused, business-appropriate. ";
+        $prompt .= "Colors: blue, white, grey tones. No text or words in the image. ";
+        $prompt .= "Suitable for a news article header.";
+        
+        return $prompt;
+    }
+    
+    /**
+     * 検索キーワード作成（Unsplash用）
+     */
+    private function create_search_keywords($title, $content) {
+        // タイトルから重要なキーワードを抽出
+        $keywords = array('technology', 'artificial intelligence', 'digital', 'computer', 'innovation', 'future');
+        
+        // AI関連のキーワードを優先
+        if (stripos($title, 'AI') !== false || stripos($title, '人工知能') !== false) {
+            return 'artificial intelligence technology';
+        }
+        if (stripos($title, 'robot') !== false || stripos($title, 'ロボット') !== false) {
+            return 'robot technology';
+        }
+        
+        return 'technology innovation';
+    }
+    
+    /**
+     * 画像ダウンロードと設定
+     */
+    private function download_and_set_image($post_id, $image_url, $title, $source = '') {
+        try {
+            // 画像をダウンロード
+            $image_data = wp_remote_get($image_url, array(
+                'timeout' => 30,
+                'user-agent' => 'WordPress/' . get_bloginfo('version')
+            ));
+            
+            if (is_wp_error($image_data)) {
+                $this->log('error', $source . '画像ダウンロードに失敗: ' . $image_data->get_error_message());
+                return $this->generate_placeholder_image($post_id, $title);
+            }
+            
+            $response_code = wp_remote_retrieve_response_code($image_data);
+            if ($response_code !== 200) {
+                $this->log('error', $source . '画像ダウンロードに失敗: HTTPエラー ' . $response_code);
+                return $this->generate_placeholder_image($post_id, $title);
+            }
+            
+            // アップロードディレクトリ準備
+            $upload_dir = wp_upload_dir();
+            if (!is_dir($upload_dir['path'])) {
+                wp_mkdir_p($upload_dir['path']);
+            }
+            
+            $file_extension = $source === 'dalle' ? 'png' : 'jpg';
+            $filename = 'ai-news-' . $source . '-' . $post_id . '-' . time() . '.' . $file_extension;
+            $file_path = $upload_dir['path'] . '/' . $filename;
+            
+            // ファイルを保存
+            $image_content = wp_remote_retrieve_body($image_data);
+            $file_saved = file_put_contents($file_path, $image_content);
+            
+            if ($file_saved === false) {
+                $this->log('error', $source . '画像ファイル保存に失敗: ' . $file_path);
+                return $this->generate_placeholder_image($post_id, $title);
+            }
+            
+            // WordPressメディアライブラリに追加
+            $mime_type = $source === 'dalle' ? 'image/png' : 'image/jpeg';
+            $attachment = array(
+                'post_mime_type' => $mime_type,
+                'post_title' => sanitize_text_field($title . ' (' . $source . ')'),
+                'post_content' => '',
+                'post_status' => 'inherit'
+            );
+            
+            $attachment_id = wp_insert_attachment($attachment, $file_path, $post_id);
+            
+            if (is_wp_error($attachment_id)) {
+                $this->log('error', $source . 'アタッチメント登録に失敗: ' . $attachment_id->get_error_message());
+                unlink($file_path);
+                return $this->generate_placeholder_image($post_id, $title);
+            }
+            
+            // メタデータ生成
+            require_once(ABSPATH . 'wp-admin/includes/image.php');
+            $attachment_data = wp_generate_attachment_metadata($attachment_id, $file_path);
+            wp_update_attachment_metadata($attachment_id, $attachment_data);
+            
+            // アイキャッチ画像として設定
+            $thumbnail_set = set_post_thumbnail($post_id, $attachment_id);
+            
+            if ($thumbnail_set) {
+                $this->log('success', $source . 'アイキャッチ画像を設定しました: ID ' . $attachment_id);
+                return $attachment_id;
+            } else {
+                $this->log('error', $source . 'アイキャッチ画像の設定に失敗');
+                return $this->generate_placeholder_image($post_id, $title);
+            }
+            
+        } catch (Exception $e) {
+            $this->log('error', $source . '画像処理でエラー: ' . $e->getMessage());
+            return $this->generate_placeholder_image($post_id, $title);
+        }
+    }
+    
+    /**
+     * プレースホルダー画像生成
+     */
+    private function generate_placeholder_image($post_id, $title) {
         try {
             // プレースホルダー画像URL（より確実なサービスを使用）
             $image_text = urlencode('AI News');

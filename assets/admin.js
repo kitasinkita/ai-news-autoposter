@@ -40,6 +40,9 @@
             // 自動更新トグル
             $(document).on('change', '#auto-publish-toggle', this.toggleAutoPublish);
             
+            // 画像生成方式の変更
+            $(document).on('change', 'select[name="image_generation_type"]', this.toggleImageSettings);
+            
             // リアルタイム統計更新
             setInterval(this.updateStats, 30000); // 30秒ごと
             
@@ -298,6 +301,9 @@
             
             // 初回統計取得
             this.updateStats();
+            
+            // 画像生成設定の初期化
+            this.initImageSettings();
         },
         
         clearLogs: function(e) {
@@ -567,6 +573,29 @@
                            .removeClass('ai-news-loading');
                 }
             });
+        },
+        
+        initImageSettings: function() {
+            // ページ読み込み時の画像生成設定を初期化
+            const currentType = $('select[name="image_generation_type"]').val();
+            this.showImageSettingsForType(currentType);
+        },
+        
+        showImageSettingsForType: function(type) {
+            // すべての API キー行を非表示
+            $('#dalle-api-key-row, #unsplash-access-key-row').hide();
+            
+            // 選択された方式に応じて表示
+            if (type === 'dalle') {
+                $('#dalle-api-key-row').show();
+            } else if (type === 'unsplash') {
+                $('#unsplash-access-key-row').show();
+            }
+        },
+        
+        toggleImageSettings: function() {
+            const selectedType = $(this).val();
+            AINewsAutoPoster.showImageSettingsForType(selectedType);
         },
         
         generateFromAdminBar: function(e) {
