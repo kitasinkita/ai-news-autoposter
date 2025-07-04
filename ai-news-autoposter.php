@@ -84,6 +84,7 @@ class AINewsAutoPoster {
                 'article_word_count' => 500,
                 'enable_disclaimer' => true,
                 'disclaimer_text' => '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。',
+                'custom_prompt' => '',
                 'image_generation_type' => 'placeholder', // placeholder, dalle, unsplash
                 'dalle_api_key' => '',
                 'unsplash_access_key' => '',
@@ -451,6 +452,25 @@ class AINewsAutoPoster {
                                 <textarea name="disclaimer_text" rows="3" class="large-text"><?php echo esc_textarea($settings['disclaimer_text'] ?? '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。'); ?></textarea>
                                 <p class="ai-news-form-description">記事末尾に表示する免責事項の文言を設定してください。</p>
                             </div>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">カスタムプロンプト</th>
+                        <td>
+                            <textarea name="custom_prompt" rows="8" class="large-text" placeholder="空白の場合はデフォルトプロンプトを使用します"><?php echo esc_textarea($settings['custom_prompt'] ?? ''); ?></textarea>
+                            <p class="ai-news-form-description">
+                                Claude AIに送信するカスタムプロンプトを設定できます。以下のプレースホルダーが使用可能です：<br>
+                                <code>{言語}</code> - ニュース収集言語<br>
+                                <code>{キーワード}</code> - 検索キーワード<br>
+                                <code>{文字数}</code> - 記事文字数<br>
+                                <code>{文体}</code> - 文体スタイル<br><br>
+                                <strong>デフォルトプロンプト例：</strong><br>
+                                【{言語}】のニュースから、【{キーワード}】に関する最新のニュースを送ってください。5本ぐらいが理想です。<br>
+                                ニュースの背景や文脈を簡単にまとめ、かつ、上記の最新ニュースのリンク先を参考情報元として記事のタイトルとリンクを記載し、なぜ今、これが起こっているのか、という背景情報を踏まえて、今後どのような影響をあたえるのか、推察もしてください。<br>
+                                全部で【{文字数}文字】程度にまとめてください。充実した内容で。<br>
+                                文体は{文体}風でお願いします。
+                            </p>
                         </td>
                     </tr>
                     
@@ -962,35 +982,58 @@ class AINewsAutoPoster {
         $word_count = $settings['article_word_count'] ?? 500;
         $writing_style = $settings['writing_style'] ?? '夏目漱石';
         
+        // カスタムプロンプトがあればそれを使用
+        $custom_prompt = $settings['custom_prompt'] ?? '';
+        if (!empty($custom_prompt)) {
+            return $this->build_custom_prompt($custom_prompt, $settings);
+        }
+        
         // 言語指定を作成
         $language_names = array_map(array($this, 'get_language_name'), $selected_languages);
         $language_text = implode('と', $language_names);
         
-        $current_date = current_time('Y年n月j日');
-        $current_year = current_time('Y');
-        
-        $prompt = "現在は{$current_date}（{$current_year}年）です。【{$language_text}】のニュースから、【{$search_keywords}】に関する最新ニュース（{$current_year}年の最新情報を優先）を送ってください。5本ぐらいが理想です。\n";
-        $prompt .= "ニュースの背景や文脈を簡単にまとめ、なぜ今、これが起こっているのか、という背景情報を踏まえて、今後どのような影響をあたえるのか、推察もしてください。\n";
+        // シンプルで効果的なプロンプト
+        $prompt = "【{$language_text}】のニュースから、【{$search_keywords}】に関する最新のニュースを送ってください。5本ぐらいが理想です。\n";
+        $prompt .= "ニュースの背景や文脈を簡単にまとめ、かつ、上記の最新ニュースのリンク先を参考情報元として記事のタイトルとリンクを記載し、なぜ今、これが起こっているのか、という背景情報を踏まえて、今後どのような影響をあたえるのか、推察もしてください。\n";
         $prompt .= "全部で【{$word_count}文字】程度にまとめてください。充実した内容で。\n";
-        $prompt .= "文体は{$writing_style}風でお願いします。\n\n";
+        if ($writing_style !== '標準') {
+            $prompt .= "文体は{$writing_style}風でお願いします。\n";
+        }
+        $prompt .= "\n";
         
-        $prompt .= "以下の構造で出力してください：\n\n";
-        $prompt .= "TITLE: [記事タイトル]\n";
-        $prompt .= "TAGS: [関連タグ,カンマ区切り]\n";
-        $prompt .= "CONTENT:\n";
-        $prompt .= "[リード文]\n";
-        $prompt .= "<h2>[見出し1]</h2>\n";
-        $prompt .= "[本文1（適時、参照元を（記事タイトル - メディア名）の形式で本文中に記載してください）]\n";
-        $prompt .= "<h2>[見出し2]</h2>\n";
-        $prompt .= "[本文2（適時、参照元を（記事タイトル - メディア名）の形式で本文中に記載してください）]\n";
-        $prompt .= "...\n\n";
-        $prompt .= "## 参考情報源\n";
-        $prompt .= "[実際に参考にした記事の具体的なURLとタイトルを記載してください]\n";
-        $prompt .= "[形式: <a href=\"記事の具体的なURL\" target=\"_blank\">「記事タイトル」({$current_year}年の日付) - メディア名</a>]\n";
-        $prompt .= "[重要: 実在する記事の正確なURLを使用してください。メディアのトップページではなく、具体的な記事のURLが必要です]\n";
-        $prompt .= "[例: <a href=\"https://techcrunch.com/2025/07/04/openai-announces-new-features/\" target=\"_blank\">「OpenAI announces new AI features」(2025年7月4日) - TechCrunch</a>]\n\n";
+        $prompt .= "構成は以下のようなイメージです。見出しは【３】個ぐらいにしてください\n";
+        $prompt .= "---------------------------------\n";
+        $prompt .= "記事タイトル\n";
+        $prompt .= "リード文\n";
+        $prompt .= "見出しH2\n";
+        $prompt .= "本文\n";
+        $prompt .= "見出しH2\n";
+        $prompt .= "本文\n";
+        $prompt .= "・・・\n";
+        $prompt .= "---------------------------------\n";
+        $prompt .= "適時、参照元リンクを本文中にいれてください。\n";
         
-        $prompt .= "記事を作成してください。";
+        return $prompt;
+    }
+    
+    /**
+     * カスタムプロンプト構築
+     */
+    private function build_custom_prompt($custom_prompt, $settings) {
+        $search_keywords = $settings['search_keywords'] ?? 'AI ニュース';
+        $selected_languages = $settings['news_languages'] ?? array('japanese', 'english');
+        $word_count = $settings['article_word_count'] ?? 500;
+        $writing_style = $settings['writing_style'] ?? '夏目漱石';
+        
+        // 言語指定を作成
+        $language_names = array_map(array($this, 'get_language_name'), $selected_languages);
+        $language_text = implode('と', $language_names);
+        
+        // プレースホルダーを置換
+        $prompt = str_replace('{言語}', $language_text, $custom_prompt);
+        $prompt = str_replace('{キーワード}', $search_keywords, $prompt);
+        $prompt = str_replace('{文字数}', $word_count, $prompt);
+        $prompt = str_replace('{文体}', $writing_style, $prompt);
         
         return $prompt;
     }
@@ -1162,13 +1205,25 @@ class AINewsAutoPoster {
      * AIレスポンス解析
      */
     private function parse_ai_response($response) {
+        // 構造化レスポンス（TITLE:, TAGS:, CONTENT:）の場合
+        if (strpos($response, 'TITLE:') !== false && strpos($response, 'CONTENT:') !== false) {
+            return $this->parse_structured_response($response);
+        }
+        
+        // シンプルなレスポンス（タイトルと本文のみ）の場合
+        return $this->parse_simple_response($response);
+    }
+    
+    /**
+     * 構造化レスポンス解析
+     */
+    private function parse_structured_response($response) {
         $lines = explode("\n", $response);
         $title = '';
         $tags = array();
         $sources = array();
         $content = '';
         $in_content = false;
-        $in_references = false;
         
         foreach ($lines as $line) {
             if (strpos($line, 'SOURCES:') === 0) {
@@ -1181,24 +1236,52 @@ class AINewsAutoPoster {
                 $tags = array_map('trim', explode(',', $tags_str));
             } elseif (strpos($line, 'CONTENT:') === 0) {
                 $in_content = true;
-                $in_references = false;
-                continue;
-            } elseif (strpos($line, '## 参考情報源') === 0 || strpos($line, '参考情報源') !== false) {
-                $in_content = true; // 参考情報源もcontentに含める
-                $in_references = true;
-                $content .= "\n<h2>参考情報源</h2>\n";
                 continue;
             } elseif ($in_content) {
                 $content .= $line . "\n";
             }
         }
         
-        // ソース情報をログに記録
-        if (!empty($sources)) {
-            $this->log('info', '参考情報源: ' . implode(', ', $sources));
+        return array(
+            'title' => $title ?: '最新AIニュース: ' . date('Y年m月d日'),
+            'content' => trim($content),
+            'tags' => array_filter($tags)
+        );
+    }
+    
+    /**
+     * シンプルレスポンス解析
+     */
+    private function parse_simple_response($response) {
+        $lines = explode("\n", $response);
+        $title = '';
+        $content = '';
+        $tags = array();
+        
+        // 最初の行をタイトルとして使用
+        foreach ($lines as $index => $line) {
+            $line = trim($line);
+            if (!empty($line) && strpos($line, '#') !== 0) {
+                $title = $line;
+                // タイトル以降をコンテンツとして使用
+                $content = implode("\n", array_slice($lines, $index + 1));
+                break;
+            }
         }
         
-        // リンク検証処理は削除（タイムアウト原因のため）
+        // タイトルからタグを生成
+        if (stripos($title . $content, 'AI') !== false) $tags[] = 'AI';
+        if (stripos($title . $content, '人工知能') !== false) $tags[] = '人工知能';
+        if (stripos($title . $content, 'ChatGPT') !== false) $tags[] = 'ChatGPT';
+        if (stripos($title . $content, 'OpenAI') !== false) $tags[] = 'OpenAI';
+        if (stripos($title . $content, 'Google') !== false) $tags[] = 'Google';
+        
+        return array(
+            'title' => $title ?: '最新AIニュース: ' . date('Y年m月d日'),
+            'content' => trim($content),
+            'tags' => array_filter($tags)
+        );
+    }
         
         // 免責事項を追加
         $settings = get_option('ai_news_autoposter_settings', array());
