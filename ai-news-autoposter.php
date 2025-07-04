@@ -78,6 +78,8 @@ class AINewsAutoPoster {
                 'news_languages' => array('japanese', 'english'), // english, japanese, chinese
                 'output_language' => 'japanese', // japanese, english, chinese
                 'article_word_count' => 500,
+                'enable_disclaimer' => true,
+                'disclaimer_text' => '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。',
                 'image_generation_type' => 'placeholder', // placeholder, dalle, unsplash
                 'dalle_api_key' => '',
                 'unsplash_access_key' => '',
@@ -257,6 +259,8 @@ class AINewsAutoPoster {
                 'news_languages' => isset($_POST['news_languages']) ? array_map('sanitize_text_field', $_POST['news_languages']) : array(),
                 'output_language' => sanitize_text_field($_POST['output_language']),
                 'article_word_count' => intval($_POST['article_word_count']),
+                'enable_disclaimer' => isset($_POST['enable_disclaimer']),
+                'disclaimer_text' => sanitize_textarea_field($_POST['disclaimer_text']),
                 'image_generation_type' => sanitize_text_field($_POST['image_generation_type']),
                 'dalle_api_key' => sanitize_text_field($_POST['dalle_api_key']),
                 'unsplash_access_key' => sanitize_text_field($_POST['unsplash_access_key']),
@@ -424,6 +428,20 @@ class AINewsAutoPoster {
                             <input type="number" name="article_word_count" value="<?php echo esc_attr($settings['article_word_count'] ?? 500); ?>" min="100" max="3000" step="50" class="small-text" />
                             <span>文字程度</span>
                             <p class="ai-news-form-description">生成する記事の目安文字数を設定してください（100〜3000文字）。</p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">免責事項</th>
+                        <td>
+                            <label>
+                                <input type="checkbox" name="enable_disclaimer" <?php checked($settings['enable_disclaimer'] ?? true); ?> />
+                                記事末尾に免責事項を表示する
+                            </label>
+                            <div style="margin-top: 10px;">
+                                <textarea name="disclaimer_text" rows="3" class="large-text"><?php echo esc_textarea($settings['disclaimer_text'] ?? '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。'); ?></textarea>
+                                <p class="ai-news-form-description">記事末尾に表示する免責事項の文言を設定してください。</p>
+                            </div>
                         </td>
                     </tr>
                     
@@ -877,7 +895,7 @@ class AINewsAutoPoster {
         $prompt .= "CONTENT:\n";
         $prompt .= "[記事本文（HTMLタグ使用可、見出しはH2・H3タグを使用）]\n\n";
         $prompt .= "## 参考ニュース\n";
-        $prompt .= "[引用したニュースソースのタイトルとリンクを箇条書きで記載]";
+        $prompt .= "[引用したニュースソースのタイトルとリンクをHTML形式のリンクで記載。例: <a href=\"URL\" target=\"_blank\">タイトル</a>]";
         
         return $prompt;
     }
@@ -947,6 +965,15 @@ class AINewsAutoPoster {
             } elseif ($in_content) {
                 $content .= $line . "\n";
             }
+        }
+        
+        // 免責事項を追加
+        $settings = get_option('ai_news_autoposter_settings', array());
+        $enable_disclaimer = $settings['enable_disclaimer'] ?? true;
+        $disclaimer_text = $settings['disclaimer_text'] ?? '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。';
+        
+        if ($enable_disclaimer && !empty($disclaimer_text)) {
+            $content = trim($content) . "\n\n<div style=\"margin-top: 20px; padding: 10px; background-color: #f0f0f0; border-left: 4px solid #ccc; font-size: 14px; color: #666;\">" . esc_html($disclaimer_text) . "</div>";
         }
         
         return array(
