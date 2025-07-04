@@ -966,8 +966,10 @@ class AINewsAutoPoster {
         $language_names = array_map(array($this, 'get_language_name'), $selected_languages);
         $language_text = implode('と', $language_names);
         
-        $prompt = "【{$language_text}】のニュースから、【{$search_keywords}】に関する最新のニュースを送ってください。5本ぐらいが理想です。\n";
-        $prompt .= "ニュースの背景や文脈を簡単にまとめ、かつ、上記の最新ニュースのリンク先を参考情報元として記事のタイトルとリンクを記載し、なぜ今、これが起こっているのか、という背景情報を踏まえて、今後どのような影響をあたえるのか、推察もしてください。\n";
+        $current_date = current_time('Y年n月j日');
+        
+        $prompt = "【{$language_text}】のニュースから、【{$search_keywords}】に関する{$current_date}の最新ニュース（できるだけ今日や昨日の新しいニュース）を優先して送ってください。5本ぐらいが理想です。\n";
+        $prompt .= "ニュースの背景や文脈を簡単にまとめ、なぜ今、これが起こっているのか、という背景情報を踏まえて、今後どのような影響をあたえるのか、推察もしてください。\n";
         $prompt .= "全部で【{$word_count}文字】程度にまとめてください。充実した内容で。\n";
         $prompt .= "文体は{$writing_style}風でお願いします。\n\n";
         
@@ -982,8 +984,9 @@ class AINewsAutoPoster {
         $prompt .= "[本文2（適時、参照元を（記事タイトル - メディア名）の形式で本文中に記載してください）]\n";
         $prompt .= "...\n\n";
         $prompt .= "## 参考情報源\n";
-        $prompt .= "[参考にした記事のタイトルとリンクを記載してください。形式: <a href=\"URL\" target=\"_blank\">「記事タイトル」(発行日) - メディア名</a>]\n";
-        $prompt .= "[例: <a href=\"https://www.nikkei.com/\" target=\"_blank\">「ChatGPT-4の新機能発表」(2024年1月10日) - 日経新聞</a>]\n\n";
+        $prompt .= "[参考にした最新記事の情報を記載してください。リンクは不要です]\n";
+        $prompt .= "[形式: 「記事タイトル」({$current_date}) - メディア名]\n";
+        $prompt .= "[例: 「ChatGPT-4の新機能発表」(2024年7月4日) - 日経新聞]\n\n";
         
         $prompt .= "記事を作成してください。";
         
