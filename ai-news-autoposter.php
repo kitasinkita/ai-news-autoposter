@@ -1003,12 +1003,10 @@ class AINewsAutoPoster {
         $prompt .= "- 事実に基づいた信頼性の高い情報のみを使用してください\n";
         $prompt .= "- 現在日時: {$current_date} {$current_time}\n\n";
         
-        $prompt .= "## 参考リンクの指示\n";
-        $prompt .= "- 参考情報源には以下の実在する安全なリンクのみを使用してください\n";
-        $prompt .= "- 日本語情報: https://www.nikkei.com/ (日経新聞)\n";
-        $prompt .= "- 英語情報: https://techcrunch.com/ (TechCrunch)\n";
-        $prompt .= "- AI専門: https://www.artificialintelligence-news.com/ (AI News)\n";
-        $prompt .= "- 必ずtarget=\"_blank\"を付けてください\n\n";
+        $prompt .= "## 参考情報源の指示\n";
+        $prompt .= "- 実際に参考にした情報源を正確に記載してください\n";
+        $prompt .= "- リンクは提供せず、情報源名のみを記載してください\n";
+        $prompt .= "- 例：日経新聞、TechCrunch、MIT Technology Review、OpenAI公式ブログなど\n\n";
         
         $prompt .= "## 出力形式\n";
         $prompt .= "以下の形式で段階的に回答してください：\n\n";
@@ -1019,8 +1017,8 @@ class AINewsAutoPoster {
         $prompt .= "CONTENT:\n";
         $prompt .= "[記事本文（HTMLタグ使用可、見出しはH2・H3タグを使用）]\n\n";
         $prompt .= "## 参考情報源\n";
-        $prompt .= "[上記で指定した安全なリンクを使用して参考情報源をHTML形式で記載]\n";
-        $prompt .= "[例: <a href=\"https://www.nikkei.com/\" target=\"_blank\">日経新聞</a>]\n\n";
+        $prompt .= "[実際に参考にした情報源を名前のみで記載（リンクなし）]\n";
+        $prompt .= "[例: 日経新聞、TechCrunch、MIT Technology Review]\n\n";
         
         $prompt .= "記事を作成してください。";
         
