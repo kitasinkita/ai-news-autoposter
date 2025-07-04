@@ -1004,10 +1004,10 @@ class AINewsAutoPoster {
         $prompt .= "- 現在日時: {$current_date} {$current_time}\n\n";
         
         $prompt .= "## 参考情報源の指示\n";
-        $prompt .= "- 実際に参考にした情報源を正確に記載してください\n";
-        $prompt .= "- 各情報源には実在するトップページのURLを付けてください\n";
-        $prompt .= "- 必ずtarget=\"_blank\"を付けて新しいタブで開くようにしてください\n";
-        $prompt .= "- 例：<a href=\"https://www.nikkei.com/\" target=\"_blank\">日経新聞</a>\n\n";
+        $prompt .= "- 実際に参考にした情報源を具体的に記載してください\n";
+        $prompt .= "- 以下の形式で記載：「記事タイトル」(発行日) - 情報源名\n";
+        $prompt .= "- リンクは情報源のトップページを使用し、target=\"_blank\"を付けてください\n";
+        $prompt .= "- 例：<a href=\"https://www.nikkei.com/\" target=\"_blank\">「AI技術の最新動向について」(2024年1月15日) - 日経新聞</a>\n\n";
         
         $prompt .= "## 出力形式\n";
         $prompt .= "以下の形式で段階的に回答してください：\n\n";
@@ -1018,8 +1018,9 @@ class AINewsAutoPoster {
         $prompt .= "CONTENT:\n";
         $prompt .= "[記事本文（HTMLタグ使用可、見出しはH2・H3タグを使用）]\n\n";
         $prompt .= "## 参考情報源\n";
-        $prompt .= "[実際に参考にした情報源をHTML形式のリンクで記載]\n";
-        $prompt .= "[例: <a href=\"https://www.nikkei.com/\" target=\"_blank\">日経新聞</a>, <a href=\"https://techcrunch.com/\" target=\"_blank\">TechCrunch</a>]\n\n";
+        $prompt .= "[実際に参考にした記事を具体的に記載（記事タイトル・発行日・情報源名）]\n";
+        $prompt .= "[例: <a href=\"https://www.nikkei.com/\" target=\"_blank\">「ChatGPT-4の新機能発表」(2024年1月10日) - 日経新聞</a>]\n";
+        $prompt .= "[例: <a href=\"https://techcrunch.com/\" target=\"_blank\">\"OpenAI Launches New AI Model\"(Jan 12, 2024) - TechCrunch</a>]\n\n";
         
         $prompt .= "記事を作成してください。";
         
