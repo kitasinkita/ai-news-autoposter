@@ -834,12 +834,13 @@ class AINewsAutoPoster {
         }
         
         $response = wp_remote_head($url, array(
-            'timeout' => 15,
-            'redirection' => 3,
-            'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'timeout' => 20,
+            'redirection' => 5,
+            'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'headers' => array(
-                'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                 'Accept-Language' => 'ja,en-US;q=0.7,en;q=0.3',
+                'Cache-Control' => 'no-cache',
             )
         ));
         
@@ -983,8 +984,8 @@ class AINewsAutoPoster {
         $prompt .= "## 重要な注意事項\n";
         $prompt .= "- 知識ベースから最新の技術動向や業界トレンドを活用してください\n";
         $prompt .= "- 事実に基づいた信頼性の高い情報のみを使用してください\n";
-        $prompt .= "- 参考情報として一般的な業界サイトや技術サイトを想定したリンクを作成してください\n";
-        $prompt .= "- リンクには必ずtarget=\"_blank\"を指定してください\n";
+        $prompt .= "- 参考情報源は具体的なURLリンクではなく、メディア名や情報源の名前のみを記載してください\n";
+        $prompt .= "- リンクは作成せず、テキストのみで参考情報を示してください\n";
         $prompt .= "- 現在日時: {$current_date} {$current_time}\n\n";
         
         $prompt .= "## 出力形式\n";
@@ -994,8 +995,9 @@ class AINewsAutoPoster {
         $prompt .= "CONTENT:\n";
         $prompt .= "[記事本文（HTMLタグ使用可、見出しはH2・H3タグを使用）]\n\n";
         $prompt .= "## 参考情報源\n";
-        $prompt .= "[業界の主要なニュースサイトや技術サイトを想定した参考リンクをHTML形式で記載]\n";
-        $prompt .= "[例: <a href=\"https://example-tech-news.com/article\" target=\"_blank\">AI技術の最新動向</a>]\n\n";
+        $prompt .= "[情報源の名前やメディア名をテキストのみで記載してください]\n";
+        $prompt .= "[例: TechCrunch、Nikkei Business、MIT Technology Review等]\n";
+        $prompt .= "[注意: URLリンクは一切作成しないでください]\n\n";
         
         $prompt .= "記事を作成してください。";
         
@@ -1127,6 +1129,39 @@ class AINewsAutoPoster {
     }
     
     /**
+     * 記事内の全リンクを検証して無効なものを削除
+     */
+    private function validate_and_clean_links($content) {
+        $this->log('info', '記事内のリンク検証を開始します');
+        
+        // <a>タグを抽出
+        preg_match_all('/<a\s+[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)<\/a>/i', $content, $matches, PREG_SET_ORDER);
+        
+        $removed_count = 0;
+        $total_links = count($matches);
+        
+        foreach ($matches as $match) {
+            $full_link_tag = $match[0];
+            $url = $match[1];
+            $link_text = $match[2];
+            
+            // リンクの有効性を確認
+            if (!$this->validate_link($url)) {
+                // 無効なリンクをテキストのみに置換
+                $content = str_replace($full_link_tag, strip_tags($link_text), $content);
+                $removed_count++;
+                $this->log('info', "無効なリンクを削除: {$url}");
+            } else {
+                $this->log('info', "有効なリンクを確認: {$url}");
+            }
+        }
+        
+        $this->log('info', "リンク検証完了: {$total_links}件中{$removed_count}件を削除");
+        
+        return $content;
+    }
+    
+    /**
      * AIレスポンス解析
      */
     private function parse_ai_response($response) {
@@ -1149,6 +1184,9 @@ class AINewsAutoPoster {
                 $content .= $line . "\n";
             }
         }
+        
+        // 記事内の全リンクを検証して無効なものを削除
+        $content = $this->validate_and_clean_links($content);
         
         // 免責事項を追加
         $settings = get_option('ai_news_autoposter_settings', array());
