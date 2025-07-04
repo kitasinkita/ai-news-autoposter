@@ -69,7 +69,7 @@ class AINewsAutoPoster {
                 'max_posts_per_day' => 1,
                 'post_category' => get_option('default_category'),
                 'seo_focus_keyword' => 'AI ニュース',
-                'meta_description_template' => '最新のAI業界ニュースをお届けします。{title}について詳しく解説。',
+                'meta_description_template' => '最新の業界ニュースをお届けします。{title}について詳しく解説いたします。',
                 'enable_featured_image' => true,
                 'post_status' => 'publish',
                 'enable_tags' => true,
@@ -925,7 +925,7 @@ class AINewsAutoPoster {
      * メタディスクリプション生成
      */
     private function generate_meta_description($title, $settings) {
-        $template = $settings['meta_description_template'] ?? '最新のAI業界ニュースをお届けします。{title}について詳しく解説。';
+        $template = $settings['meta_description_template'] ?? '最新の業界ニュースをお届けします。{title}について詳しく解説いたします。';
         return str_replace('{title}', $title, $template);
     }
     
