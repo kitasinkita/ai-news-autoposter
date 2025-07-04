@@ -961,9 +961,10 @@ class AINewsAutoPoster {
         $prompt = "あなたは優秀なAIジャーナリストです。以下の指示に従って最新のニュース記事を作成してください。\n\n";
         
         $prompt .= "## 指示内容\n";
-        $prompt .= "1. あなたの知識ベースから「{$search_keywords}」に関する最新の情報・トレンドを活用してください\n";
-        $prompt .= "2. 現在進行中の技術動向、市場動向、注目すべき発展を含めてください\n";
-        $prompt .= "3. これらの情報を基に、{$writing_style}風の文体で記事を{$language_instructions[$output_language]}作成してください\n\n";
+        $prompt .= "以下の手順で記事を作成してください：\n\n";
+        $prompt .= "1. まず、「{$search_keywords}」に関して参考にする情報源を列挙してください\n";
+        $prompt .= "2. 次に、それらの情報源から得られる最新の技術動向・市場動向を整理してください\n";
+        $prompt .= "3. 最後に、整理した情報を基に{$writing_style}風の文体で記事を{$language_instructions[$output_language]}作成してください\n\n";
         
         $prompt .= "## 記事の要件\n";
         $prompt .= "- 文字数: 約{$word_count}文字\n";
@@ -984,20 +985,24 @@ class AINewsAutoPoster {
         $prompt .= "## 重要な注意事項\n";
         $prompt .= "- 知識ベースから最新の技術動向や業界トレンドを活用してください\n";
         $prompt .= "- 事実に基づいた信頼性の高い情報のみを使用してください\n";
-        $prompt .= "- 参考情報源は具体的なURLリンクではなく、メディア名や情報源の名前のみを記載してください\n";
-        $prompt .= "- リンクは作成せず、テキストのみで参考情報を示してください\n";
         $prompt .= "- 現在日時: {$current_date} {$current_time}\n\n";
         
+        $prompt .= "## 絶対禁止事項\n";
+        $prompt .= "- URLリンクは絶対に作成しないでください\n";
+        $prompt .= "- <a>タグは一切使用しないでください\n";
+        $prompt .= "- httpやhttpsで始まるリンクは記載しないでください\n";
+        $prompt .= "- 参考情報はメディア名のみをテキストで記載してください\n\n";
+        
         $prompt .= "## 出力形式\n";
-        $prompt .= "以下の形式で回答してください：\n\n";
+        $prompt .= "以下の形式で段階的に回答してください：\n\n";
+        $prompt .= "SOURCES: [参考情報源の名前をカンマ区切りで列挙]\n";
+        $prompt .= "[例: TechCrunch, MIT Technology Review, 日経ビジネス]\n\n";
         $prompt .= "TITLE: [記事タイトル]\n";
         $prompt .= "TAGS: [関連タグ,カンマ区切り]\n";
         $prompt .= "CONTENT:\n";
         $prompt .= "[記事本文（HTMLタグ使用可、見出しはH2・H3タグを使用）]\n\n";
         $prompt .= "## 参考情報源\n";
-        $prompt .= "[情報源の名前やメディア名をテキストのみで記載してください]\n";
-        $prompt .= "[例: TechCrunch、Nikkei Business、MIT Technology Review等]\n";
-        $prompt .= "[注意: URLリンクは一切作成しないでください]\n\n";
+        $prompt .= "[上記SOURCESで列挙した情報源の詳細をテキストのみで記載]\n\n";
         
         $prompt .= "記事を作成してください。";
         
@@ -1168,11 +1173,15 @@ class AINewsAutoPoster {
         $lines = explode("\n", $response);
         $title = '';
         $tags = array();
+        $sources = array();
         $content = '';
         $in_content = false;
         
         foreach ($lines as $line) {
-            if (strpos($line, 'TITLE:') === 0) {
+            if (strpos($line, 'SOURCES:') === 0) {
+                $sources_str = trim(substr($line, 8));
+                $sources = array_map('trim', explode(',', $sources_str));
+            } elseif (strpos($line, 'TITLE:') === 0) {
                 $title = trim(substr($line, 6));
             } elseif (strpos($line, 'TAGS:') === 0) {
                 $tags_str = trim(substr($line, 5));
@@ -1185,8 +1194,12 @@ class AINewsAutoPoster {
             }
         }
         
-        // 記事内の全リンクを検証して無効なものを削除
-        $content = $this->validate_and_clean_links($content);
+        // ソース情報をログに記録
+        if (!empty($sources)) {
+            $this->log('info', '参考情報源: ' . implode(', ', $sources));
+        }
+        
+        // リンク検証処理は削除（タイムアウト原因のため）
         
         // 免責事項を追加
         $settings = get_option('ai_news_autoposter_settings', array());
