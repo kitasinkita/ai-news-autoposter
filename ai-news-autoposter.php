@@ -107,7 +107,7 @@ class AINewsAutoPoster {
             'manage_options',
             'ai-news-autoposter',
             array($this, 'admin_page'),
-            'dashicons-robot',
+            'dashicons-megaphone',
             30
         );
         
