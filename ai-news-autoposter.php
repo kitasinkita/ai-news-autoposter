@@ -908,34 +908,6 @@ class AINewsAutoPoster {
 // プラグインの初期化
 new AINewsAutoPoster();
 
-/**
- * カスタム投稿タイプ: AIニュース履歴
- */
-function ai_news_autoposter_register_post_type() {
-    register_post_type('ai_news_history', array(
-        'labels' => array(
-            'name' => 'AI記事履歴',
-            'singular_name' => 'AI記事',
-            'menu_name' => 'AI記事履歴',
-            'add_new' => '新規追加',
-            'add_new_item' => '新しいAI記事を追加',
-            'edit_item' => 'AI記事を編集',
-            'new_item' => '新しいAI記事',
-            'view_item' => 'AI記事を表示',
-            'search_items' => 'AI記事を検索',
-            'not_found' => 'AI記事が見つかりませんでした',
-            'not_found_in_trash' => 'ゴミ箱にAI記事がありませんでした'
-        ),
-        'public' => false,
-        'show_ui' => true,
-        'show_in_menu' => 'ai-news-autoposter',
-        'capability_type' => 'post',
-        'supports' => array('title', 'editor', 'custom-fields'),
-        'has_archive' => false,
-        'rewrite' => false
-    ));
-}
-add_action('init', 'ai_news_autoposter_register_post_type');
 
 /**
  * ウィジェット: 最新AI記事
@@ -1160,15 +1132,18 @@ function ai_news_autoposter_uninstall() {
     // Cronイベント削除
     wp_clear_scheduled_hook('ai_news_autoposter_daily_cron');
     
-    // カスタム投稿タイプの記事削除
+    // AI生成記事のメタデータ削除
     $posts = get_posts(array(
-        'post_type' => 'ai_news_history',
+        'post_type' => 'post',
         'numberposts' => -1,
-        'post_status' => 'any'
+        'meta_key' => '_ai_generated',
+        'meta_value' => true
     ));
     
     foreach ($posts as $post) {
-        wp_delete_post($post->ID, true);
+        delete_post_meta($post->ID, '_ai_generated');
+        delete_post_meta($post->ID, '_seo_focus_keyword');
+        delete_post_meta($post->ID, '_meta_description');
     }
 }
 register_uninstall_hook(__FILE__, 'ai_news_autoposter_uninstall');
