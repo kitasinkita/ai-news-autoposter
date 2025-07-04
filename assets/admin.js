@@ -43,8 +43,6 @@
             // 画像生成方式の変更
             $(document).on('change', 'select[name="image_generation_type"]', this.toggleImageSettings);
             
-            // 最大投稿数の変更
-            $(document).on('change', 'input[name="max_posts_per_day"]', this.updateScheduleInputs);
             
             // リアルタイム統計更新
             setInterval(this.updateStats, 30000); // 30秒ごと
@@ -70,8 +68,6 @@
             // ダッシュボード統計更新
             this.updateDashboardStats();
             
-            // スケジュール入力フィールドの初期化
-            this.initScheduleInputs();
         },
         
         createNotificationContainer: function() {
@@ -230,18 +226,10 @@
                 errors.push('1日の最大投稿数は1-24の範囲で設定してください。');
             }
             
-            // 時刻検証 - schedule_timesの最初の値をチェック
-            const scheduleTimesInputs = $('input[name="schedule_times[]"]');
-            let hasValidTime = false;
-            scheduleTimesInputs.each(function() {
-                if ($(this).val() && $(this).is(':visible')) {
-                    hasValidTime = true;
-                    return false; // break
-                }
-            });
-            
-            if (!hasValidTime) {
-                errors.push('投稿時刻を設定してください。');
+            // 開始時刻検証
+            const scheduleTime = $('#schedule_time').val();
+            if (!scheduleTime) {
+                errors.push('投稿開始時刻を設定してください。');
             }
             
             if (errors.length > 0) {
@@ -644,40 +632,6 @@
             });
         },
         
-        initScheduleInputs: function() {
-            // ページロード時に現在の最大投稿数に応じてフィールドを初期化
-            const maxPosts = parseInt($('input[name="max_posts_per_day"]').val()) || 1;
-            this.updateScheduleInputsForCount(maxPosts);
-        },
-        
-        updateScheduleInputs: function() {
-            const maxPosts = parseInt($(this).val()) || 1;
-            AINewsAutoPoster.updateScheduleInputsForCount(maxPosts);
-        },
-        
-        updateScheduleInputsForCount: function(maxPosts) {
-            const $container = $('#schedule-times-container');
-            const $rows = $container.find('.schedule-time-row');
-            
-            // 必要な数の入力フィールドを表示
-            for (let i = 0; i < maxPosts; i++) {
-                if (i < $rows.length) {
-                    $rows.eq(i).show();
-                } else {
-                    // 新しい入力フィールドを追加
-                    const newRow = '<div class="schedule-time-row">' +
-                        '<label>投稿時刻 ' + (i + 1) + ':</label> ' +
-                        '<input type="time" name="schedule_times[]" value="" />' +
-                        '</div>';
-                    $container.append(newRow);
-                }
-            }
-            
-            // 余分な入力フィールドを非表示
-            for (let i = maxPosts; i < $rows.length; i++) {
-                $rows.eq(i).hide();
-            }
-        }
     };
 
     // DOM Ready

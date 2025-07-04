@@ -106,7 +106,9 @@ class AINewsAutoPoster {
         // Cronスケジュールを設定
         if (!wp_next_scheduled('ai_news_autoposter_daily_cron')) {
             $settings = get_option('ai_news_autoposter_settings', array());
-            $schedule_times = $settings['schedule_times'] ?? array('06:00');
+            $start_time = $settings['schedule_time'] ?? '06:00';
+            $max_posts = $settings['max_posts_per_day'] ?? 1;
+            $schedule_times = $this->generate_hourly_schedule($start_time, $max_posts);
             $this->setup_multiple_schedules($schedule_times);
         }
     }
@@ -244,7 +246,6 @@ class AINewsAutoPoster {
                 'claude_api_key' => sanitize_text_field($_POST['claude_api_key']),
                 'auto_publish' => isset($_POST['auto_publish']),
                 'schedule_time' => sanitize_text_field($_POST['schedule_time']),
-                'schedule_times' => isset($_POST['schedule_times']) ? array_map('sanitize_text_field', $_POST['schedule_times']) : array('06:00'),
                 'max_posts_per_day' => intval($_POST['max_posts_per_day']),
                 'post_category' => intval($_POST['post_category']),
                 'seo_focus_keyword' => sanitize_text_field($_POST['seo_focus_keyword']),
@@ -264,6 +265,10 @@ class AINewsAutoPoster {
                 'unsplash_access_key' => sanitize_text_field($_POST['unsplash_access_key']),
                 'news_sources' => $this->parse_news_sources($_POST)
             );
+            
+            // 開始時刻から1時間おきのスケジュールを自動生成
+            $schedule_times = $this->generate_hourly_schedule($settings['schedule_time'], $settings['max_posts_per_day']);
+            $settings['schedule_times'] = $schedule_times;
             
             update_option('ai_news_autoposter_settings', $settings);
             
@@ -304,27 +309,14 @@ class AINewsAutoPoster {
                     </tr>
                     
                     <tr>
-                        <th scope="row">投稿スケジュール</th>
+                        <th scope="row">投稿開始時刻</th>
                         <td>
-                            <div id="schedule-times-container">
-                                <?php 
-                                $schedule_times = $settings['schedule_times'] ?? array('06:00');
-                                $max_posts = $settings['max_posts_per_day'] ?? 1;
-                                
-                                // 最大投稿数分の入力フィールドを生成
-                                for ($i = 0; $i < $max_posts; $i++) {
-                                    $time_value = isset($schedule_times[$i]) ? $schedule_times[$i] : '';
-                                    echo '<div class="schedule-time-row">';
-                                    echo '<label>投稿時刻 ' . ($i + 1) . ':</label> ';
-                                    echo '<input type="time" name="schedule_times[]" value="' . esc_attr($time_value) . '" />';
-                                    echo '</div>';
-                                }
-                                ?>
-                            </div>
-                            <p class="ai-news-form-description">1日の最大投稿数に応じて投稿時刻を設定してください。設定した時刻に自動投稿されます。</p>
-                            
-                            <!-- 後方互換性のため -->
-                            <input type="hidden" name="schedule_time" value="<?php echo esc_attr($settings['schedule_time'] ?? '06:00'); ?>" />
+                            <input type="time" id="schedule_time" name="schedule_time" value="<?php echo esc_attr($settings['schedule_time'] ?? '06:00'); ?>" />
+                            <p class="ai-news-form-description">
+                                <strong>自動投稿の仕組み：</strong><br>
+                                開始時刻から1時間おきに投稿されます。<br>
+                                例：開始時刻06:00、最大投稿数3の場合 → 06:00、07:00、08:00に投稿
+                            </p>
                         </td>
                     </tr>
                     
@@ -1319,6 +1311,25 @@ class AINewsAutoPoster {
             $this->log('error', 'アイキャッチ画像生成でエラー: ' . $e->getMessage());
             return false;
         }
+    }
+    
+    /**
+     * 1時間おきのスケジュールを生成
+     */
+    private function generate_hourly_schedule($start_time, $max_posts) {
+        $schedule_times = array();
+        
+        // 開始時刻をパース
+        $start_hour = intval(substr($start_time, 0, 2));
+        $start_minute = intval(substr($start_time, 3, 2));
+        
+        for ($i = 0; $i < $max_posts; $i++) {
+            $hour = ($start_hour + $i) % 24; // 24時間を超えたら0時から
+            $time = sprintf('%02d:%02d', $hour, $start_minute);
+            $schedule_times[] = $time;
+        }
+        
+        return $schedule_times;
     }
     
     /**
