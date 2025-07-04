@@ -1119,7 +1119,7 @@ class AINewsAutoPoster {
         );
         
         $body = array(
-            'model' => 'claude-3-5-sonnet-4',
+            'model' => 'claude-sonnet-4-20250514',
             'max_tokens' => 2000, // トークン数を削減して処理時間短縮
             'messages' => array(
                 array(
