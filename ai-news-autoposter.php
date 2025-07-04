@@ -688,7 +688,10 @@ class AINewsAutoPoster {
         $prompt .= "以下のニュースを参考にしてください：\n";
         
         foreach ($news_topics as $news) {
-            $prompt .= "- {$news['title']}: {$news['description']}\n";
+            $prompt .= "- タイトル: {$news['title']}\n";
+            $prompt .= "  説明: {$news['description']}\n";
+            $prompt .= "  リンク: {$news['link']}\n";
+            $prompt .= "  日時: {$news['date']}\n\n";
         }
         
         $prompt .= "\n記事の要件：\n";
@@ -697,12 +700,17 @@ class AINewsAutoPoster {
         $prompt .= "- 1500-2000文字程度\n";
         $prompt .= "- 魅力的なタイトル\n";
         $prompt .= "- 村上春樹風の文学的表現\n";
-        $prompt .= "- 読者にとって有益で興味深い内容\n\n";
+        $prompt .= "- 読者にとって有益で興味深い内容\n";
+        $prompt .= "- 適切な見出し（H2、H3タグ）を使用\n";
+        $prompt .= "- 記事の最後に参考ニュースの引用元とリンクを記載\n\n";
         
         $prompt .= "以下の形式で回答してください：\n";
         $prompt .= "TITLE: [記事タイトル]\n";
         $prompt .= "TAGS: [関連タグ,カンマ区切り]\n";
-        $prompt .= "CONTENT:\n[記事本文]";
+        $prompt .= "CONTENT:\n";
+        $prompt .= "[記事本文（HTMLタグ使用可、見出しはH2・H3タグを使用）]\n\n";
+        $prompt .= "## 参考ニュース\n";
+        $prompt .= "[引用したニュースソースのタイトルとリンクを箇条書きで記載]";
         
         return $prompt;
     }
