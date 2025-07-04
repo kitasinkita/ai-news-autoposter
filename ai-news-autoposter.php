@@ -818,11 +818,15 @@ class AINewsAutoPoster {
             wp_set_post_tags($post_id, $article_data['tags']);
         }
         
-        // アイキャッチ画像を生成（一時的に無効化してタイムアウト問題を解決）
-        // if ($settings['enable_featured_image']) {
-        //     $this->generate_featured_image($post_id, $article_data['title'], $article_data['content'], $settings);
-        // }
-        $this->log('info', 'アイキャッチ画像生成は一時的に無効化されています（ネットワークエラー対策）');
+        // アイキャッチ画像を生成
+        if ($settings['enable_featured_image']) {
+            $this->log('info', 'アイキャッチ画像生成を開始します');
+            try {
+                $this->generate_featured_image($post_id, $article_data['title'], $article_data['content'], $settings);
+            } catch (Exception $e) {
+                $this->log('warning', 'アイキャッチ画像生成をスキップしました: ' . $e->getMessage());
+            }
+        }
         
         // SEO設定
         $this->set_seo_data($post_id, $settings['seo_focus_keyword'], $this->generate_meta_description($article_data['title'], $settings));
@@ -999,11 +1003,12 @@ class AINewsAutoPoster {
         $prompt .= "- 事実に基づいた信頼性の高い情報のみを使用してください\n";
         $prompt .= "- 現在日時: {$current_date} {$current_time}\n\n";
         
-        $prompt .= "## 絶対禁止事項\n";
-        $prompt .= "- URLリンクは絶対に作成しないでください\n";
-        $prompt .= "- <a>タグは一切使用しないでください\n";
-        $prompt .= "- httpやhttpsで始まるリンクは記載しないでください\n";
-        $prompt .= "- 参考情報はメディア名のみをテキストで記載してください\n\n";
+        $prompt .= "## 参考リンクの指示\n";
+        $prompt .= "- 参考情報源には以下の実在する安全なリンクのみを使用してください\n";
+        $prompt .= "- 日本語情報: https://www.nikkei.com/ (日経新聞)\n";
+        $prompt .= "- 英語情報: https://techcrunch.com/ (TechCrunch)\n";
+        $prompt .= "- AI専門: https://www.artificialintelligence-news.com/ (AI News)\n";
+        $prompt .= "- 必ずtarget=\"_blank\"を付けてください\n\n";
         
         $prompt .= "## 出力形式\n";
         $prompt .= "以下の形式で段階的に回答してください：\n\n";
@@ -1014,7 +1019,8 @@ class AINewsAutoPoster {
         $prompt .= "CONTENT:\n";
         $prompt .= "[記事本文（HTMLタグ使用可、見出しはH2・H3タグを使用）]\n\n";
         $prompt .= "## 参考情報源\n";
-        $prompt .= "[上記SOURCESで列挙した情報源の詳細をテキストのみで記載]\n\n";
+        $prompt .= "[上記で指定した安全なリンクを使用して参考情報源をHTML形式で記載]\n";
+        $prompt .= "[例: <a href=\"https://www.nikkei.com/\" target=\"_blank\">日経新聞</a>]\n\n";
         
         $prompt .= "記事を作成してください。";
         
@@ -1484,7 +1490,7 @@ class AINewsAutoPoster {
             
             // 画像をダウンロード
             $image_data = wp_remote_get($default_image_url, array(
-                'timeout' => 30,
+                'timeout' => 10, // タイムアウトを短縮
                 'user-agent' => 'WordPress/' . get_bloginfo('version')
             ));
             
