@@ -43,6 +43,9 @@
             // 画像生成方式の変更
             $(document).on('change', 'select[name="image_generation_type"]', this.toggleImageSettings);
             
+            // 最大投稿数の変更
+            $(document).on('change', 'input[name="max_posts_per_day"]', this.updateScheduleInputs);
+            
             // リアルタイム統計更新
             setInterval(this.updateStats, 30000); // 30秒ごと
             
@@ -628,6 +631,31 @@
                 console.error('Error:', error);
                 alert('ネットワークエラーが発生しました。');
             });
+        },
+        
+        updateScheduleInputs: function() {
+            const maxPosts = parseInt($(this).val()) || 1;
+            const $container = $('#schedule-times-container');
+            const $rows = $container.find('.schedule-time-row');
+            
+            // 必要な数の入力フィールドを表示
+            for (let i = 0; i < maxPosts; i++) {
+                if (i < $rows.length) {
+                    $rows.eq(i).show();
+                } else {
+                    // 新しい入力フィールドを追加
+                    const newRow = '<div class="schedule-time-row">' +
+                        '<label>投稿時刻 ' + (i + 1) + ':</label> ' +
+                        '<input type="time" name="schedule_times[]" value="" />' +
+                        '</div>';
+                    $container.append(newRow);
+                }
+            }
+            
+            // 余分な入力フィールドを非表示
+            for (let i = maxPosts; i < $rows.length; i++) {
+                $rows.eq(i).hide();
+            }
         }
     };
 

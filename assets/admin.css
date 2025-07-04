@@ -576,6 +576,24 @@
     font-weight: normal;
 }
 
+/* Schedule time inputs */
+.schedule-time-row {
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+}
+
+.schedule-time-row label {
+    display: inline-block;
+    width: 100px;
+    margin-right: 10px;
+    font-weight: 600;
+}
+
+.schedule-time-row input[type="time"] {
+    width: 120px;
+}
+
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {
     .ai-news-status-card {

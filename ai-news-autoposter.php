@@ -66,6 +66,7 @@ class AINewsAutoPoster {
                 'claude_api_key' => '',
                 'auto_publish' => false,
                 'schedule_time' => '06:00',
+                'schedule_times' => array('06:00'),
                 'max_posts_per_day' => 1,
                 'post_category' => get_option('default_category'),
                 'seo_focus_keyword' => 'AI ニュース',
@@ -105,12 +106,8 @@ class AINewsAutoPoster {
         // Cronスケジュールを設定
         if (!wp_next_scheduled('ai_news_autoposter_daily_cron')) {
             $settings = get_option('ai_news_autoposter_settings', array());
-            $schedule_time = $settings['schedule_time'] ?? '06:00';
-            $timestamp = strtotime('today ' . $schedule_time);
-            if ($timestamp < time()) {
-                $timestamp += DAY_IN_SECONDS;
-            }
-            wp_schedule_event($timestamp, 'daily', 'ai_news_autoposter_daily_cron');
+            $schedule_times = $settings['schedule_times'] ?? array('06:00');
+            $this->setup_multiple_schedules($schedule_times);
         }
     }
     
@@ -247,6 +244,7 @@ class AINewsAutoPoster {
                 'claude_api_key' => sanitize_text_field($_POST['claude_api_key']),
                 'auto_publish' => isset($_POST['auto_publish']),
                 'schedule_time' => sanitize_text_field($_POST['schedule_time']),
+                'schedule_times' => isset($_POST['schedule_times']) ? array_map('sanitize_text_field', $_POST['schedule_times']) : array('06:00'),
                 'max_posts_per_day' => intval($_POST['max_posts_per_day']),
                 'post_category' => intval($_POST['post_category']),
                 'seo_focus_keyword' => sanitize_text_field($_POST['seo_focus_keyword']),
@@ -271,11 +269,7 @@ class AINewsAutoPoster {
             
             // Cronスケジュール更新
             wp_clear_scheduled_hook('ai_news_autoposter_daily_cron');
-            $timestamp = strtotime('today ' . $settings['schedule_time']);
-            if ($timestamp < time()) {
-                $timestamp += DAY_IN_SECONDS;
-            }
-            wp_schedule_event($timestamp, 'daily', 'ai_news_autoposter_daily_cron');
+            $this->setup_multiple_schedules($settings['schedule_times']);
             
             echo '<div class="notice notice-success"><p>設定を保存しました。</p></div>';
         }
@@ -310,10 +304,27 @@ class AINewsAutoPoster {
                     </tr>
                     
                     <tr>
-                        <th scope="row">投稿時刻</th>
+                        <th scope="row">投稿スケジュール</th>
                         <td>
-                            <input type="time" id="schedule_time" name="schedule_time" value="<?php echo esc_attr($settings['schedule_time'] ?? '06:00'); ?>" />
-                            <p class="ai-news-form-description">毎日の投稿時刻を設定してください。</p>
+                            <div id="schedule-times-container">
+                                <?php 
+                                $schedule_times = $settings['schedule_times'] ?? array('06:00');
+                                $max_posts = $settings['max_posts_per_day'] ?? 1;
+                                
+                                for ($i = 0; $i < $max_posts; $i++) {
+                                    $time_value = isset($schedule_times[$i]) ? $schedule_times[$i] : '';
+                                    $display_style = $i >= count($schedule_times) ? 'style="display:none;"' : '';
+                                    echo '<div class="schedule-time-row" ' . $display_style . '>';
+                                    echo '<label>投稿時刻 ' . ($i + 1) . ':</label> ';
+                                    echo '<input type="time" name="schedule_times[]" value="' . esc_attr($time_value) . '" />';
+                                    echo '</div>';
+                                }
+                                ?>
+                            </div>
+                            <p class="ai-news-form-description">1日の最大投稿数に応じて投稿時刻を設定してください。設定した時刻に自動投稿されます。</p>
+                            
+                            <!-- 後方互換性のため -->
+                            <input type="hidden" name="schedule_time" value="<?php echo esc_attr($settings['schedule_time'] ?? '06:00'); ?>" />
                         </td>
                     </tr>
                     
@@ -655,7 +666,7 @@ class AINewsAutoPoster {
             wp_die('Security check failed');
         }
         
-        $result = $this->generate_and_publish_article(false);
+        $result = $this->generate_and_publish_article(false, 'manual');
         
         if (is_wp_error($result)) {
             wp_send_json_error($result->get_error_message());
@@ -725,7 +736,7 @@ class AINewsAutoPoster {
     /**
      * 記事生成・投稿
      */
-    private function generate_and_publish_article($is_test = false) {
+    private function generate_and_publish_article($is_test = false, $post_type = 'auto') {
         $settings = get_option('ai_news_autoposter_settings', array());
         $api_key = $settings['claude_api_key'] ?? '';
         
@@ -757,6 +768,7 @@ class AINewsAutoPoster {
             'post_category' => array($settings['post_category'] ?? get_option('default_category')),
             'meta_input' => array(
                 '_ai_generated' => true,
+                '_ai_post_type' => $is_test ? 'test' : $post_type, // 投稿タイプを記録
                 '_seo_focus_keyword' => $settings['seo_focus_keyword'] ?? '',
                 '_meta_description' => $this->generate_meta_description($article_data['title'], $settings)
             )
@@ -1310,6 +1322,30 @@ class AINewsAutoPoster {
     }
     
     /**
+     * 複数スケジュールを設定
+     */
+    private function setup_multiple_schedules($schedule_times) {
+        // 既存のスケジュールをクリア
+        wp_clear_scheduled_hook('ai_news_autoposter_daily_cron');
+        
+        foreach ($schedule_times as $index => $time) {
+            if (empty($time)) continue;
+            
+            $hook_name = 'ai_news_autoposter_daily_cron' . ($index > 0 ? '_' . $index : '');
+            $timestamp = strtotime('today ' . $time);
+            
+            if ($timestamp < time()) {
+                $timestamp += DAY_IN_SECONDS;
+            }
+            
+            wp_schedule_event($timestamp, 'daily', $hook_name);
+            
+            // 各スケジュールのフックを追加
+            add_action($hook_name, array($this, 'execute_daily_post_generation'));
+        }
+    }
+    
+    /**
      * 今日の投稿数を取得
      */
     private function get_posts_count_today() {
@@ -1321,6 +1357,11 @@ class AINewsAutoPoster {
                 array(
                     'key' => '_ai_generated',
                     'value' => true,
+                    'compare' => '='
+                ),
+                array(
+                    'key' => '_ai_post_type',
+                    'value' => 'auto',
                     'compare' => '='
                 )
             ),
