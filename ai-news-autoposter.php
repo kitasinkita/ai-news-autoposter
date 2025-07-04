@@ -1,10 +1,10 @@
 <?php
 /**
  * Plugin Name: AI News AutoPoster
- * Plugin URI: https://your-website.com/ai-news-autoposter
+ * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。
  * Version: 1.0.0
- * Author: Your Name
+ * Author: kitasinkita
  * License: GPL v2 or later
  * Text Domain: ai-news-autoposter
  */
