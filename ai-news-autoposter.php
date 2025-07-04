@@ -992,8 +992,13 @@ class AINewsAutoPoster {
         $language_names = array_map(array($this, 'get_language_name'), $selected_languages);
         $language_text = implode('と', $language_names);
         
+        $current_date = current_time('Y年n月j日');
+        $current_year = current_time('Y');
+        
         // シンプルで効果的なプロンプト
-        $prompt = "【{$language_text}】のニュースから、【{$search_keywords}】に関する最新のニュースを送ってください。5本ぐらいが理想です。\n";
+        $prompt = "現在は{$current_date}（{$current_year}年）です。\n\n";
+        $prompt .= "【重要】: 2024年以前の古い情報ではなく、{$current_year}年の最新情報のみを使用してください。\n\n";
+        $prompt .= "【{$language_text}】のニュースから、【{$search_keywords}】に関する{$current_year}年の最新ニュース（特に直近数ヶ月の新しい情報）を送ってください。5本ぐらいが理想です。\n";
         $prompt .= "ニュースの背景や文脈を簡単にまとめ、かつ、上記の最新ニュースのリンク先を参考情報元として記事のタイトルとリンクを記載し、なぜ今、これが起こっているのか、という背景情報を踏まえて、今後どのような影響をあたえるのか、推察もしてください。\n";
         $prompt .= "全部で【{$word_count}文字】程度にまとめてください。充実した内容で。\n";
         if ($writing_style !== '標準') {
@@ -1015,9 +1020,10 @@ class AINewsAutoPoster {
         
         $prompt .= "**重要**: 記事の最後に必ず参考情報源セクションを含めてください：\n";
         $prompt .= "## 参考情報源\n";
-        $prompt .= "- 実際のニュース記事のタイトルとリンクを記載\n";
-        $prompt .= "- 例: [OpenAI、Claude-4の新機能を発表](https://example.com/news/openai-claude4)\n";
-        $prompt .= "- 例: [Google AI研究チーム、新技術を開発](https://example.com/news/google-ai)\n\n";
+        $prompt .= "- {$current_year}年の実際のニュース記事のタイトルとリンクを記載\n";
+        $prompt .= "- 2024年以前の古い記事は使用禁止\n";
+        $prompt .= "- 例: [OpenAI、{$current_year}年新機能発表]({$current_year}年のURL)\n";
+        $prompt .= "- 例: [Google AI、{$current_year}年最新技術開発]({$current_year}年のURL)\n\n";
         
         return $prompt;
     }
