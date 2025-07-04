@@ -984,9 +984,13 @@ class AINewsAutoPoster {
         $prompt .= "[本文2（適時、参照元を（記事タイトル - メディア名）の形式で本文中に記載してください）]\n";
         $prompt .= "...\n\n";
         $prompt .= "## 参考情報源\n";
-        $prompt .= "[参考にした最新記事の情報を記載してください。リンクは不要です]\n";
-        $prompt .= "[形式: 「記事タイトル」({$current_date}) - メディア名]\n";
-        $prompt .= "[例: 「ChatGPT-4の新機能発表」(2024年7月4日) - 日経新聞]\n\n";
+        $prompt .= "[参考にした最新記事の情報を以下の安全なリンクで記載してください]\n";
+        $prompt .= "[形式: <a href=\"メディアトップページURL\" target=\"_blank\">「具体的な記事タイトル」({$current_date}) - メディア名</a>]\n";
+        $prompt .= "[安全なリンク先例]\n";
+        $prompt .= "- 日本語: https://www.nikkei.com/ (日経新聞)\n";
+        $prompt .= "- 英語: https://techcrunch.com/ (TechCrunch)\n";
+        $prompt .= "- AI専門: https://www.artificialintelligence-news.com/ (AI News)\n";
+        $prompt .= "[例: <a href=\"https://www.nikkei.com/\" target=\"_blank\">「ChatGPT-4の新機能発表」(2024年7月4日) - 日経新聞</a>]\n\n";
         
         $prompt .= "記事を作成してください。";
         
