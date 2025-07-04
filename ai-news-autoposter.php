@@ -33,6 +33,8 @@ class AINewsAutoPoster {
         add_action('wp_ajax_get_stats', array($this, 'get_stats'));
         add_action('wp_ajax_clear_logs', array($this, 'clear_logs'));
         add_action('wp_ajax_autosave_setting', array($this, 'autosave_setting'));
+        add_action('wp_ajax_manual_post_now', array($this, 'manual_post_now'));
+        add_action('wp_ajax_test_cron_execution', array($this, 'test_cron_execution'));
         
         // Cronフック
         add_action('ai_news_autoposter_daily_cron', array($this, 'execute_daily_post_generation'));
@@ -66,6 +68,7 @@ class AINewsAutoPoster {
                 'enable_featured_image' => true,
                 'post_status' => 'publish',
                 'enable_tags' => true,
+                'search_keywords' => 'AI ニュース, 人工知能, 機械学習, ChatGPT, OpenAI',
                 'news_sources' => array(
                     'https://www.artificialintelligence-news.com/feed/',
                     'https://ai.googleblog.com/feeds/posts/default',
@@ -197,8 +200,12 @@ class AINewsAutoPoster {
                     <div class="ai-news-status-card">
                         <h3>手動実行</h3>
                         <p>テスト用に記事を手動生成できます。</p>
-                        <button type="button" class="ai-news-button-primary" id="generate-test-article">テスト記事生成</button>
-                        <button type="button" class="ai-news-button-secondary" id="test-api-connection">API接続テスト</button>
+                        <div class="ai-news-button-group">
+                            <button type="button" class="ai-news-button-primary" id="generate-test-article">テスト記事生成</button>
+                            <button type="button" class="ai-news-button-primary" id="manual-post-now">今すぐ投稿</button>
+                            <button type="button" class="ai-news-button-secondary" id="test-api-connection">API接続テスト</button>
+                            <button type="button" class="ai-news-button-secondary" id="test-cron-execution">Cron実行テスト</button>
+                        </div>
                         <div id="test-results" style="margin-top: 15px;"></div>
                     </div>
                 </div>
@@ -223,6 +230,7 @@ class AINewsAutoPoster {
                 'enable_featured_image' => isset($_POST['enable_featured_image']),
                 'post_status' => sanitize_text_field($_POST['post_status']),
                 'enable_tags' => isset($_POST['enable_tags']),
+                'search_keywords' => sanitize_text_field($_POST['search_keywords']),
                 'news_sources' => array_filter(array_map('esc_url_raw', explode("\n", $_POST['news_sources'])))
             );
             
@@ -340,6 +348,14 @@ class AINewsAutoPoster {
                                 <input type="checkbox" name="enable_tags" <?php checked($settings['enable_tags'] ?? true); ?> />
                                 AIが関連タグを自動生成する
                             </label>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">検索キーワード</th>
+                        <td>
+                            <input type="text" name="search_keywords" value="<?php echo esc_attr($settings['search_keywords'] ?? 'AI ニュース, 人工知能, 機械学習, ChatGPT, OpenAI'); ?>" class="large-text ai-news-autosave" />
+                            <p class="ai-news-form-description">記事生成時に検索するキーワードをカンマ区切りで入力してください。</p>
                         </td>
                     </tr>
                     
@@ -503,6 +519,41 @@ class AINewsAutoPoster {
     }
     
     /**
+     * 今すぐ投稿（Ajax）
+     */
+    public function manual_post_now() {
+        if (!wp_verify_nonce($_POST['nonce'], 'ai_news_autoposter_nonce')) {
+            wp_die('Security check failed');
+        }
+        
+        $result = $this->generate_and_publish_article(false);
+        
+        if (is_wp_error($result)) {
+            wp_send_json_error($result->get_error_message());
+        } else {
+            wp_send_json_success(array(
+                'post_id' => $result,
+                'edit_url' => admin_url('post.php?post=' . $result . '&action=edit'),
+                'view_url' => get_permalink($result)
+            ));
+        }
+    }
+    
+    /**
+     * Cron実行テスト（Ajax）
+     */
+    public function test_cron_execution() {
+        if (!wp_verify_nonce($_POST['nonce'], 'ai_news_autoposter_nonce')) {
+            wp_die('Security check failed');
+        }
+        
+        // 実際のCron処理を実行
+        $this->execute_daily_post_generation();
+        
+        wp_send_json_success('Cron実行テストが完了しました。ログを確認してください。');
+    }
+    
+    /**
      * 毎日のCron実行
      */
     public function execute_daily_post_generation() {
@@ -625,8 +676,10 @@ class AINewsAutoPoster {
      */
     private function build_article_prompt($news_topics, $settings) {
         $focus_keyword = $settings['seo_focus_keyword'] ?? 'AI ニュース';
+        $search_keywords = $settings['search_keywords'] ?? 'AI ニュース, 人工知能, 機械学習, ChatGPT, OpenAI';
         
-        $prompt = "最新のAIニュースから1つの記事を村上春樹風の文体で作成してください。\n\n";
+        $prompt = "以下のキーワードに関連する最新ニュースから1つの記事を村上春樹風の文体で作成してください。\n";
+        $prompt .= "検索キーワード: {$search_keywords}\n\n";
         $prompt .= "以下のニュースを参考にしてください：\n";
         
         foreach ($news_topics as $news) {
@@ -635,6 +688,7 @@ class AINewsAutoPoster {
         
         $prompt .= "\n記事の要件：\n";
         $prompt .= "- SEOキーワード「{$focus_keyword}」を自然に含める\n";
+        $prompt .= "- 検索キーワード「{$search_keywords}」に関連する内容\n";
         $prompt .= "- 1500-2000文字程度\n";
         $prompt .= "- 魅力的なタイトル\n";
         $prompt .= "- 村上春樹風の文学的表現\n";

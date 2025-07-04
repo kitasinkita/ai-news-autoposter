@@ -22,6 +22,12 @@
             // テスト記事生成ボタン
             $(document).on('click', '#generate-test-article', this.generateTestArticle);
             
+            // 今すぐ投稿ボタン
+            $(document).on('click', '#manual-post-now', this.manualPostNow);
+            
+            // Cron実行テストボタン
+            $(document).on('click', '#test-cron-execution', this.testCronExecution);
+            
             // 設定保存時の検証
             $(document).on('submit', '#ai-news-settings-form', this.validateSettings);
             
@@ -431,6 +437,134 @@
                             $stat.text(targetValue);
                         }
                     });
+                }
+            });
+        },
+        
+        manualPostNow: function(e) {
+            e.preventDefault();
+            
+            const $button = $(this);
+            const originalText = $button.text();
+            
+            // 確認ダイアログ
+            if (!confirm('記事を今すぐ投稿しますか？この処理には時間がかかる場合があります。')) {
+                return;
+            }
+            
+            // プログレスバー表示
+            AINewsAutoPoster.showProgress('記事を生成・投稿中...', 0);
+            
+            // ボタン状態変更
+            $button.prop('disabled', true)
+                   .html('<span class="ai-news-spinner"></span> 投稿中...')
+                   .addClass('ai-news-loading');
+            
+            // プログレス更新シミュレーション
+            let progress = 0;
+            const progressInterval = setInterval(function() {
+                progress += Math.random() * 10;
+                if (progress > 85) progress = 85;
+                AINewsAutoPoster.updateProgress(progress, '記事を生成・投稿中...');
+            }, 1500);
+            
+            // Ajax リクエスト
+            $.ajax({
+                url: ai_news_autoposter_ajax.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'manual_post_now',
+                    nonce: ai_news_autoposter_ajax.nonce
+                },
+                timeout: 120000, // 2分
+                success: function(response) {
+                    clearInterval(progressInterval);
+                    AINewsAutoPoster.updateProgress(100, '投稿完了！');
+                    
+                    if (response.success) {
+                        AINewsAutoPoster.showNotification('success', 
+                            '記事を正常に投稿しました！ <a href="' + response.data.edit_url + '" target="_blank">編集画面で確認</a> | <a href="' + response.data.view_url + '" target="_blank">表示</a>');
+                        
+                        // 統計更新
+                        AINewsAutoPoster.updateStats();
+                        
+                    } else {
+                        AINewsAutoPoster.showNotification('error', '記事投稿に失敗しました: ' + response.data);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    clearInterval(progressInterval);
+                    
+                    let errorMessage = 'ネットワークエラーが発生しました。';
+                    if (status === 'timeout') {
+                        errorMessage = '処理がタイムアウトしました。APIの応答が遅い可能性があります。';
+                    }
+                    
+                    AINewsAutoPoster.showNotification('error', errorMessage);
+                },
+                complete: function() {
+                    // ボタン状態復元
+                    $button.prop('disabled', false)
+                           .text(originalText)
+                           .removeClass('ai-news-loading');
+                    
+                    // プログレスバー非表示
+                    setTimeout(function() {
+                        AINewsAutoPoster.hideProgress();
+                    }, 2000);
+                }
+            });
+        },
+        
+        testCronExecution: function(e) {
+            e.preventDefault();
+            
+            const $button = $(this);
+            const originalText = $button.text();
+            
+            // 確認ダイアログ
+            if (!confirm('Cron実行のテストを行いますか？実際の投稿処理が実行されます。')) {
+                return;
+            }
+            
+            // ボタン状態変更
+            $button.prop('disabled', true)
+                   .html('<span class="ai-news-spinner"></span> テスト中...')
+                   .addClass('ai-news-loading');
+            
+            // Ajax リクエスト
+            $.ajax({
+                url: ai_news_autoposter_ajax.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'test_cron_execution',
+                    nonce: ai_news_autoposter_ajax.nonce
+                },
+                timeout: 120000, // 2分
+                success: function(response) {
+                    if (response.success) {
+                        AINewsAutoPoster.showNotification('success', 'Cron実行テストが完了しました。ログを確認してください。');
+                        
+                        // 統計更新
+                        AINewsAutoPoster.updateStats();
+                        
+                    } else {
+                        AINewsAutoPoster.showNotification('error', 'Cron実行テストに失敗しました: ' + response.data);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    let errorMessage = 'ネットワークエラーが発生しました。';
+                    if (status === 'timeout') {
+                        errorMessage = '処理がタイムアウトしました。';
+                    }
+                    
+                    AINewsAutoPoster.showNotification('error', errorMessage);
+                },
+                complete: function() {
+                    // ボタン状態復元
+                    $button.prop('disabled', false)
+                           .text(originalText)
+                           .removeClass('ai-news-loading');
                 }
             });
         },
