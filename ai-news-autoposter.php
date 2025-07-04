@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.0.1
+ * Version: 1.0.2
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.0.1');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.0.2');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -74,6 +74,7 @@ class AINewsAutoPoster {
                 'post_status' => 'publish',
                 'enable_tags' => true,
                 'search_keywords' => 'AI ニュース, 人工知能, 機械学習, ChatGPT, OpenAI',
+                'writing_style' => '夏目漱石',
                 'image_generation_type' => 'placeholder', // placeholder, dalle, unsplash
                 'dalle_api_key' => '',
                 'unsplash_access_key' => '',
@@ -239,6 +240,7 @@ class AINewsAutoPoster {
                 'post_status' => sanitize_text_field($_POST['post_status']),
                 'enable_tags' => isset($_POST['enable_tags']),
                 'search_keywords' => sanitize_text_field($_POST['search_keywords']),
+                'writing_style' => sanitize_text_field($_POST['writing_style']),
                 'image_generation_type' => sanitize_text_field($_POST['image_generation_type']),
                 'dalle_api_key' => sanitize_text_field($_POST['dalle_api_key']),
                 'unsplash_access_key' => sanitize_text_field($_POST['unsplash_access_key']),
@@ -367,6 +369,14 @@ class AINewsAutoPoster {
                         <td>
                             <input type="text" name="search_keywords" value="<?php echo esc_attr($settings['search_keywords'] ?? 'AI ニュース, 人工知能, 機械学習, ChatGPT, OpenAI'); ?>" class="large-text ai-news-autosave" />
                             <p class="ai-news-form-description">記事生成時に検索するキーワードをカンマ区切りで入力してください。</p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">文体スタイル</th>
+                        <td>
+                            <input type="text" name="writing_style" value="<?php echo esc_attr($settings['writing_style'] ?? '夏目漱石'); ?>" class="regular-text ai-news-autosave" />
+                            <p class="ai-news-form-description">記事の文体スタイルを指定してください（例：夏目漱石、村上春樹、新聞記事風など）。</p>
                         </td>
                     </tr>
                     
@@ -717,7 +727,9 @@ class AINewsAutoPoster {
         $focus_keyword = $settings['seo_focus_keyword'] ?? 'AI ニュース';
         $search_keywords = $settings['search_keywords'] ?? 'AI ニュース, 人工知能, 機械学習, ChatGPT, OpenAI';
         
-        $prompt = "以下のキーワードに関連する最新ニュースから1つの記事を村上春樹風の文体で作成してください。\n";
+        $writing_style = $settings['writing_style'] ?? '夏目漱石';
+        
+        $prompt = "以下のキーワードに関連する最新ニュースから1つの記事を{$writing_style}風の文体で作成してください。\n";
         $prompt .= "検索キーワード: {$search_keywords}\n\n";
         $prompt .= "以下のニュースを参考にしてください：\n";
         
@@ -733,7 +745,7 @@ class AINewsAutoPoster {
         $prompt .= "- 検索キーワード「{$search_keywords}」に関連する内容\n";
         $prompt .= "- 1500-2000文字程度\n";
         $prompt .= "- 魅力的なタイトル\n";
-        $prompt .= "- 村上春樹風の文学的表現\n";
+        $prompt .= "- {$writing_style}風の文学的表現\n";
         $prompt .= "- 読者にとって有益で興味深い内容\n";
         $prompt .= "- 適切な見出し（H2、H3タグ）を使用\n";
         $prompt .= "- 記事の最後に参考ニュースの引用元とリンクを記載\n\n";
