@@ -85,8 +85,6 @@ class AINewsAutoPoster {
                 'enable_disclaimer' => true,
                 'disclaimer_text' => '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。',
                 'custom_prompt' => '',
-                'use_external_news_api' => false,
-                'news_api_key' => '',
                 'image_generation_type' => 'placeholder', // placeholder, dalle, unsplash
                 'dalle_api_key' => '',
                 'unsplash_access_key' => '',
@@ -453,23 +451,6 @@ class AINewsAutoPoster {
                             <div style="margin-top: 10px;">
                                 <textarea name="disclaimer_text" rows="3" class="large-text"><?php echo esc_textarea($settings['disclaimer_text'] ?? '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。'); ?></textarea>
                                 <p class="ai-news-form-description">記事末尾に表示する免責事項の文言を設定してください。</p>
-                            </div>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">外部ニュースAPI</th>
-                        <td>
-                            <label>
-                                <input type="checkbox" name="use_external_news_api" <?php checked($settings['use_external_news_api'] ?? false); ?> />
-                                リアルタイムニュース取得を有効にする（News API使用）
-                            </label>
-                            <div style="margin-top: 10px;">
-                                <input type="password" name="news_api_key" value="<?php echo esc_attr($settings['news_api_key'] ?? ''); ?>" class="regular-text" placeholder="News API Key" />
-                                <p class="ai-news-form-description">
-                                    <a href="https://newsapi.org/" target="_blank">NewsAPI.org</a>でAPIキーを取得してください。<br>
-                                    有効にすると、Claude AIの知識ベースではなく、実際の最新ニュースを取得して記事を生成します。
-                                </p>
                             </div>
                         </td>
                     </tr>
@@ -993,55 +974,6 @@ class AINewsAutoPoster {
     }
     
     /**
-     * 外部ニュースAPI取得
-     */
-    private function fetch_external_news($settings) {
-        $api_key = $settings['news_api_key'] ?? '';
-        if (empty($api_key)) {
-            $this->log('warning', 'News API キーが設定されていません');
-            return array();
-        }
-        
-        $search_keywords = $settings['search_keywords'] ?? 'AI';
-        $keywords_for_api = 'AI OR "artificial intelligence" OR OpenAI OR Google OR ChatGPT';
-        
-        $this->log('info', 'News APIから最新ニュースを取得中...');
-        
-        $url = 'https://newsapi.org/v2/everything?' . http_build_query(array(
-            'q' => $keywords_for_api,
-            'language' => 'en',
-            'sortBy' => 'publishedAt',
-            'pageSize' => 10,
-            'apiKey' => $api_key,
-            'from' => date('Y-m-d', strtotime('-7 days')) // 過去7日間
-        ));
-        
-        $response = wp_remote_get($url, array(
-            'timeout' => 30,
-            'headers' => array(
-                'User-Agent' => 'AI News AutoPoster'
-            )
-        ));
-        
-        if (is_wp_error($response)) {
-            $this->log('error', 'News API呼び出しエラー: ' . $response->get_error_message());
-            return array();
-        }
-        
-        $body = wp_remote_retrieve_body($response);
-        $data = json_decode($body, true);
-        
-        if (isset($data['status']) && $data['status'] === 'ok') {
-            $articles = array_slice($data['articles'] ?? array(), 0, 5);
-            $this->log('info', count($articles) . '件の最新ニュースを取得しました');
-            return $articles;
-        } else {
-            $this->log('error', 'News API エラー: ' . ($data['message'] ?? '不明なエラー'));
-            return array();
-        }
-    }
-    
-    /**
      * 直接記事生成プロンプト構築（Claude AIがニュースを検索）
      */
     private function build_direct_article_prompt($settings) {
@@ -1054,12 +986,6 @@ class AINewsAutoPoster {
         $custom_prompt = $settings['custom_prompt'] ?? '';
         if (!empty($custom_prompt)) {
             return $this->build_custom_prompt($custom_prompt, $settings);
-        }
-        
-        // 外部ニュースAPIを使用する場合
-        $use_external_api = $settings['use_external_news_api'] ?? false;
-        if ($use_external_api) {
-            return $this->build_external_news_prompt($settings);
         }
         
         // 言語指定を作成
@@ -1100,59 +1026,6 @@ class AINewsAutoPoster {
         $prompt .= "- 例: [Google AI、{$current_year}年最新技術開発]({$current_year}年のURL)\n\n";
         
         return $prompt;
-    }
-    
-    /**
-     * 外部ニュースAPIベースのプロンプト構築
-     */
-    private function build_external_news_prompt($settings) {
-        $word_count = $settings['article_word_count'] ?? 500;
-        $writing_style = $settings['writing_style'] ?? '夏目漱石';
-        
-        // 外部ニュースAPIから最新ニュースを取得
-        $external_news = $this->fetch_external_news($settings);
-        
-        if (empty($external_news)) {
-            $this->log('warning', '外部ニュース取得に失敗。デフォルトプロンプトを使用します');
-            return $this->build_default_prompt($settings);
-        }
-        
-        $current_date = current_time('Y年n月j日');
-        
-        $prompt = "以下の{$current_date}の最新ニュースを参考に、AIに関する包括的な記事を作成してください。\n\n";
-        $prompt .= "【最新ニュース情報】\n";
-        
-        foreach ($external_news as $index => $article) {
-            $published_date = date('Y年m月d日', strtotime($article['publishedAt']));
-            $prompt .= ($index + 1) . ". タイトル: {$article['title']}\n";
-            $prompt .= "   URL: {$article['url']}\n";
-            $prompt .= "   発行日: {$published_date}\n";
-            $prompt .= "   概要: " . substr($article['description'] ?? '', 0, 200) . "\n\n";
-        }
-        
-        $prompt .= "【記事作成要件】\n";
-        $prompt .= "- 上記の最新ニュースを基に、{$word_count}文字程度の記事を作成\n";
-        $prompt .= "- 文体: {$writing_style}風\n";
-        $prompt .= "- 3つの見出し（H2タグ）で構成\n";
-        $prompt .= "- 本文中に参照元のタイトルとリンクを適時挿入\n";
-        $prompt .= "- 記事最後に参考情報源セクションを必ず含める\n\n";
-        
-        $prompt .= "記事を作成してください。";
-        
-        return $prompt;
-    }
-    
-    /**
-     * デフォルトプロンプト構築
-     */
-    private function build_default_prompt($settings) {
-        $search_keywords = $settings['search_keywords'] ?? 'AI ニュース, 人工知能, 機械学習, ChatGPT, OpenAI';
-        $selected_languages = $settings['news_languages'] ?? array('japanese', 'english');
-        $word_count = $settings['article_word_count'] ?? 500;
-        $writing_style = $settings['writing_style'] ?? '夏目漱石';
-        
-        // デフォルトプロンプトを使用
-        return $this->build_default_prompt($settings);
     }
     
     /**
