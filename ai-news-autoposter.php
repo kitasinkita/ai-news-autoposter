@@ -1115,10 +1115,16 @@ class AINewsAutoPoster {
             return new WP_Error('api_error', $data['error']['message']);
         }
         
-        $response_length = strlen($data['content'][0]['text'] ?? '');
+        $response_text = $data['content'][0]['text'] ?? '';
+        $response_length = strlen($response_text);
         $this->log('info', 'Claude APIレスポンス取得完了。レスポンス長: ' . $response_length . '文字');
         
-        return $data['content'][0]['text'] ?? '';
+        // デバッグ用：Claude APIの生レスポンスをログに出力
+        $this->log('info', '=== Claude API 生レスポンス開始 ===');
+        $this->log('info', $response_text);
+        $this->log('info', '=== Claude API 生レスポンス終了 ===');
+        
+        return $response_text;
     }
     
     /**
