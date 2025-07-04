@@ -1247,6 +1247,12 @@ class AINewsAutoPoster {
      * アイキャッチ画像生成
      */
     private function generate_featured_image($post_id, $title, $content, $settings) {
+        // ネットワークエラー対策: プレースホルダー画像のみ使用
+        $this->log('info', 'プレースホルダー画像を生成中...');
+        return $this->generate_placeholder_image($post_id, $title);
+        
+        // DALL-E/Unsplashは一時的に無効化
+        /*
         $image_type = $settings['image_generation_type'] ?? 'placeholder';
         
         switch ($image_type) {
@@ -1257,6 +1263,7 @@ class AINewsAutoPoster {
             default:
                 return $this->generate_placeholder_image($post_id, $title);
         }
+        */
     }
     
     /**
@@ -1490,7 +1497,7 @@ class AINewsAutoPoster {
             
             // 画像をダウンロード
             $image_data = wp_remote_get($default_image_url, array(
-                'timeout' => 10, // タイムアウトを短縮
+                'timeout' => 5, // タイムアウトをさらに短縮
                 'user-agent' => 'WordPress/' . get_bloginfo('version')
             ));
             
