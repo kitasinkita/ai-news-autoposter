@@ -664,11 +664,19 @@ class AINewsAutoPoster {
             wp_die('Security check failed');
         }
         
+        // タイムアウトを延長
+        set_time_limit(600); // 10分
+        ini_set('max_execution_time', 600);
+        
+        $this->log('info', '手動投稿を開始します');
+        
         $result = $this->generate_and_publish_article(false, 'manual');
         
         if (is_wp_error($result)) {
+            $this->log('error', '手動投稿失敗: ' . $result->get_error_message());
             wp_send_json_error($result->get_error_message());
         } else {
+            $this->log('success', '手動投稿成功: 投稿ID ' . $result);
             wp_send_json_success(array(
                 'post_id' => $result,
                 'edit_url' => admin_url('post.php?post=' . $result . '&action=edit'),
@@ -1066,6 +1074,8 @@ class AINewsAutoPoster {
     private function call_claude_api($prompt, $api_key) {
         $url = 'https://api.anthropic.com/v1/messages';
         
+        $this->log('info', 'Claude API呼び出しを開始します。プロンプト長: ' . strlen($prompt) . '文字');
+        
         $headers = array(
             'Content-Type' => 'application/json',
             'x-api-key' => $api_key,
@@ -1083,22 +1093,35 @@ class AINewsAutoPoster {
             )
         );
         
+        $start_time = microtime(true);
+        
         $response = wp_remote_post($url, array(
             'headers' => $headers,
             'body' => json_encode($body),
-            'timeout' => 120
+            'timeout' => 300 // 5分に延長
         ));
         
+        $end_time = microtime(true);
+        $duration = round($end_time - $start_time, 2);
+        
         if (is_wp_error($response)) {
+            $this->log('error', 'Claude API呼び出しエラー (' . $duration . '秒): ' . $response->get_error_message());
             return $response;
         }
+        
+        $response_code = wp_remote_retrieve_response_code($response);
+        $this->log('info', 'Claude API呼び出し完了 (' . $duration . '秒) - HTTP ' . $response_code);
         
         $body = wp_remote_retrieve_body($response);
         $data = json_decode($body, true);
         
         if (isset($data['error'])) {
+            $this->log('error', 'Claude APIエラー: ' . $data['error']['message']);
             return new WP_Error('api_error', $data['error']['message']);
         }
+        
+        $response_length = strlen($data['content'][0]['text'] ?? '');
+        $this->log('info', 'Claude APIレスポンス取得完了。レスポンス長: ' . $response_length . '文字');
         
         return $data['content'][0]['text'] ?? '';
     }

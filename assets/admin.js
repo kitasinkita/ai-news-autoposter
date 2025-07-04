@@ -168,7 +168,7 @@
                     action: 'generate_test_article',
                     nonce: ai_news_autoposter_ajax.nonce
                 },
-                timeout: 120000, // 2分
+                timeout: 360000, // 6分
                 success: function(response) {
                     clearInterval(progressInterval);
                     AINewsAutoPoster.updateProgress(100, '完了！');
@@ -470,11 +470,25 @@
             
             // プログレス更新シミュレーション
             let progress = 0;
+            let progressMessages = [
+                '記事を生成・投稿中...',
+                'Claude AIで記事を作成中...',
+                '高品質な記事を生成中...',
+                '記事の最終調整中...',
+                '投稿準備中...'
+            ];
+            let messageIndex = 0;
+            
             const progressInterval = setInterval(function() {
-                progress += Math.random() * 10;
+                progress += Math.random() * 8;
                 if (progress > 85) progress = 85;
-                AINewsAutoPoster.updateProgress(progress, '記事を生成・投稿中...');
-            }, 1500);
+                
+                if (progress > messageIndex * 20 && messageIndex < progressMessages.length - 1) {
+                    messageIndex++;
+                }
+                
+                AINewsAutoPoster.updateProgress(progress, progressMessages[messageIndex]);
+            }, 2000);
             
             // Ajax リクエスト
             $.ajax({
@@ -484,7 +498,7 @@
                     action: 'manual_post_now',
                     nonce: ai_news_autoposter_ajax.nonce
                 },
-                timeout: 120000, // 2分
+                timeout: 360000, // 6分
                 success: function(response) {
                     clearInterval(progressInterval);
                     AINewsAutoPoster.updateProgress(100, '投稿完了！');
@@ -548,7 +562,7 @@
                     action: 'test_cron_execution',
                     nonce: ai_news_autoposter_ajax.nonce
                 },
-                timeout: 120000, // 2分
+                timeout: 360000, // 6分
                 success: function(response) {
                     if (response.success) {
                         AINewsAutoPoster.showNotification('success', 'Cron実行テストが完了しました。ログを確認してください。');
