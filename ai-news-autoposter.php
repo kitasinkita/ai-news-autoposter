@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.3
+ * Version: 1.2.4
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.3');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.4');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1120,14 +1120,15 @@ class AINewsAutoPoster {
         // モデルに応じてプロンプトを最適化
         if ($model === 'gemini-2.5-flash') {
             // Gemini 2.5 Google Search 特化プロンプト
-            $prompt = "Search Google for recent news about {$search_keywords} in {$current_year}. ";
-            $prompt .= "Current date: {$current_date} ({$current_year})\n\n";
-            $prompt .= "Find 3-5 recent news articles about {$search_keywords} and write a comprehensive article in Japanese.\n\n";
+            $prompt = "I need you to search Google for current news about {$search_keywords}. ";
+            $prompt .= "Please find recent news articles from {$current_year} and write a comprehensive article in Japanese.\n\n";
+            $prompt .= "Search for: \"{$search_keywords} ニュース {$current_year}\"\n\n";
             $prompt .= "Requirements:\n";
-            $prompt .= "- Use Google Search to find real news articles from {$current_year}\n";
+            $prompt .= "- Search Google for real news articles\n";
             $prompt .= "- Include actual URLs from news websites\n";
-            $prompt .= "- Write the entire article in Japanese\n";
-            $prompt .= "- Never create fake URLs\n\n";
+            $prompt .= "- Write entire article in Japanese\n";
+            $prompt .= "- Use approximately {$word_count} characters\n";
+            $prompt .= "- Include proper headings and structure\n\n";
         } else {
             // その他のGeminiモデル用プロンプト
             $prompt = "【あなたの最新知識を活用してください】\n\n";
@@ -1533,7 +1534,7 @@ class AINewsAutoPoster {
                 )
             ),
             'generationConfig' => array(
-                'maxOutputTokens' => 2000,
+                'maxOutputTokens' => 4000,
                 'temperature' => 0.7
             )
         );
@@ -1575,12 +1576,29 @@ class AINewsAutoPoster {
         
         $response_data = json_decode($response_body, true);
         
-        if (empty($response_data['candidates'][0]['content']['parts'][0]['text'])) {
+        // レスポンス形式の柔軟な解析
+        $generated_text = '';
+        
+        if (!empty($response_data['candidates'][0]['content']['parts'][0]['text'])) {
+            // 通常のGeminiレスポンス形式
+            $generated_text = $response_data['candidates'][0]['content']['parts'][0]['text'];
+        } elseif (!empty($response_data['candidates'][0]['content']['text'])) {
+            // 代替形式1
+            $generated_text = $response_data['candidates'][0]['content']['text'];
+        } elseif (!empty($response_data['candidates'][0]['text'])) {
+            // 代替形式2
+            $generated_text = $response_data['candidates'][0]['text'];
+        } else {
             $this->log('error', 'Gemini API レスポンスの形式が不正です: ' . $response_body);
+            
+            // finishReasonをチェック
+            $finish_reason = $response_data['candidates'][0]['finishReason'] ?? 'UNKNOWN';
+            if ($finish_reason === 'MAX_TOKENS') {
+                return new WP_Error('gemini_api_error', 'Gemini API: トークン上限に達しました。記事の文字数を減らしてください。');
+            }
+            
             return new WP_Error('gemini_api_error', 'Gemini API レスポンスの形式が不正です。');
         }
-        
-        $generated_text = $response_data['candidates'][0]['content']['parts'][0]['text'];
         
         // Grounding情報を詳細にログ記録
         if (isset($response_data['candidates'][0]['groundingMetadata'])) {
