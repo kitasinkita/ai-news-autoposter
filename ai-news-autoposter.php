@@ -584,7 +584,7 @@ class AINewsAutoPoster {
      */
     public function logs_page() {
         $logs = get_option('ai_news_autoposter_logs', array());
-        $logs = array_reverse(array_slice($logs, -50)); // 最新50件
+        $logs = array_reverse(array_slice($logs, -100)); // 最新100件
         
         ?>
         <div class="wrap">
@@ -980,13 +980,28 @@ class AINewsAutoPoster {
         
         $post_data['post_excerpt'] = isset($post_data['post_excerpt']) ? strip_tags($post_data['post_excerpt']) : '';
         
-        // UTF-8エンコーディングの確認のみ（変換は行わない）
+        // UTF-8エンコーディングの確認と修正
         if (!mb_check_encoding($post_data['post_title'], 'UTF-8')) {
-            $this->log('error', 'タイトルのUTF-8エンコーディングが不正です');
+            $this->log('warning', 'タイトルのUTF-8エンコーディングが不正です - 修正します');
+            // 不正な文字を削除して再エンコード
+            $post_data['post_title'] = mb_convert_encoding($post_data['post_title'], 'UTF-8', 'UTF-8//IGNORE');
+            if (empty($post_data['post_title'])) {
+                $post_data['post_title'] = 'AI生成記事';
+            }
         }
         
         if (!mb_check_encoding($post_data['post_content'], 'UTF-8')) {
-            $this->log('error', 'コンテンツのUTF-8エンコーディングが不正です');
+            $this->log('warning', 'コンテンツのUTF-8エンコーディングが不正です - 修正します');
+            // 不正な文字を削除して再エンコード
+            $original_length = mb_strlen($post_data['post_content']);
+            $post_data['post_content'] = mb_convert_encoding($post_data['post_content'], 'UTF-8', 'UTF-8//IGNORE');
+            $new_length = mb_strlen($post_data['post_content']);
+            $this->log('info', "エンコーディング修正: {$original_length}文字 → {$new_length}文字");
+            
+            if (empty($post_data['post_content'])) {
+                $this->log('error', 'コンテンツが空になりました');
+                return new WP_Error('empty_content', 'エンコーディング修正後にコンテンツが空になりました');
+            }
         }
         
         // 最小限のテストデータで投稿を試行
@@ -2219,6 +2234,12 @@ class AINewsAutoPoster {
         if ($response_code !== 200) {
             $this->log('error', 'Gemini API エラーレスポンス: ' . $response_body);
             return new WP_Error('gemini_api_error', 'Gemini API エラー: ' . $response_body);
+        }
+        
+        // UTF-8エンコーディングを確保してからJSON解析
+        if (!mb_check_encoding($response_body, 'UTF-8')) {
+            $this->log('warning', 'Gemini APIレスポンスのエンコーディングを修正');
+            $response_body = mb_convert_encoding($response_body, 'UTF-8', 'UTF-8//IGNORE');
         }
         
         $response_data = json_decode($response_body, true);
