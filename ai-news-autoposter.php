@@ -1657,20 +1657,40 @@ class AINewsAutoPoster {
      * 部分的なコンテンツが記事として成り立つかチェック
      */
     private function is_viable_partial_content($content) {
-        // 最低限の条件をチェック
-        if (mb_strlen($content) < 200) {
+        $content_length = mb_strlen($content);
+        $this->log('info', 'Partial content 評価: 長さ=' . $content_length . '文字');
+        
+        // 最低限の条件を緩和（100文字から受け入れ）
+        if ($content_length < 100) {
+            $this->log('info', 'Partial content 拒否: 長さ不足 (' . $content_length . '文字 < 100文字)');
             return false;
         }
         
-        // タイトルらしき行があるかチェック
+        // タイトルらしき行があるかチェック（条件を緩和）
         $lines = explode("\n", $content);
         $has_title = false;
-        foreach ($lines as $line) {
+        foreach ($lines as $index => $line) {
             $line = trim($line);
-            if (!empty($line) && mb_strlen($line) > 10 && mb_strlen($line) < 100) {
+            $line_length = mb_strlen($line);
+            // 条件を緩和: 5文字以上、150文字未満（より柔軟に）
+            if (!empty($line) && $line_length >= 5 && $line_length < 150) {
                 $has_title = true;
+                $this->log('info', 'Partial content タイトル候補[' . $index . ']: "' . mb_substr($line, 0, 50) . '..." (' . $line_length . '文字)');
                 break;
             }
+        }
+        
+        if (!$has_title) {
+            $this->log('info', 'Partial content 拒否: タイトル候補なし');
+            // デバッグ用に最初の3行を表示
+            for ($i = 0; $i < min(3, count($lines)); $i++) {
+                $line = trim($lines[$i]);
+                if (!empty($line)) {
+                    $this->log('info', 'Line[' . $i . ']: "' . mb_substr($line, 0, 100) . '..." (' . mb_strlen($line) . '文字)');
+                }
+            }
+        } else {
+            $this->log('info', 'Partial content 承認: 利用可能');
         }
         
         return $has_title;
@@ -2083,8 +2103,12 @@ class AINewsAutoPoster {
                     $response_data['candidates'][0]['text'] ?? ''
                 ];
                 
-                foreach ($potential_content_paths as $content) {
-                    if (!empty($content) && strlen($content) > 100) { // 最低限の長さをチェック
+                foreach ($potential_content_paths as $index => $content) {
+                    $this->log('info', 'MAX_TOKENS パス[' . $index . ']: ' . (empty($content) ? '空' : strlen($content) . '文字'));
+                    
+                    if (!empty($content) && strlen($content) > 50) { // 閾値を50文字に緩和
+                        $this->log('info', 'MAX_TOKENS コンテンツ確認中: "' . mb_substr($content, 0, 200) . '..."');
+                        
                         // 部分的なコンテンツでも記事として成り立つかチェック
                         if ($this->is_viable_partial_content($content)) {
                             $this->log('warning', 'Gemini API: トークン制限に達しましたが、部分的なコンテンツ(' . strlen($content) . '文字)を返します。');
@@ -2110,7 +2134,11 @@ class AINewsAutoPoster {
                             }
                             
                             return $result;
+                        } else {
+                            $this->log('info', 'パス[' . $index . ']のコンテンツは viable_partial_content チェックを通過しませんでした');
                         }
+                    } else {
+                        $this->log('info', 'パス[' . $index . ']のコンテンツは長さ不足です');
                     }
                 }
                 
