@@ -145,7 +145,10 @@
             }
             
             // プログレスバー表示
-            AINewsAutoPoster.showProgress('記事を生成中...', 0);
+            const selectedModel = $('#claude_model').val() || 'claude-3-5-haiku-20241022';
+            const isGemini = selectedModel.includes('gemini');
+            const initialMessage = isGemini ? 'Gemini AIで記事を生成中...' : 'Claude AIで記事を生成中...';
+            AINewsAutoPoster.showProgress(initialMessage, 0);
             
             // ボタン状態変更
             $button.prop('disabled', true)
@@ -156,7 +159,7 @@
             let progress = 0;
             const selectedModel = $('#claude_model').val() || 'claude-3-5-haiku-20241022';
             const isGemini = selectedModel.includes('gemini');
-            const progressMessage = isGemini ? 'Gemini AIでWeb検索・記事生成中...' : '記事を生成中...';
+            const progressMessage = isGemini ? 'Gemini AIで記事生成中...' : 'Claude AIで記事生成中...';
             
             const progressInterval = setInterval(function() {
                 progress += Math.random() * 15;
@@ -465,7 +468,10 @@
             }
             
             // プログレスバー表示
-            AINewsAutoPoster.showProgress('記事を生成・投稿中...', 0);
+            const selectedModel = $('#claude_model').val() || 'claude-3-5-haiku-20241022';
+            const isGemini = selectedModel.includes('gemini');
+            const initialMessage = isGemini ? 'Gemini AIで記事を生成・投稿中...' : 'Claude AIで記事を生成・投稿中...';
+            AINewsAutoPoster.showProgress(initialMessage, 0);
             
             // ボタン状態変更
             $button.prop('disabled', true)
@@ -478,8 +484,8 @@
             const isGemini = selectedModel.includes('gemini');
             let progressMessages = [
                 '記事を生成・投稿中...',
-                isGemini ? 'Gemini AIでWeb検索・記事作成中...' : 'Claude AIで記事を作成中...',
-                isGemini ? 'Google検索で最新情報を取得中...' : '高品質な記事を生成中...',
+                isGemini ? 'Gemini AIで記事作成中...' : 'Claude AIで記事を作成中...',
+                isGemini ? 'Gemini AIで高品質な記事を生成中...' : '高品質な記事を生成中...',
                 '記事の最終調整中...',
                 '投稿準備中...'
             ];
