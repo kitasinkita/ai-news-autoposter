@@ -2008,22 +2008,29 @@ class AINewsAutoPoster {
         $settings = get_option('ai_news_autoposter_settings', array());
         $expected_chars = $settings['article_word_count'] ?? 500;
         
-        // 文字数をトークン数に変換（1トークン ≈ 0.7文字として計算）
-        $expected_tokens = intval($expected_chars / 0.7);
-        
-        // プロンプト長に応じた調整
-        $max_tokens = $expected_tokens;
-        
-        if ($prompt_length > 2000) {
-            $max_tokens = min($expected_tokens, 1500); // 長いプロンプトの場合は制限
-        } elseif ($prompt_length > 1500) {
-            $max_tokens = min($expected_tokens, 1800);
+        // Gemini 2.5でGoogle Search Groundingを使用する場合は大幅にトークンを増やす
+        if ($model === 'gemini-2.5-flash') {
+            // Google Search Groundingは大量のトークンを消費するため、出力用に十分確保
+            $max_tokens = 4000; // 固定で大きな値を設定
+            $this->log('info', 'Gemini 2.5 + Grounding用にmaxOutputTokensを4000に設定');
         } else {
-            $max_tokens = min($expected_tokens, 2500); // 最大値制限
+            // 文字数をトークン数に変換（1トークン ≈ 0.7文字として計算）
+            $expected_tokens = intval($expected_chars / 0.7);
+            
+            // プロンプト長に応じた調整
+            $max_tokens = $expected_tokens;
+            
+            if ($prompt_length > 2000) {
+                $max_tokens = min($expected_tokens, 2000); // 制限を緩和
+            } elseif ($prompt_length > 1500) {
+                $max_tokens = min($expected_tokens, 2500);
+            } else {
+                $max_tokens = min($expected_tokens, 3000); // 最大値制限を緩和
+            }
+            
+            // 最低限の長さを保証
+            $max_tokens = max($max_tokens, 1500); // 最低値を上げる
         }
-        
-        // 最低限の長さを保証
-        $max_tokens = max($max_tokens, 800);
         
         $this->log('info', '設定文字数: ' . $expected_chars . '、プロンプト長: ' . $prompt_length . '文字、maxOutputTokens: ' . $max_tokens);
         
@@ -2139,6 +2146,35 @@ class AINewsAutoPoster {
                         }
                     } else {
                         $this->log('info', 'パス[' . $index . ']のコンテンツは長さ不足です');
+                    }
+                }
+                
+                // 全てのパスが空の場合、Grounding情報だけでも最小限の記事を作成
+                if (isset($response_data['candidates'][0]['groundingMetadata']['groundingChunks'])) {
+                    $grounding_chunks = $response_data['candidates'][0]['groundingMetadata']['groundingChunks'];
+                    if (!empty($grounding_chunks)) {
+                        $this->log('warning', 'コンテンツは空ですが、Grounding情報(' . count($grounding_chunks) . '件)から最小限の記事を生成します');
+                        
+                        // Grounding情報から最小限のコンテンツを生成
+                        $minimal_content = "2025年のAI業界では、以下のような最新動向が注目されています：\n\n";
+                        $grounding_sources = array();
+                        
+                        foreach ($grounding_chunks as $index => $chunk) {
+                            if (isset($chunk['web']['uri']) && isset($chunk['web']['title'])) {
+                                $minimal_content .= "• " . $chunk['web']['title'] . "\n";
+                                $grounding_sources[] = array(
+                                    'title' => $chunk['web']['title'],
+                                    'url' => $chunk['web']['uri']
+                                );
+                            }
+                        }
+                        
+                        $minimal_content .= "\n※ 詳細については、以下の参考情報源をご確認ください。";
+                        
+                        return array(
+                            'text' => $minimal_content,
+                            'grounding_sources' => $grounding_sources
+                        );
                     }
                 }
                 
