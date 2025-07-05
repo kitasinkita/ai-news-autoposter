@@ -1017,6 +1017,16 @@ class AINewsAutoPoster {
             $this->log('info', '短縮後のコンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字');
         }
         
+        $this->log('info', 'コンテンツ長チェック完了。投稿作成処理を開始します。');
+        
+        // 処理継続を確保するための緊急処理
+        if (function_exists('fastcgi_finish_request')) {
+            // FastCGIバッファをクリアして処理を続行
+            @fastcgi_finish_request();
+        }
+        @flush();
+        @ob_flush();
+        
         // 投稿作成
         $this->log('info', 'WordPressに投稿を作成中...');
         
