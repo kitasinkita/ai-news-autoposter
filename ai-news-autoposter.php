@@ -875,7 +875,23 @@ class AINewsAutoPoster {
         
         // AIレスポンスを解析
         $this->log('info', 'AIレスポンスを解析中...');
-        $article_data = $this->parse_ai_response($ai_response);
+        
+        // Gemini APIからの構造化レスポンス処理
+        if ($is_gemini && is_array($ai_response) && isset($ai_response['text'])) {
+            $this->log('info', 'Gemini API構造化レスポンスを処理中...');
+            $grounding_sources = $ai_response['grounding_sources'] ?? array();
+            $article_data = $this->parse_ai_response($ai_response['text']);
+            
+            // 記事にグラウンディングソースを統合
+            if (!empty($grounding_sources)) {
+                $this->log('info', count($grounding_sources) . '件のグラウンディングソースを記事に統合中...');
+                $article_data = $this->integrate_grounding_sources($article_data, $grounding_sources);
+            }
+        } else {
+            // Claude APIまたは古いGemini形式の場合
+            $article_data = $this->parse_ai_response($ai_response);
+        }
+        
         $this->log('info', '記事データ解析完了。タイトル: ' . $article_data['title']);
         
         // 投稿データを準備
@@ -1445,6 +1461,58 @@ class AINewsAutoPoster {
     }
     
     /**
+     * グラウンディングソースを記事に統合
+     */
+    private function integrate_grounding_sources($article_data, $grounding_sources) {
+        if (empty($grounding_sources)) {
+            return $article_data;
+        }
+        
+        $this->log('info', 'グラウンディングソースを記事に統合開始');
+        
+        // 記事内容に参考情報源セクションを追加または置換
+        $content = $article_data['content'];
+        
+        // 既存の参考情報源セクションを検索
+        $references_pattern = '/##?\s*参考.*?\n(.*?)(?=\n##|$)/is';
+        $sources_section = "\n\n## 参考情報源\n";
+        
+        foreach ($grounding_sources as $index => $source) {
+            $title = esc_html($source['title']);
+            $url = esc_url($source['url']);
+            $sources_section .= "- <a href=\"{$url}\" target=\"_blank\">{$title}</a>\n";
+            $this->log('info', "統合URL[" . ($index + 1) . "]: {$title} - {$url}");
+        }
+        
+        // 既存の参考情報源セクションがある場合は置換、ない場合は追加
+        if (preg_match($references_pattern, $content)) {
+            $content = preg_replace($references_pattern, $sources_section, $content);
+            $this->log('info', '既存の参考情報源セクションを実際のグラウンディングソースで置換しました');
+        } else {
+            $content .= $sources_section;
+            $this->log('info', '記事末尾にグラウンディングソースセクションを追加しました');
+        }
+        
+        // サンプルURLやダミーURLを削除
+        $dummy_patterns = array(
+            '/https?:\/\/[^\/]*sample[^\/\s)]*[^\s)]*/',
+            '/https?:\/\/[^\/]*example[^\/\s)]*[^\s)]*/',
+            '/https?:\/\/[^\/]*dummy[^\/\s)]*[^\s)]*/',
+            '/https?:\/\/[^\/]*test[^\/\s)]*[^\s)]*/',
+            '/https?:\/\/[^\/]*placeholder[^\/\s)]*[^\s)]*/'
+        );
+        
+        foreach ($dummy_patterns as $pattern) {
+            $content = preg_replace($pattern, '[参考URL]', $content);
+        }
+        
+        $article_data['content'] = $content;
+        $this->log('info', 'グラウンディングソース統合完了');
+        
+        return $article_data;
+    }
+    
+    /**
      * 記事内容の後処理（Markdown変換、免責事項追加など）
      */
     private function post_process_content($content) {
@@ -1633,7 +1701,27 @@ class AINewsAutoPoster {
         }
         
         $this->log('info', 'Gemini API呼び出し完了。生成文字数: ' . mb_strlen($generated_text));
-        return $generated_text;
+        
+        // Grounding情報も含めて返す
+        $result = array(
+            'text' => $generated_text,
+            'grounding_sources' => array()
+        );
+        
+        // Grounding情報を抽出
+        if (isset($response_data['candidates'][0]['groundingMetadata']['groundingChunks'])) {
+            $grounding_chunks = $response_data['candidates'][0]['groundingMetadata']['groundingChunks'];
+            foreach ($grounding_chunks as $chunk) {
+                if (isset($chunk['web']['uri']) && isset($chunk['web']['title'])) {
+                    $result['grounding_sources'][] = array(
+                        'title' => $chunk['web']['title'],
+                        'url' => $chunk['web']['uri']
+                    );
+                }
+            }
+        }
+        
+        return $result;
     }
     
     /**
