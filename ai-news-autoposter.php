@@ -1413,51 +1413,15 @@ class AINewsAutoPoster {
             $prompt .= "- Include proper headings and structure\n\n";
         } else {
             // その他のGeminiモデル用プロンプト
-            $prompt = "【あなたの最新知識を活用してください】\n\n";
-            $prompt .= "現在は{$current_date}（{$current_year}年）です。\n\n";
-            $prompt .= "あなたの最新の知識（2024年末まで）を活用して、【{$search_keywords}】に関する業界の最新動向と{$current_year}年の予想される展開をまとめた記事を作成してください。\n\n";
-            
-            $prompt .= "【重要事項】:\n";
-            $prompt .= "1. 2024年末までの最新知識を基に業界動向を分析\n";
-            $prompt .= "2. {$current_year}年の予想される展開と影響を含める\n";
-            $prompt .= "3. 実在する企業・サービス・技術のみを言及\n";
-            $prompt .= "4. 参考情報源として主要ニュースサイトの一般的なURLパターンを使用\n";
-            $prompt .= "5. 架空の詳細な日付や具体的イベントは避ける\n\n";
+            $prompt = "{$current_year}年の【{$search_keywords}】に関する最新動向記事を作成してください。\n\n";
         }
         
-        $prompt .= "【記事要求】:\n";
-        $prompt .= "- 最新の業界動向を総合的にまとめた記事\n";
-        $prompt .= "- 全体で【{$word_count}文字】程度\n";
-        $prompt .= "- なぜ今これが起こっているのか、今後の影響についての分析を含む\n";
+        
+        $prompt .= "要件: {$word_count}文字程度、タイトル25文字以内";
         if ($writing_style !== '標準') {
-            $prompt .= "- 文体は{$writing_style}風\n";
+            $prompt .= "、{$writing_style}風の文体";
         }
-        $prompt .= "\n";
-        
-        $prompt .= "【記事構成】:\n";
-        $prompt .= "```\n";
-        $prompt .= "記事タイトル（25文字程度の簡潔なタイトル）\n";
-        $prompt .= "\n";
-        $prompt .= "リード文（概要）\n";
-        $prompt .= "\n";
-        $prompt .= "## 見出し1（最新動向）\n";
-        $prompt .= "本文（2024年後半〜{$current_year}年の動向）\n";
-        $prompt .= "\n";
-        $prompt .= "## 見出し2（今後の影響・予測）\n";
-        $prompt .= "本文（業界への影響分析）\n";
-        $prompt .= "\n";
-        $prompt .= "## 参考情報源\n";
-        $prompt .= "- [主要ニュースサイトの記事タイトル](実在の可能性が高いURL)\n";
-        $prompt .= "- [業界レポートのタイトル](実在の可能性が高いURL)\n";
-        $prompt .= "```\n\n";
-        
-        $prompt .= "【タイトル要件】:\n";
-        $prompt .= "- 記事のタイトルは必ず25-30文字の範囲で簡潔にまとめる\n";
-        $prompt .= "- 内容を的確に表現した魅力的なタイトルにする\n";
-        $prompt .= "- 長すぎるタイトルは避け、核心をついた短いタイトルを作成する\n";
-        $prompt .= "- 文字数を厳密に守り、30文字を超えないこと\n\n";
-        
-        $prompt .= "【重要】: 参考情報源は実在する可能性の高い主要ニュースサイト（ITmedia、TechCrunch、Wiredなど）のURLパターンを使用し、架空の詳細情報は避けてください。";
+        $prompt .= "。";
         
         return $prompt;
     }
@@ -2270,11 +2234,11 @@ class AINewsAutoPoster {
         $settings = get_option('ai_news_autoposter_settings', array());
         $expected_chars = $settings['article_word_count'] ?? 500;
         
-        // Gemini 2.5でGoogle Search Groundingを使用する場合は大幅にトークンを増やす
+        // Gemini 2.5でGoogle Search Groundingを使用する場合はトークンを調整
         if ($model === 'gemini-2.5-flash') {
-            // Google Search Groundingは大量のトークンを消費するため、出力用に十分確保
-            $max_tokens = 4000; // 固定で大きな値を設定
-            $this->log('info', 'Gemini 2.5 + Grounding用にmaxOutputTokensを4000に設定');
+            // Google Search Groundingのトークン消費を考慮し、余裕を持たせて設定
+            $max_tokens = 2000; // MAX_TOKENSエラー回避のため減らす
+            $this->log('info', 'Gemini 2.5 + Grounding用にmaxOutputTokensを2000に設定（MAX_TOKENSエラー回避）');
         } else {
             // 文字数をトークン数に変換（1トークン ≈ 0.7文字として計算）
             $expected_tokens = intval($expected_chars / 0.7);
