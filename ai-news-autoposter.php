@@ -1021,7 +1021,7 @@ class AINewsAutoPoster {
         }
         
         // UTF-8エンコーディングチェックを一時的に無効化（緊急回避）
-        $this->log('info', '【緊急回避モード v1.2.16】UTF-8エンコーディングチェックをスキップします');
+        $this->log('info', '【緊急回避モード v1.2.17】UTF-8エンコーディングチェックをスキップします');
         
         // 全ての制御文字、非印刷可能文字、異常文字を除去
         $post_data['post_content'] = preg_replace('/[\x00-\x1F\x7F-\x9F]/', '', $post_data['post_content']);
@@ -1119,7 +1119,32 @@ class AINewsAutoPoster {
             }
         }
         
-        $post_id = wp_insert_post($post_data, true); // true: より詳細なエラー情報
+        // wp_insert_post実行直前の最終ログ
+        $memory_usage = memory_get_usage(true) / 1024 / 1024; // MB
+        $memory_peak = memory_get_peak_usage(true) / 1024 / 1024; // MB
+        $this->log('info', 'wp_insert_postを実行します。メモリ使用量: ' . round($memory_usage, 2) . 'MB, ピーク: ' . round($memory_peak, 2) . 'MB');
+        $this->log('info', 'データサイズ: ' . strlen(serialize($post_data)) . ' bytes');
+        $this->log('info', 'コンテンツサイズ: ' . mb_strlen($post_data['post_content']) . '文字');
+        
+        // PHPエラーをキャッチするためのoutput buffering開始
+        ob_start();
+        
+        try {
+            $post_id = wp_insert_post($post_data, true); // true: より詳細なエラー情報
+            $this->log('info', 'wp_insert_post実行完了。結果: ' . (is_wp_error($post_id) ? 'WP_Error' : (数值($post_id) ? 'ID=' . $post_id : '0')));
+        } catch (Exception $e) {
+            $this->log('error', 'wp_insert_postでPHP例外が発生: ' . $e->getMessage());
+            $post_id = new WP_Error('php_exception', $e->getMessage());
+        } catch (Error $e) {
+            $this->log('error', 'wp_insert_postでPHPエラーが発生: ' . $e->getMessage());
+            $post_id = new WP_Error('php_error', $e->getMessage());
+        }
+        
+        // バッファの内容をログ出力
+        $buffer_content = ob_get_clean();
+        if (!empty($buffer_content)) {
+            $this->log('error', 'wp_insert_post実行中の出力: ' . $buffer_content);
+        }
         
         error_reporting($original_error_reporting);
         
