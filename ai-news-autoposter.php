@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.11
+ * Version: 1.2.12
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.11');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.12');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1195,9 +1195,10 @@ class AINewsAutoPoster {
         $prompt .= "```\n\n";
         
         $prompt .= "【タイトル要件】:\n";
-        $prompt .= "- 記事のタイトルは必ず25文字程度で簡潔にまとめる\n";
+        $prompt .= "- 記事のタイトルは必ず25-30文字の範囲で簡潔にまとめる\n";
         $prompt .= "- 内容を的確に表現した魅力的なタイトルにする\n";
-        $prompt .= "- 長いタイトルは避け、核心をついた短いタイトルを作成する\n\n";
+        $prompt .= "- 長すぎるタイトルは避け、核心をついた短いタイトルを作成する\n";
+        $prompt .= "- 文字数を厳密に守り、30文字を超えないこと\n\n";
         
         $prompt .= "【重要】: 参考情報源は実在する可能性の高い主要ニュースサイト（ITmedia、TechCrunch、Wiredなど）のURLパターンを使用し、架空の詳細情報は避けてください。";
         
@@ -1596,36 +1597,22 @@ class AINewsAutoPoster {
             $original_title = $source['title'] ?? 'AI関連記事';
             $original_url = $source['url'] ?? '';
             
-            // タイトルがドメイン名のみの場合は、汎用的なタイトルを生成
-            $domain_only_patterns = array(
-                '/^[a-zA-Z0-9\-\.]+\.(com|co\.jp|jp|net|org)$/i',
-                '/^www\.[a-zA-Z0-9\-\.]+\.(com|co\.jp|jp|net|org)$/i'
-            );
+            // タイトルとURLを基本的にそのまま使用（過度な処理を避ける）
+            $display_title = $original_title;
             
-            $is_domain_only = false;
-            foreach ($domain_only_patterns as $pattern) {
-                if (preg_match($pattern, $original_title)) {
-                    $is_domain_only = true;
-                    break;
-                }
-            }
-            
-            if ($is_domain_only) {
-                // ドメイン名のみの場合は、汎用的なタイトルを作成
+            // タイトルが明らかにドメイン名のみの場合のみ、汎用的なタイトルを生成
+            if (preg_match('/^[a-zA-Z0-9\-\.]+\.(com|co\.jp|jp|net|org)$/i', $original_title)) {
                 $domain_to_name = array(
-                    'itmedia.co.jp' => 'ITmedia記事',
-                    'hitachi.co.jp' => '日立公式発表',
-                    'note.com' => 'Note記事',
-                    'lion.co.jp' => 'ライオン企業情報',
-                    'nttdata.com' => 'NTTデータ発表',
-                    'microsoft.com' => 'Microsoft公式情報',
-                    'gartner.co.jp' => 'ガートナー分析',
-                    'hp.com' => 'HP公式発表'
+                    'itmedia.co.jp' => 'ITmedia AI関連記事',
+                    'techcrunch.com' => 'TechCrunch AI記事',
+                    'wired.com' => 'Wired AI記事',
+                    'note.com' => 'Note AI記事',
+                    'microsoft.com' => 'Microsoft AI情報',
+                    'gartner.co.jp' => 'ガートナー AI分析',
+                    'hp.com' => 'HP AI発表'
                 );
                 
-                $display_title = $domain_to_name[$original_title] ?? ($original_title . '関連記事');
-            } else {
-                $display_title = $original_title;
+                $display_title = $domain_to_name[$original_title] ?? 'AI関連記事';
             }
             
             // タイトルが長すぎる場合は短縮
@@ -1635,30 +1622,12 @@ class AINewsAutoPoster {
             
             $title = esc_html($display_title);
             
-            // リダイレクトURLの場合は、ベースURLを生成
-            if (strpos($original_url, 'vertexaisearch.cloud.google.com') !== false) {
-                $domain_hints = array(
-                    'itmedia.co.jp' => 'https://www.itmedia.co.jp/',
-                    'hitachi.co.jp' => 'https://www.hitachi.co.jp/',
-                    'note.com' => 'https://note.com/',
-                    'lion.co.jp' => 'https://www.lion.co.jp/',
-                    'nttdata.com' => 'https://www.nttdata.com/',
-                    'microsoft.com' => 'https://www.microsoft.com/',
-                    'gartner.co.jp' => 'https://www.gartner.co.jp/',
-                    'hp.com' => 'https://www.hp.com/'
-                );
-                
-                $found_url = null;
-                foreach ($domain_hints as $domain => $base_url) {
-                    if (stripos($original_title, $domain) !== false || stripos($original_url, $domain) !== false) {
-                        $found_url = $base_url;
-                        break;
-                    }
-                }
-                
-                $url = $found_url ? esc_url($found_url) : esc_url('https://google.com/search?q=' . urlencode($display_title));
-            } else {
-                $url = esc_url($original_url);
+            // URLは基本的にそのまま使用（Geminiが返すURLを信頼）
+            $url = esc_url($original_url);
+            
+            // URLが空の場合のみ、検索URLを生成
+            if (empty($url) || $url === 'https://') {
+                $url = esc_url('https://google.com/search?q=' . urlencode($display_title));
             }
             
             $sources_section .= "- <a href=\"{$url}\" target=\"_blank\">{$title}</a>\n";
