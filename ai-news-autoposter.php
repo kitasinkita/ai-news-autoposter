@@ -1054,21 +1054,27 @@ class AINewsAutoPoster {
         $this->log('info', 'データベース接続状態: ' . ($wpdb->check_connection() ? '正常' : '異常'));
         
         // データベース設定を確認
+        $this->log('info', 'データベース設定を取得中...');
         $max_allowed_packet = $wpdb->get_var("SELECT @@max_allowed_packet");
         $this->log('info', 'max_allowed_packet: ' . number_format($max_allowed_packet) . ' bytes');
         
         // 文字セットを確認
+        $this->log('info', '文字セットを取得中...');
         $charset = $wpdb->get_var("SELECT @@character_set_database");
         $collation = $wpdb->get_var("SELECT @@collation_database");
         $this->log('info', 'DB文字セット: ' . $charset . ', 照合順序: ' . $collation);
         
         // 投稿前にデータベースエラーをクリア
+        $this->log('info', 'データベースエラーをクリア中...');
         $wpdb->flush();
         $wpdb->last_error = '';
+        $this->log('info', 'データベースエラークリア完了');
         
         // 文字化けを防ぐため、最小限のサニタイズのみ実行
+        $this->log('info', 'タイトルのサニタイズ中...');
         // タイトルのHTMLタグを削除
         $post_data['post_title'] = strip_tags($post_data['post_title']);
+        $this->log('info', 'タイトルサニタイズ完了');
         
         // コンテンツのサニタイズは行わず、そのまま使用
         // （WordPressが自動的に適切に処理する）
