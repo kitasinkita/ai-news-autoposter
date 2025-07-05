@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.14
+ * Version: 1.2.15
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.14');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.15');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1493,11 +1493,30 @@ class AINewsAutoPoster {
         $content = '';
         $tags = array();
         
-        // 最初の行をタイトルとして使用
+        // 最初の非空行から適切な長さのタイトルを生成
         foreach ($lines as $index => $line) {
             $line = trim($line);
             if (!empty($line) && strpos($line, '#') !== 0) {
-                $title = $line;
+                // タイトルを25-30文字に制限
+                if (mb_strlen($line) > 30) {
+                    // 文章の意味のある区切りで短縮
+                    $truncated = mb_substr($line, 0, 25);
+                    // 最後の句読点で切る
+                    $lastPunctuation = max(
+                        mb_strrpos($truncated, '。'),
+                        mb_strrpos($truncated, '、'),
+                        mb_strrpos($truncated, '：'),
+                        mb_strrpos($truncated, 'は'),
+                        mb_strrpos($truncated, 'が')
+                    );
+                    if ($lastPunctuation !== false) {
+                        $title = mb_substr($truncated, 0, $lastPunctuation + 1);
+                    } else {
+                        $title = $truncated . '...';
+                    }
+                } else {
+                    $title = $line;
+                }
                 // タイトル以降をコンテンツとして使用
                 $content = implode("\n", array_slice($lines, $index + 1));
                 break;
@@ -1600,19 +1619,29 @@ class AINewsAutoPoster {
             // タイトルとURLを基本的にそのまま使用（過度な処理を避ける）
             $display_title = $original_title;
             
-            // タイトルが明らかにドメイン名のみの場合のみ、汎用的なタイトルを生成
+            // タイトルが明らかにドメイン名のみの場合のみ、より具体的なタイトルを生成
             if (preg_match('/^[a-zA-Z0-9\-\.]+\.(com|co\.jp|jp|net|org)$/i', $original_title)) {
                 $domain_to_name = array(
-                    'itmedia.co.jp' => 'ITmedia AI関連記事',
-                    'techcrunch.com' => 'TechCrunch AI記事',
-                    'wired.com' => 'Wired AI記事',
-                    'note.com' => 'Note AI記事',
-                    'microsoft.com' => 'Microsoft AI情報',
-                    'gartner.co.jp' => 'ガートナー AI分析',
-                    'hp.com' => 'HP AI発表'
+                    'itmedia.co.jp' => 'ITmedia：AI技術の最新動向',
+                    'techcrunch.com' => 'TechCrunch：AIスタートアップニュース',
+                    'wired.com' => 'Wired：AI技術の未来展望',
+                    'note.com' => 'Note：AI開発者による解説記事',
+                    'microsoft.com' => 'Microsoft：AI製品・サービス発表',
+                    'ibm.com' => 'IBM：企業向けAIソリューション',
+                    'qiita.com' => 'Qiita：AI開発技術情報',
+                    'brainpad.co.jp' => 'ブレインパッド：AIデータ分析事例',
+                    'gartner.co.jp' => 'ガートナー：AI市場分析レポート',
+                    'hp.com' => 'HP：AI活用ビジネス事例',
+                    'sotatek.com' => 'SotaTek：AI開発サービス紹介',
+                    'agentec.jp' => 'エージェンテック：AIエージェント技術',
+                    'atarayo.co.jp' => 'あたらよ：AI業界ニュース',
+                    'shift-ai.co.jp' => 'SHIFT AI：AI品質保証技術',
+                    'kimini.online' => 'Kimini：AI教育サービス',
+                    'ai-kenkyujo.com' => 'AI研究所：AI技術解説',
+                    'lion.co.jp' => 'ライオン：AI活用製品開発'
                 );
                 
-                $display_title = $domain_to_name[$original_title] ?? 'AI関連記事';
+                $display_title = $domain_to_name[$original_title] ?? ($original_title . '：AI関連記事');
             }
             
             // タイトルが長すぎる場合は短縮
