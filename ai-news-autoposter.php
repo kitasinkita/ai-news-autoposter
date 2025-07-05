@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.6
+ * Version: 1.2.8
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.6');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.8');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1473,24 +1473,40 @@ class AINewsAutoPoster {
         // 記事内容に参考情報源セクションを追加または置換
         $content = $article_data['content'];
         
-        // 既存の参考情報源セクションを検索
-        $references_pattern = '/##?\s*参考.*?\n(.*?)(?=\n##|$)/is';
-        $sources_section = "\n\n## 参考情報源\n";
+        // 複数の形式の参考情報源セクションを段階的に削除
+        $reference_patterns = array(
+            // Markdownスタイル（# ## ###）
+            '/#+\s*参考.*?(?=\n#+|\n\n|\Z)/is',
+            // HTMLスタイル（<h2> <h3>など）
+            '/<h[2-6][^>]*>\s*参考.*?<\/h[2-6]>.*?(?=<h[2-6]|\Z)/is',
+            // 太字スタイル（**参考情報源**）
+            '/\*\*\s*参考.*?\*\*.*?(?=\n\n|\*\*|\Z)/is',
+            // リスト形式で参考情報が続く場合
+            '/参考情報.*?(?:\n-.*?(?:https?:\/\/[^\s\)]+|vertexaisearch\.cloud\.google\.com[^\s\)]+).*?)*(?=\n\n|\Z)/is'
+        );
         
-        foreach ($grounding_sources as $index => $source) {
-            $title = esc_html($source['title']);
-            $url = esc_url($source['url']);
-            $sources_section .= "- <a href=\"{$url}\" target=\"_blank\">{$title}</a>\n";
-            $this->log('info', "統合URL[" . ($index + 1) . "]: {$title} - {$url}");
+        $removed_sections = 0;
+        foreach ($reference_patterns as $pattern) {
+            $matches = preg_match_all($pattern, $content);
+            if ($matches > 0) {
+                $content = preg_replace($pattern, '', $content);
+                $removed_sections += $matches;
+                $this->log('info', "参考情報源パターンで{$matches}件のセクションを削除");
+            }
         }
         
-        // 既存の参考情報源セクションがある場合は置換、ない場合は追加
-        if (preg_match($references_pattern, $content)) {
-            $content = preg_replace($references_pattern, $sources_section, $content);
-            $this->log('info', '既存の参考情報源セクションを実際のグラウンディングソースで置換しました');
-        } else {
-            $content .= $sources_section;
-            $this->log('info', '記事末尾にグラウンディングソースセクションを追加しました');
+        // Google リダイレクトURLを含む行を削除
+        $redirect_patterns = array(
+            '/.*vertexaisearch\.cloud\.google\.com.*\n?/i',
+            '/.*https?:\/\/[^\s]*redirect[^\s]*.*\n?/i'
+        );
+        
+        foreach ($redirect_patterns as $pattern) {
+            $matches = preg_match_all($pattern, $content);
+            if ($matches > 0) {
+                $content = preg_replace($pattern, '', $content);
+                $this->log('info', "リダイレクトURLで{$matches}件の行を削除");
+            }
         }
         
         // サンプルURLやダミーURLを削除
@@ -1505,6 +1521,23 @@ class AINewsAutoPoster {
         foreach ($dummy_patterns as $pattern) {
             $content = preg_replace($pattern, '[参考URL]', $content);
         }
+        
+        // 連続する空行を整理
+        $content = preg_replace('/\n{3,}/', "\n\n", $content);
+        $content = trim($content);
+        
+        // 新しい統合された参考情報源セクションを生成
+        $sources_section = "\n\n## 参考情報源\n";
+        foreach ($grounding_sources as $index => $source) {
+            $title = esc_html($source['title']);
+            $url = esc_url($source['url']);
+            $sources_section .= "- <a href=\"{$url}\" target=\"_blank\">{$title}</a>\n";
+            $this->log('info', "統合URL[" . ($index + 1) . "]: {$title} - {$url}");
+        }
+        
+        // 最終的な統合セクションを追加
+        $content .= $sources_section;
+        $this->log('info', "{$removed_sections}件の既存参考情報源セクションを削除し、統合セクションを追加しました");
         
         $article_data['content'] = $content;
         $this->log('info', 'グラウンディングソース統合完了');
