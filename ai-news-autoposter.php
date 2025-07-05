@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.1.8
+ * Version: 1.1.9
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.1.8');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.1.9');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -821,29 +821,31 @@ class AINewsAutoPoster {
             return new WP_Error('no_api_key', 'Claude API キーが設定されていません。');
         }
         
-        $this->log('info', 'Claude AIに最新ニュース検索と記事生成を依頼します');
-        
-        // Claude AI に直接ニュース検索と記事生成を依頼
-        $prompt = $this->build_direct_article_prompt($settings);
-        
         // AI APIを呼び出し
         $model = $settings['claude_model'] ?? 'claude-3-5-haiku-20241022';
-        if (strpos($model, 'gemini') === 0) {
-            $this->log('info', 'Gemini API（Web検索付き）を呼び出します...');
+        $is_gemini = strpos($model, 'gemini') === 0;
+        $api_name = $is_gemini ? 'Gemini' : 'Claude';
+        
+        $this->log('info', $api_name . ' AIに最新ニュース検索と記事生成を依頼します');
+        
+        if ($is_gemini) {
+            $this->log('info', 'Gemini APIを呼び出します...');
             // Gemini用にWeb検索特化プロンプトを使用
             $gemini_prompt = $this->build_gemini_search_prompt($settings);
             $ai_response = $this->call_gemini_api($gemini_prompt, $settings['gemini_api_key'] ?? '', $model);
         } else {
             $this->log('info', 'Claude APIを呼び出します...');
+            // Claude AI に直接ニュース検索と記事生成を依頼
+            $prompt = $this->build_direct_article_prompt($settings);
             $ai_response = $this->call_claude_api($prompt, $api_key, $settings);
         }
         
         if (is_wp_error($ai_response)) {
-            $this->log('error', 'Claude API呼び出しに失敗: ' . $ai_response->get_error_message());
+            $this->log('error', $api_name . ' API呼び出しに失敗: ' . $ai_response->get_error_message());
             return $ai_response;
         }
         
-        $this->log('info', 'Claude APIから正常にレスポンスを受信しました');
+        $this->log('info', $api_name . ' APIから正常にレスポンスを受信しました');
         
         // AIレスポンスを解析
         $this->log('info', 'AIレスポンスを解析中...');
