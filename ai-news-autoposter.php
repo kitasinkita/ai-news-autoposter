@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.0.4
+ * Version: 1.0.5
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.0.4');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.0.5');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -67,6 +67,7 @@ class AINewsAutoPoster {
         if (!get_option('ai_news_autoposter_settings')) {
             $default_settings = array(
                 'claude_api_key' => '',
+                'claude_model' => 'claude-3-5-haiku-20241022',
                 'auto_publish' => false,
                 'schedule_time' => '06:00',
                 'schedule_times' => array('06:00'),
@@ -248,6 +249,7 @@ class AINewsAutoPoster {
         if (isset($_POST['submit'])) {
             $settings = array(
                 'claude_api_key' => sanitize_text_field($_POST['claude_api_key']),
+                'claude_model' => sanitize_text_field($_POST['claude_model']),
                 'auto_publish' => isset($_POST['auto_publish']),
                 'schedule_time' => sanitize_text_field($_POST['schedule_time']),
                 'max_posts_per_day' => intval($_POST['max_posts_per_day']),
@@ -302,6 +304,18 @@ class AINewsAutoPoster {
                         <td>
                             <input type="password" id="claude_api_key" name="claude_api_key" value="<?php echo esc_attr($settings['claude_api_key'] ?? ''); ?>" class="regular-text" />
                             <p class="ai-news-form-description">AnthropicのClaude APIキーを入力してください。</p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">Claudeモデル</th>
+                        <td>
+                            <select name="claude_model" id="claude_model">
+                                <option value="claude-3-5-haiku-20241022" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'claude-3-5-haiku-20241022'); ?>>Claude 3.5 Haiku (高速・低コスト)</option>
+                                <option value="claude-3-5-sonnet-20241022" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022'); ?>>Claude 3.5 Sonnet (バランス)</option>
+                                <option value="claude-sonnet-4-20250514" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'claude-sonnet-4-20250514'); ?>>Claude Sonnet 4 (最高品質)</option>
+                            </select>
+                            <p class="ai-news-form-description">使用するClaudeモデルを選択してください。Haikuは高速で低コスト、Sonnet 4は最高品質ですが高コストです。</p>
                         </td>
                     </tr>
                     
@@ -597,7 +611,7 @@ class AINewsAutoPoster {
             return;
         }
         
-        $response = $this->call_claude_api('こんにちは。これはAPIテストです。', $api_key);
+        $response = $this->call_claude_api('こんにちは。これはAPIテストです。', $api_key, $settings);
         
         if (is_wp_error($response)) {
             wp_send_json_error($response->get_error_message());
@@ -793,7 +807,7 @@ class AINewsAutoPoster {
         
         // Claude APIを呼び出し
         $this->log('info', 'Claude APIを呼び出します...');
-        $ai_response = $this->call_claude_api($prompt, $api_key);
+        $ai_response = $this->call_claude_api($prompt, $api_key, $settings);
         
         if (is_wp_error($ai_response)) {
             $this->log('error', 'Claude API呼び出しに失敗: ' . $ai_response->get_error_message());
@@ -1119,7 +1133,10 @@ class AINewsAutoPoster {
     /**
      * Claude API呼び出し
      */
-    private function call_claude_api($prompt, $api_key) {
+    private function call_claude_api($prompt, $api_key, $settings = null) {
+        if ($settings === null) {
+            $settings = get_option('ai_news_autoposter_settings', array());
+        }
         $url = 'https://api.anthropic.com/v1/messages';
         
         $this->log('info', 'Claude API呼び出しを開始します。プロンプト長: ' . strlen($prompt) . '文字');
@@ -1131,7 +1148,7 @@ class AINewsAutoPoster {
         );
         
         $body = array(
-            'model' => 'claude-sonnet-4-20250514',
+            'model' => $settings['claude_model'] ?? 'claude-3-5-haiku-20241022',
             'max_tokens' => 2000, // トークン数を削減して処理時間短縮
             'messages' => array(
                 array(

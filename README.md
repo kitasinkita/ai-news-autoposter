@@ -6,7 +6,7 @@
 [![PHP](https://img.shields.io/badge/PHP-7.4+-purple.svg)](https://php.net)
 [![License](https://img.shields.io/badge/License-GPL%20v2-green.svg)](LICENSE)
 [![Claude AI](https://img.shields.io/badge/AI-Claude%20Sonnet%204-orange.svg)](https://anthropic.com)
-[![Version](https://img.shields.io/badge/Version-1.0.4-green.svg)](https://github.com/kitasinkita/ai-news-autoposter/releases)
+[![Version](https://img.shields.io/badge/Version-1.0.5-green.svg)](https://github.com/kitasinkita/ai-news-autoposter/releases)
 
 ## 📖 概要
 
@@ -15,7 +15,7 @@ AI News AutoPosterは、最新の**Claude Sonnet 4**を活用してAI関連ニ�
 ## ✨ 主な機能
 
 ### 🤖 AI記事自動生成
-- **Claude Sonnet 4** による最新AI技術活用
+- **Claudeモデル選択** - Haiku (高速・低コスト) / Sonnet 3.5 (バランス) / Sonnet 4 (最高品質)
 - **多言語対応** (日本語・英語・中国語)
 - **RSS不要** - Claudeの内蔵知識ベース活用
 - **カスタムプロンプト** 対応
@@ -250,7 +250,8 @@ ai-news-autoposter/
 
 ## 🔄 バージョン履歴
 
-### v1.0.4 (現在) ✅
+### v1.0.5 (現在) ✅
+- ✅ **Claudeモデル選択機能** - Haiku/Sonnet 3.5/Sonnet 4から選択可能
 - ✅ Claude Sonnet 4 モデル対応
 - ✅ 1時間間隔自動投稿システム
 - ✅ 多言語ニュース収集 (日本語・英語・中国語)
@@ -258,6 +259,10 @@ ai-news-autoposter/
 - ✅ カスタムプロンプト機能
 - ✅ ネットワークタイムアウト対策 (360秒)
 - ✅ 参考リンク自動生成・クリック可能化
+
+### v1.0.4
+- Claude Sonnet 4 対応とドキュメント更新
+- 村上春樹→夏目漱石への著作権対応
 
 ### 今後の予定
 - [ ] 外部ニュースAPI統合（複雑性を避け現在見送り中）
