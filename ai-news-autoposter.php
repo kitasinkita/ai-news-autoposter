@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.18
+ * Version: 1.2.19
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.18');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.19');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1097,7 +1097,7 @@ class AINewsAutoPoster {
         $this->log('info', 'タイトルのUTF-8エンコーディングチェック完了');
         
         // UTF-8エンコーディングチェックを一時的に無効化（緊急回避）
-        $this->log('info', '【緊急回避モード v1.2.17】UTF-8エンコーディングチェックをスキップします');
+        $this->log('info', '【緊急回避モード v1.2.19】UTF-8エンコーディングチェックをスキップします');
         
         $this->log('info', '制御文字の除去を開始します...');
         // 全ての制御文字、非印刷可能文字、異常文字を除去
@@ -1120,14 +1120,53 @@ class AINewsAutoPoster {
         $this->log('info', '長いURL短縮完了');
         
         $this->log('info', 'UTF-8エンコーディング強制変換を開始します...');
-        // UTF-8エンコーディングを強制し、不正文字を除去
-        $post_data['post_content'] = mb_convert_encoding($post_data['post_content'], 'UTF-8', 'UTF-8//IGNORE');
+        // より安全なUTF-8エンコーディング処理（段階的処理でハング回避）
+        try {
+            $this->log('info', 'UTF-8エンコーディング変換前のコンテンツ長: ' . strlen($post_data['post_content']) . ' bytes');
+            
+            // まず非常に長いコンテンツを事前に短縮（メモリ問題回避）
+            if (strlen($post_data['post_content']) > 10000) {
+                $this->log('warning', 'コンテンツが非常に長いため事前短縮します');
+                $post_data['post_content'] = substr($post_data['post_content'], 0, 8000) . "\n\n※ 記事が長いため事前短縮しています。";
+            }
+            
+            // より安全な文字エンコーディング処理
+            $this->log('info', 'mb_convert_encoding実行中...');
+            if (function_exists('mb_convert_encoding')) {
+                // タイムアウト回避のため小さなチャンクで処理
+                $content_length = strlen($post_data['post_content']);
+                if ($content_length > 5000) {
+                    $this->log('info', '大きなコンテンツのためチャンク処理を実行');
+                    $chunks = str_split($post_data['post_content'], 2000);
+                    $converted_content = '';
+                    foreach ($chunks as $i => $chunk) {
+                        $converted_content .= mb_convert_encoding($chunk, 'UTF-8', 'UTF-8//IGNORE');
+                        $this->log('info', 'チャンク ' . ($i + 1) . '/' . count($chunks) . ' 変換完了');
+                    }
+                    $post_data['post_content'] = $converted_content;
+                } else {
+                    $post_data['post_content'] = mb_convert_encoding($post_data['post_content'], 'UTF-8', 'UTF-8//IGNORE');
+                }
+            } else {
+                $this->log('warning', 'mb_convert_encoding関数が利用できません - 簡易クリーニングのみ実行');
+                // フォールバック: 基本的な非ASCII文字の処理のみ
+                $post_data['post_content'] = preg_replace('/[^\x20-\x7E\p{L}\p{N}\p{P}\p{Z}]/u', '', $post_data['post_content']);
+            }
+        } catch (Exception $e) {
+            $this->log('error', 'UTF-8エンコーディング変換でエラー: ' . $e->getMessage() . ' - 簡易処理にフォールバック');
+            // エラー時のフォールバック処理
+            $post_data['post_content'] = preg_replace('/[^\x20-\x7E\p{L}\p{N}\p{P}\p{Z}]/u', '', $post_data['post_content']);
+        }
         $this->log('info', 'UTF-8エンコーディング強制変換完了');
         
         $this->log('info', '空白文字の正規化を開始します...');
-        // 空白文字の正規化
-        $post_data['post_content'] = preg_replace('/\s+/', ' ', $post_data['post_content']);
-        $this->log('info', '空白文字正規化完了');
+        // 空白文字の正規化（より安全に実行）
+        try {
+            $post_data['post_content'] = preg_replace('/\s+/', ' ', $post_data['post_content']);
+            $this->log('info', '空白文字正規化完了');
+        } catch (Exception $e) {
+            $this->log('warning', '空白文字正規化でエラー - スキップします: ' . $e->getMessage());
+        }
         
         $this->log('info', '制御文字を除去し、長いURLを短縮しました。コンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字');
         
