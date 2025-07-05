@@ -945,6 +945,45 @@ class AINewsAutoPoster {
         $original_error_reporting = error_reporting();
         error_reporting(E_ALL);
         
+        // 投稿データの詳細検証
+        $required_fields = ['post_title', 'post_content', 'post_status', 'post_type'];
+        foreach ($required_fields as $field) {
+            if (empty($post_data[$field])) {
+                $this->log('error', '必須フィールドが空です: ' . $field);
+                return new WP_Error('missing_required_field', '必須フィールドが不足しています: ' . $field);
+            }
+        }
+        
+        // データベース接続状態を確認
+        global $wpdb;
+        $this->log('info', 'データベース接続状態: ' . ($wpdb->check_connection() ? '正常' : '異常'));
+        
+        // 投稿前にデータベースエラーをクリア
+        $wpdb->flush();
+        $wpdb->last_error = '';
+        
+        // 投稿データをサニタイズ
+        $post_data['post_title'] = sanitize_text_field($post_data['post_title']);
+        $post_data['post_content'] = wp_kses_post($post_data['post_content']);
+        $post_data['post_excerpt'] = isset($post_data['post_excerpt']) ? sanitize_text_field($post_data['post_excerpt']) : '';
+        
+        // カテゴリの検証
+        if (isset($post_data['post_category']) && is_array($post_data['post_category'])) {
+            $valid_categories = array();
+            foreach ($post_data['post_category'] as $cat_id) {
+                if (is_numeric($cat_id) && get_category($cat_id)) {
+                    $valid_categories[] = intval($cat_id);
+                }
+            }
+            $post_data['post_category'] = $valid_categories;
+            
+            // 有効なカテゴリがない場合はデフォルトカテゴリを使用
+            if (empty($post_data['post_category'])) {
+                $post_data['post_category'] = array(1);
+                $this->log('warning', 'カテゴリが無効のため、デフォルトカテゴリ(1)を使用します');
+            }
+        }
+        
         $post_id = wp_insert_post($post_data, true); // true: より詳細なエラー情報
         
         error_reporting($original_error_reporting);
@@ -955,6 +994,16 @@ class AINewsAutoPoster {
                 $error_messages[] = $code . ': ' . implode(', ', $post_id->get_error_messages($code));
             }
             $this->log('error', '投稿作成に失敗: ' . implode(' | ', $error_messages));
+            
+            // 追加のデバッグ情報
+            $this->log('error', 'カテゴリ詳細: ' . json_encode($post_data['post_category']));
+            $this->log('error', 'メタ情報: ' . json_encode($post_data['meta_input']));
+            
+            // データベースエラーもチェック
+            if ($wpdb->last_error) {
+                $this->log('error', 'データベースエラー詳細: ' . $wpdb->last_error);
+            }
+            
             return $post_id;
         }
         
