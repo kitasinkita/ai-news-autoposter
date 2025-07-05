@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.9
+ * Version: 1.2.10
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.9');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.10');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1403,22 +1403,40 @@ class AINewsAutoPoster {
     /**
      * タイトルを適切な長さに短縮
      */
-    private function shorten_title($title, $max_length = 25) {
+    private function shorten_title($title, $max_length = 30) {
         if (mb_strlen($title) <= $max_length) {
             return $title;
         }
         
-        // 句読点で区切って最初の部分を使用
-        $punctuation = array('。', '、', '：', ':', '！', '!', '？', '?', '）', ')');
-        foreach ($punctuation as $punct) {
+        // 意味のある区切り点で短縮（より長い最小長を保証）
+        $good_punctuation = array('。', '！', '!', '？', '?', '）', ')');
+        foreach ($good_punctuation as $punct) {
             $pos = mb_strpos($title, $punct);
-            if ($pos !== false && $pos < $max_length) {
+            if ($pos !== false && $pos >= 15 && $pos <= $max_length) { // 最低15文字は保証
                 return mb_substr($title, 0, $pos + 1);
             }
         }
         
-        // 句読点がない場合は単純に切り詰め
-        return mb_substr($title, 0, $max_length - 3) . '...';
+        // 「、」「：」「:」は意味が続く場合があるので、より慎重に処理
+        $continue_punctuation = array('、', '：', ':');
+        foreach ($continue_punctuation as $punct) {
+            $pos = mb_strpos($title, $punct);
+            if ($pos !== false && $pos >= 20 && $pos <= $max_length) { // より長い最小長を要求
+                return mb_substr($title, 0, $pos + 1);
+            }
+        }
+        
+        // 句読点による良い切り位置がない場合は、単語境界で切り詰め
+        $words = preg_split('/[\s　]+/u', $title); // 空白で分割
+        $result = '';
+        foreach ($words as $word) {
+            if (mb_strlen($result . $word) > $max_length - 3) {
+                break;
+            }
+            $result .= ($result ? ' ' : '') . $word;
+        }
+        
+        return $result ? $result . '...' : mb_substr($title, 0, $max_length - 3) . '...';
     }
     
     /**
@@ -1567,6 +1585,9 @@ class AINewsAutoPoster {
         // 新しい統合された参考情報源セクションを生成
         $sources_section = "\n\n## 参考情報源\n";
         foreach ($grounding_sources as $index => $source) {
+            // デバッグ: ソースの完全な内容をログ出力
+            $this->log('info', "ソース[" . ($index + 1) . "]の内容: " . json_encode($source, JSON_UNESCAPED_UNICODE));
+            
             // 記事タイトルを使用（利用可能な場合）
             $display_title = $source['title'] ?? 'AI関連記事';
             
@@ -1575,8 +1596,39 @@ class AINewsAutoPoster {
                 $display_title = mb_substr($display_title, 0, 47) . '...';
             }
             
+            // HTMLエスケープとURL処理を確実に行う
             $title = esc_html($display_title);
-            $url = esc_url($source['url']);
+            $original_url = $source['url'] ?? '';
+            
+            // リダイレクトURLの場合は、ベースURLを生成
+            if (strpos($original_url, 'vertexaisearch.cloud.google.com') !== false) {
+                $domain_hints = array(
+                    'itmedia.co.jp' => 'https://www.itmedia.co.jp/',
+                    'hitachi.co.jp' => 'https://www.hitachi.co.jp/',
+                    'hitamuki-inc.com' => 'https://hitamuki-inc.com/',
+                    'weel.co.jp' => 'https://weel.co.jp/',
+                    'aismiley.co.jp' => 'https://aismiley.co.jp/',
+                    'note.com' => 'https://note.com/',
+                    'appswingby.com' => 'https://appswingby.com/',
+                    'globalxetfs.co.jp' => 'https://www.globalxetfs.co.jp/',
+                    'microsoft.com' => 'https://www.microsoft.com/',
+                    'gartner.co.jp' => 'https://www.gartner.co.jp/',
+                    'hp.com' => 'https://www.hp.com/'
+                );
+                
+                $found_url = null;
+                foreach ($domain_hints as $domain => $base_url) {
+                    if (stripos($title, $domain) !== false || stripos($original_url, $domain) !== false) {
+                        $found_url = $base_url;
+                        break;
+                    }
+                }
+                
+                $url = $found_url ? esc_url($found_url) : esc_url('https://google.com/search?q=' . urlencode($title));
+            } else {
+                $url = esc_url($original_url);
+            }
+            
             $sources_section .= "- <a href=\"{$url}\" target=\"_blank\">{$title}</a>\n";
             $this->log('info', "統合URL[" . ($index + 1) . "]: {$title} - {$url}");
         }
