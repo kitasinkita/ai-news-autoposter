@@ -154,10 +154,14 @@
             
             // プログレス更新シミュレーション
             let progress = 0;
+            const selectedModel = $('#claude_model').val() || 'claude-3-5-haiku-20241022';
+            const isGemini = selectedModel.includes('gemini');
+            const progressMessage = isGemini ? 'Gemini AIでWeb検索・記事生成中...' : '記事を生成中...';
+            
             const progressInterval = setInterval(function() {
                 progress += Math.random() * 15;
                 if (progress > 90) progress = 90;
-                AINewsAutoPoster.updateProgress(progress, '記事を生成中...');
+                AINewsAutoPoster.updateProgress(progress, progressMessage);
             }, 1000);
             
             // Ajax リクエスト
@@ -470,10 +474,12 @@
             
             // プログレス更新シミュレーション
             let progress = 0;
+            const selectedModel = $('#claude_model').val() || 'claude-3-5-haiku-20241022';
+            const isGemini = selectedModel.includes('gemini');
             let progressMessages = [
                 '記事を生成・投稿中...',
-                'Claude AIで記事を作成中...',
-                '高品質な記事を生成中...',
+                isGemini ? 'Gemini AIでWeb検索・記事作成中...' : 'Claude AIで記事を作成中...',
+                isGemini ? 'Google検索で最新情報を取得中...' : '高品質な記事を生成中...',
                 '記事の最終調整中...',
                 '投稿準備中...'
             ];

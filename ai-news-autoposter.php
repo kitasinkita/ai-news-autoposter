@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.1.4
+ * Version: 1.1.5
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.1.4');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.1.5');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1088,17 +1088,17 @@ class AINewsAutoPoster {
         $current_date = current_time('Y年n月j日');
         $current_year = current_time('Y');
         
-        // Gemini Google Search Grounding プロンプト（修正版）
-        $prompt = "【Google検索を使用して最新情報を取得してください】\n\n";
-        $prompt .= "現在は{$current_date}（{$current_year}年）です。\n\n";
-        $prompt .= "Google検索機能を使用して、【{$search_keywords}】に関する{$current_year}年の最新ニュース（特に直近1-3ヶ月の新しい情報）を検索し、実際のニュース記事を参考にして記事を作成してください。\n\n";
+        // Gemini Google Search Grounding 特化プロンプト
+        $prompt = "【IMPORTANT: Use Google Search to find real, current news articles】\n\n";
+        $prompt .= "Current date: {$current_date} ({$current_year})\n\n";
+        $prompt .= "Please use your Google Search capability to find actual news articles about 【{$search_keywords}】 from {$current_year} (especially recent 1-3 months).\n\n";
         
-        $prompt .= "【必須要求事項】:\n";
-        $prompt .= "1. 実際にGoogle検索を実行して最新ニュースを見つけてください\n";
-        $prompt .= "2. 検索で見つけた実在するニュースサイトのURLを必ず記載してください\n";
-        $prompt .= "3. 架空のURL・タイトルは絶対に作成しないでください\n";
-        $prompt .= "4. {$current_year}年の実際のニュース記事のみを使用してください\n";
-        $prompt .= "5. 古い記事（2024年以前）は使用しないでください\n\n";
+        $prompt .= "【CRITICAL REQUIREMENTS】:\n";
+        $prompt .= "1. MUST use Google Search to find real news articles\n";
+        $prompt .= "2. MUST include actual URLs from real news websites\n";
+        $prompt .= "3. NEVER create fake URLs or article titles\n";
+        $prompt .= "4. ONLY use {$current_year} news articles\n";
+        $prompt .= "5. NEVER use old articles (before 2024)\n\n";
         
         $prompt .= "【記事要求】:\n";
         $prompt .= "- 最新の業界動向を総合的にまとめた記事\n";
