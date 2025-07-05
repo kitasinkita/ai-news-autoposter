@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.1.7
+ * Version: 1.1.8
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.1.7');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.1.8');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -316,10 +316,10 @@ class AINewsAutoPoster {
                                 <option value="claude-3-5-haiku-20241022" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'claude-3-5-haiku-20241022'); ?>>Claude 3.5 Haiku (高速・低コスト)</option>
                                 <option value="claude-3-5-sonnet-20241022" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022'); ?>>Claude 3.5 Sonnet (バランス)</option>
                                 <option value="claude-sonnet-4-20250514" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'claude-sonnet-4-20250514'); ?>>Claude Sonnet 4 (最高品質)</option>
-                                <option value="gemini-1.5-flash-002" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'gemini-1.5-flash-002'); ?>>Gemini 1.5 Flash + Google検索 (最新情報・高コスト)</option>
-                                <option value="gemini-2.0-flash-exp" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'gemini-2.0-flash-exp'); ?>>Gemini 2.0 Flash + Google検索 (最新・実験版)</option>
+                                <option value="gemini-1.5-flash-002" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'gemini-1.5-flash-002'); ?>>Gemini 1.5 Flash (2024年末知識・高コスト)</option>
+                                <option value="gemini-2.0-flash-exp" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'gemini-2.0-flash-exp'); ?>>Gemini 2.0 Flash (最新・実験版)</option>
                             </select>
-                            <p class="ai-news-form-description">使用するAIモデルを選択してください。GeminiモデルはGoogle検索を使用して最新情報を取得しますが、高コストです（1,000クエリ$35）。</p>
+                            <p class="ai-news-form-description">使用するAIモデルを選択してください。Geminiモデルは2024年末までの最新知識を活用しますが、高コストです（1,000クエリ$35）。<br><small>注：Google Search Grounding機能は現在調整中です。</small></p>
                         </td>
                     </tr>
                     
@@ -1089,15 +1089,17 @@ class AINewsAutoPoster {
         $current_date = current_time('Y年n月j日');
         $current_year = current_time('Y');
         
-        // Gemini Google Search 強制実行プロンプト
-        $prompt = "I need you to search Google for recent news about {$search_keywords}. ";
-        $prompt .= "Current date: {$current_date} ({$current_year})\n\n";
-        $prompt .= "Search Google for: \"{$search_keywords} {$current_year} news latest\" and find 3-5 recent news articles.\n\n";
-        $prompt .= "Requirements:\n";
-        $prompt .= "- Search for current {$current_year} news only\n";
-        $prompt .= "- Include real URLs from news websites\n";
-        $prompt .= "- Write article in Japanese\n";
-        $prompt .= "- No fake URLs allowed\n\n";
+        // Gemini 最新知識活用プロンプト
+        $prompt = "【あなたの最新知識を活用してください】\n\n";
+        $prompt .= "現在は{$current_date}（{$current_year}年）です。\n\n";
+        $prompt .= "あなたの最新の知識（2024年末まで）を活用して、【{$search_keywords}】に関する業界の最新動向と{$current_year}年の予想される展開をまとめた記事を作成してください。\n\n";
+        
+        $prompt .= "【重要事項】:\n";
+        $prompt .= "1. 2024年末までの最新知識を基に業界動向を分析\n";
+        $prompt .= "2. {$current_year}年の予想される展開と影響を含める\n";
+        $prompt .= "3. 実在する企業・サービス・技術のみを言及\n";
+        $prompt .= "4. 参考情報源として主要ニュースサイトの一般的なURLパターンを使用\n";
+        $prompt .= "5. 架空の詳細な日付や具体的イベントは避ける\n\n";
         
         $prompt .= "【記事要求】:\n";
         $prompt .= "- 最新の業界動向を総合的にまとめた記事\n";
@@ -1489,12 +1491,12 @@ class AINewsAutoPoster {
                     )
                 )
             ),
-            // Google Search Grounding - google_search使用
-            'tools' => array(
-                array(
-                    'google_search' => array()
-                )
-            ),
+            // Google Search Grounding - 一旦無効化（API仕様不明のため）
+            // 'tools' => array(
+            //     array(
+            //         'google_search' => array()
+            //     )
+            // ),
             'generationConfig' => array(
                 'maxOutputTokens' => 2000,
                 'temperature' => 0.7
