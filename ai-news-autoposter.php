@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.0.6
+ * Version: 1.0.7
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.0.6');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.0.7');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -316,8 +316,7 @@ class AINewsAutoPoster {
                                 <option value="claude-3-5-haiku-20241022" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'claude-3-5-haiku-20241022'); ?>>Claude 3.5 Haiku (高速・低コスト)</option>
                                 <option value="claude-3-5-sonnet-20241022" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022'); ?>>Claude 3.5 Sonnet (バランス)</option>
                                 <option value="claude-sonnet-4-20250514" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'claude-sonnet-4-20250514'); ?>>Claude Sonnet 4 (最高品質)</option>
-                                <option value="gemini-1.5-flash" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'gemini-1.5-flash'); ?>>Gemini 1.5 Flash + Web検索 (最新情報・高コスト)</option>
-                                <option value="gemini-1.5-pro" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'gemini-1.5-pro'); ?>>Gemini 1.5 Pro + Web検索 (最高品質・最高コスト)</option>
+                                <option value="gemini-2.0-flash-exp" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'gemini-2.0-flash-exp'); ?>>Gemini 2.0 Flash + Web検索 (最新・推奨)</option>
                             </select>
                             <p class="ai-news-form-description">使用するAIモデルを選択してください。Geminiモデルは最新のWeb検索結果を活用しますが、高コストです（1,000クエリ$35）。</p>
                         </td>
@@ -830,7 +829,9 @@ class AINewsAutoPoster {
         $model = $settings['claude_model'] ?? 'claude-3-5-haiku-20241022';
         if (strpos($model, 'gemini') === 0) {
             $this->log('info', 'Gemini API（Web検索付き）を呼び出します...');
-            $ai_response = $this->call_gemini_api($prompt, $settings['gemini_api_key'] ?? '', $model);
+            // Gemini用にWeb検索特化プロンプトを使用
+            $gemini_prompt = $this->build_gemini_search_prompt($settings);
+            $ai_response = $this->call_gemini_api($gemini_prompt, $settings['gemini_api_key'] ?? '', $model);
         } else {
             $this->log('info', 'Claude APIを呼び出します...');
             $ai_response = $this->call_claude_api($prompt, $api_key, $settings);
@@ -1065,6 +1066,67 @@ class AINewsAutoPoster {
         $prompt .= "- 2024年以前の古い記事は使用禁止\n";
         $prompt .= "- 例: [OpenAI、{$current_year}年新機能発表]({$current_year}年のURL)\n";
         $prompt .= "- 例: [Google AI、{$current_year}年最新技術開発]({$current_year}年のURL)\n\n";
+        
+        return $prompt;
+    }
+    
+    /**
+     * Gemini用Web検索特化プロンプト構築
+     */
+    private function build_gemini_search_prompt($settings) {
+        $search_keywords = $settings['search_keywords'] ?? 'AI ニュース, 人工知能, 機械学習, ChatGPT, OpenAI';
+        $selected_languages = $settings['news_languages'] ?? array('japanese', 'english');
+        $word_count = $settings['article_word_count'] ?? 500;
+        $writing_style = $settings['writing_style'] ?? '夏目漱石';
+        
+        // カスタムプロンプトがあればそれを使用
+        $custom_prompt = $settings['custom_prompt'] ?? '';
+        if (!empty($custom_prompt)) {
+            return $this->build_custom_prompt($custom_prompt, $settings);
+        }
+        
+        $current_date = current_time('Y年n月j日');
+        $current_year = current_time('Y');
+        
+        // Gemini Web検索特化プロンプト
+        $prompt = "【Web検索を使用して最新情報を取得してください】\n\n";
+        $prompt .= "現在は{$current_date}（{$current_year}年）です。\n\n";
+        $prompt .= "Google検索を使用して、【{$search_keywords}】に関する{$current_year}年の最新ニュース（特に直近1-3ヶ月の新しい情報）を検索し、実際のニュース記事を参考にして記事を作成してください。\n\n";
+        
+        $prompt .= "【必須要求事項】:\n";
+        $prompt .= "1. 実際にWeb検索を実行して最新ニュースを見つけてください\n";
+        $prompt .= "2. 検索で見つけた実在するニュースサイトのURLを必ず記載してください\n";
+        $prompt .= "3. 架空のURL・タイトルは絶対に作成しないでください\n";
+        $prompt .= "4. {$current_year}年の実際のニュース記事のみを使用してください\n";
+        $prompt .= "5. 古い記事（2024年以前）は使用しないでください\n\n";
+        
+        $prompt .= "【記事要求】:\n";
+        $prompt .= "- 検索で見つけた複数の最新ニュースを総合的にまとめた記事\n";
+        $prompt .= "- 全体で【{$word_count}文字】程度\n";
+        $prompt .= "- なぜ今これが起こっているのか、今後の影響についての分析を含む\n";
+        if ($writing_style !== '標準') {
+            $prompt .= "- 文体は{$writing_style}風\n";
+        }
+        $prompt .= "\n";
+        
+        $prompt .= "【記事構成】:\n";
+        $prompt .= "```\n";
+        $prompt .= "記事タイトル\n";
+        $prompt .= "\n";
+        $prompt .= "リード文（概要）\n";
+        $prompt .= "\n";
+        $prompt .= "## 見出し1\n";
+        $prompt .= "本文（検索で見つけた実際の情報に基づく）\n";
+        $prompt .= "\n";
+        $prompt .= "## 見出し2\n";
+        $prompt .= "本文（今後の影響・分析）\n";
+        $prompt .= "\n";
+        $prompt .= "## 参考情報源\n";
+        $prompt .= "- [実際のニュース記事タイトル](実際のURL)\n";
+        $prompt .= "- [実際のニュース記事タイトル](実際のURL)\n";
+        $prompt .= "```\n\n";
+        
+        $prompt .= "【重要】: 参考情報源は必ずWeb検索で実際に見つけた{$current_year}年のニュース記事の実在するURL・タイトルを記載してください。架空のものは絶対に作成しないでください。";
         
         return $prompt;
     }
@@ -1425,12 +1487,7 @@ class AINewsAutoPoster {
             ),
             'tools' => array(
                 array(
-                    'googleSearchRetrieval' => array(
-                        'dynamicRetrievalConfig' => array(
-                            'mode' => 'MODE_DYNAMIC',
-                            'dynamicThreshold' => 0.7
-                        )
-                    )
+                    'googleSearch' => array()
                 )
             ),
             'generationConfig' => array(
