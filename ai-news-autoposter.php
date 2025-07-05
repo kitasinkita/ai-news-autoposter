@@ -1079,9 +1079,13 @@ class AINewsAutoPoster {
         // コンテンツのサニタイズは行わず、そのまま使用
         // （WordPressが自動的に適切に処理する）
         
+        $this->log('info', '投稿概要の処理中...');
         $post_data['post_excerpt'] = isset($post_data['post_excerpt']) ? strip_tags($post_data['post_excerpt']) : '';
+        $this->log('info', '投稿概要処理完了');
         
         // UTF-8エンコーディングの確認と修正
+        $this->log('info', 'UTF-8エンコーディングをチェック中...');
+        $this->log('info', 'タイトルのUTF-8エンコーディングをチェック中...');
         if (!mb_check_encoding($post_data['post_title'], 'UTF-8')) {
             $this->log('warning', 'タイトルのUTF-8エンコーディングが不正です - 修正します');
             // 不正な文字を削除して再エンコード
@@ -1090,27 +1094,40 @@ class AINewsAutoPoster {
                 $post_data['post_title'] = 'AI生成記事';
             }
         }
+        $this->log('info', 'タイトルのUTF-8エンコーディングチェック完了');
         
         // UTF-8エンコーディングチェックを一時的に無効化（緊急回避）
         $this->log('info', '【緊急回避モード v1.2.17】UTF-8エンコーディングチェックをスキップします');
         
+        $this->log('info', '制御文字の除去を開始します...');
         // 全ての制御文字、非印刷可能文字、異常文字を除去
         $post_data['post_content'] = preg_replace('/[\x00-\x1F\x7F-\x9F]/', '', $post_data['post_content']);
+        $this->log('info', '制御文字除去完了');
         
+        $this->log('info', '特殊文字の除去を開始します...');
         // 特殊文字、非打印可能文字を除去
         $post_data['post_content'] = preg_replace('/[\p{C}]+/u', '', $post_data['post_content']);
+        $this->log('info', '特殊文字除去完了');
         
+        $this->log('info', '問題のある文字の除去を開始します...');
         // 問題のある文字を追加除去
         $post_data['post_content'] = str_replace(array("\r", "\0", "\x00", "\xFF", "\xFE"), '', $post_data['post_content']);
+        $this->log('info', '問題のある文字除去完了');
         
+        $this->log('info', '長いURLの短縮を開始します...');
         // 長いURLを短縮
         $post_data['post_content'] = preg_replace('/https:\/\/vertexaisearch\.cloud\.google\.com\/grounding-api-redirect\/[A-Za-z0-9_-]{50,}/', '[参考リンク]', $post_data['post_content']);
+        $this->log('info', '長いURL短縮完了');
         
+        $this->log('info', 'UTF-8エンコーディング強制変換を開始します...');
         // UTF-8エンコーディングを強制し、不正文字を除去
         $post_data['post_content'] = mb_convert_encoding($post_data['post_content'], 'UTF-8', 'UTF-8//IGNORE');
+        $this->log('info', 'UTF-8エンコーディング強制変換完了');
         
+        $this->log('info', '空白文字の正規化を開始します...');
         // 空白文字の正規化
         $post_data['post_content'] = preg_replace('/\s+/', ' ', $post_data['post_content']);
+        $this->log('info', '空白文字正規化完了');
         
         $this->log('info', '制御文字を除去し、長いURLを短縮しました。コンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字');
         
@@ -1216,7 +1233,7 @@ class AINewsAutoPoster {
         
         try {
             $post_id = wp_insert_post($post_data, true); // true: より詳細なエラー情報
-            $this->log('info', 'wp_insert_post実行完了。結果: ' . (is_wp_error($post_id) ? 'WP_Error' : (数值($post_id) ? 'ID=' . $post_id : '0')));
+            $this->log('info', 'wp_insert_post実行完了。結果: ' . (is_wp_error($post_id) ? 'WP_Error' : (is_numeric($post_id) ? 'ID=' . $post_id : '0')));
         } catch (Exception $e) {
             $this->log('error', 'wp_insert_postでPHP例外が発生: ' . $e->getMessage());
             $post_id = new WP_Error('php_exception', $e->getMessage());
