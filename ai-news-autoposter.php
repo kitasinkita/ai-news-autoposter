@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.1.5
+ * Version: 1.1.6
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.1.5');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.1.6');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -317,6 +317,7 @@ class AINewsAutoPoster {
                                 <option value="claude-3-5-sonnet-20241022" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022'); ?>>Claude 3.5 Sonnet (バランス)</option>
                                 <option value="claude-sonnet-4-20250514" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'claude-sonnet-4-20250514'); ?>>Claude Sonnet 4 (最高品質)</option>
                                 <option value="gemini-1.5-flash-002" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'gemini-1.5-flash-002'); ?>>Gemini 1.5 Flash + Google検索 (最新情報・高コスト)</option>
+                                <option value="gemini-2.0-flash-exp" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'gemini-2.0-flash-exp'); ?>>Gemini 2.0 Flash + Google検索 (最新・実験版)</option>
                             </select>
                             <p class="ai-news-form-description">使用するAIモデルを選択してください。GeminiモデルはGoogle検索を使用して最新情報を取得しますが、高コストです（1,000クエリ$35）。</p>
                         </td>
@@ -1473,10 +1474,10 @@ class AINewsAutoPoster {
             return new WP_Error('gemini_api_error', 'Gemini APIキーが設定されていません。');
         }
         
-        // 2.0モデルの場合は1.5モデルを使用（Google Search Groundingサポート確認済み）
-        if ($model === 'gemini-2.0-flash-exp') {
-            $model = 'gemini-1.5-flash-002';
-        }
+        // Gemini 2.0モデルはそのまま使用
+        // if ($model === 'gemini-2.0-flash-exp') {
+        //     $model = 'gemini-1.5-flash-002';
+        // }
         
         $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . $model . ':generateContent?key=' . $api_key;
         
@@ -1493,7 +1494,12 @@ class AINewsAutoPoster {
             // Google Search Grounding - google_search_retrieval使用
             'tools' => array(
                 array(
-                    'google_search_retrieval' => new stdClass()
+                    'google_search_retrieval' => array(
+                        'dynamic_retrieval_config' => array(
+                            'mode' => 'MODE_DYNAMIC',
+                            'dynamic_threshold' => 0.7
+                        )
+                    )
                 )
             ),
             'generationConfig' => array(
@@ -1501,6 +1507,8 @@ class AINewsAutoPoster {
                 'temperature' => 0.7
             )
         );
+        
+        $this->log('info', 'Google Search Grounding設定: ' . json_encode($body['tools']));
         
         $response = wp_remote_post($url, array(
             'headers' => array(
@@ -1534,15 +1542,27 @@ class AINewsAutoPoster {
         
         $generated_text = $response_data['candidates'][0]['content']['parts'][0]['text'];
         
-        // Grounding情報をログに記録
+        // Grounding情報を詳細にログ記録
         if (isset($response_data['candidates'][0]['groundingMetadata'])) {
-            $grounding_sources = $response_data['candidates'][0]['groundingMetadata']['groundingSources'] ?? array();
+            $grounding_metadata = $response_data['candidates'][0]['groundingMetadata'];
+            $this->log('info', 'Grounding Metadata: ' . json_encode($grounding_metadata));
+            
+            $grounding_sources = $grounding_metadata['groundingSources'] ?? array();
             $this->log('info', 'Web検索ソース数: ' . count($grounding_sources) . '件');
-            foreach ($grounding_sources as $source) {
+            
+            foreach ($grounding_sources as $index => $source) {
                 if (isset($source['uri'])) {
-                    $this->log('info', '参考URL: ' . $source['uri']);
+                    $this->log('info', '参考URL[' . ($index + 1) . ']: ' . $source['uri']);
                 }
             }
+            
+            // Web検索クエリもログに記録
+            if (isset($grounding_metadata['webSearchQueries'])) {
+                $this->log('info', 'Web検索クエリ: ' . json_encode($grounding_metadata['webSearchQueries']));
+            }
+        } else {
+            $this->log('warning', 'Grounding Metadataが見つかりません。Google Search Groundingが動作していない可能性があります。');
+            $this->log('info', 'レスポンス全体: ' . json_encode($response_data));
         }
         
         $this->log('info', 'Gemini API呼び出し完了。生成文字数: ' . mb_strlen($generated_text));
