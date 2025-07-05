@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.0.7
+ * Version: 1.0.8
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.0.7');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.0.8');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1485,11 +1485,7 @@ class AINewsAutoPoster {
                     )
                 )
             ),
-            'tools' => array(
-                array(
-                    'googleSearch' => array()
-                )
-            ),
+            'tools' => array('google_search_retrieval'),
             'generationConfig' => array(
                 'maxOutputTokens' => 2000,
                 'temperature' => 0.7
