@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.0.5
+ * Version: 1.0.6
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.0.5');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.0.6');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -68,6 +68,7 @@ class AINewsAutoPoster {
             $default_settings = array(
                 'claude_api_key' => '',
                 'claude_model' => 'claude-3-5-haiku-20241022',
+                'gemini_api_key' => '',
                 'auto_publish' => false,
                 'schedule_time' => '06:00',
                 'schedule_times' => array('06:00'),
@@ -250,6 +251,7 @@ class AINewsAutoPoster {
             $settings = array(
                 'claude_api_key' => sanitize_text_field($_POST['claude_api_key']),
                 'claude_model' => sanitize_text_field($_POST['claude_model']),
+                'gemini_api_key' => sanitize_text_field($_POST['gemini_api_key']),
                 'auto_publish' => isset($_POST['auto_publish']),
                 'schedule_time' => sanitize_text_field($_POST['schedule_time']),
                 'max_posts_per_day' => intval($_POST['max_posts_per_day']),
@@ -308,14 +310,24 @@ class AINewsAutoPoster {
                     </tr>
                     
                     <tr>
-                        <th scope="row">Claudeモデル</th>
+                        <th scope="row">AIモデル</th>
                         <td>
                             <select name="claude_model" id="claude_model">
                                 <option value="claude-3-5-haiku-20241022" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'claude-3-5-haiku-20241022'); ?>>Claude 3.5 Haiku (高速・低コスト)</option>
                                 <option value="claude-3-5-sonnet-20241022" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022'); ?>>Claude 3.5 Sonnet (バランス)</option>
                                 <option value="claude-sonnet-4-20250514" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'claude-sonnet-4-20250514'); ?>>Claude Sonnet 4 (最高品質)</option>
+                                <option value="gemini-1.5-flash" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'gemini-1.5-flash'); ?>>Gemini 1.5 Flash + Web検索 (最新情報・高コスト)</option>
+                                <option value="gemini-1.5-pro" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'gemini-1.5-pro'); ?>>Gemini 1.5 Pro + Web検索 (最高品質・最高コスト)</option>
                             </select>
-                            <p class="ai-news-form-description">使用するClaudeモデルを選択してください。Haikuは高速で低コスト、Sonnet 4は最高品質ですが高コストです。</p>
+                            <p class="ai-news-form-description">使用するAIモデルを選択してください。Geminiモデルは最新のWeb検索結果を活用しますが、高コストです（1,000クエリ$35）。</p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">Gemini API キー</th>
+                        <td>
+                            <input type="password" id="gemini_api_key" name="gemini_api_key" value="<?php echo esc_attr($settings['gemini_api_key'] ?? ''); ?>" class="regular-text" />
+                            <p class="ai-news-form-description">Google AI StudioのGemini APIキーを入力してください。Geminiモデル使用時に必要です。</p>
                         </td>
                     </tr>
                     
@@ -604,14 +616,23 @@ class AINewsAutoPoster {
         }
         
         $settings = get_option('ai_news_autoposter_settings', array());
-        $api_key = $settings['claude_api_key'] ?? '';
+        $model = $settings['claude_model'] ?? 'claude-3-5-haiku-20241022';
         
-        if (empty($api_key)) {
-            wp_send_json_error('API キーが設定されていません。');
-            return;
+        if (strpos($model, 'gemini') === 0) {
+            $api_key = $settings['gemini_api_key'] ?? '';
+            if (empty($api_key)) {
+                wp_send_json_error('Gemini API キーが設定されていません。');
+                return;
+            }
+            $response = $this->call_gemini_api('こんにちは。これはAPIテストです。', $api_key, $model);
+        } else {
+            $api_key = $settings['claude_api_key'] ?? '';
+            if (empty($api_key)) {
+                wp_send_json_error('Claude API キーが設定されていません。');
+                return;
+            }
+            $response = $this->call_claude_api('こんにちは。これはAPIテストです。', $api_key, $settings);
         }
-        
-        $response = $this->call_claude_api('こんにちは。これはAPIテストです。', $api_key, $settings);
         
         if (is_wp_error($response)) {
             wp_send_json_error($response->get_error_message());
@@ -805,9 +826,15 @@ class AINewsAutoPoster {
         // Claude AI に直接ニュース検索と記事生成を依頼
         $prompt = $this->build_direct_article_prompt($settings);
         
-        // Claude APIを呼び出し
-        $this->log('info', 'Claude APIを呼び出します...');
-        $ai_response = $this->call_claude_api($prompt, $api_key, $settings);
+        // AI APIを呼び出し
+        $model = $settings['claude_model'] ?? 'claude-3-5-haiku-20241022';
+        if (strpos($model, 'gemini') === 0) {
+            $this->log('info', 'Gemini API（Web検索付き）を呼び出します...');
+            $ai_response = $this->call_gemini_api($prompt, $settings['gemini_api_key'] ?? '', $model);
+        } else {
+            $this->log('info', 'Claude APIを呼び出します...');
+            $ai_response = $this->call_claude_api($prompt, $api_key, $settings);
+        }
         
         if (is_wp_error($ai_response)) {
             $this->log('error', 'Claude API呼び出しに失敗: ' . $ai_response->get_error_message());
@@ -1313,9 +1340,12 @@ class AINewsAutoPoster {
     }
     
     /**
-     * 記事内容の後処理（免責事項追加など）
+     * 記事内容の後処理（Markdown変換、免責事項追加など）
      */
     private function post_process_content($content) {
+        // MarkdownをHTMLに変換
+        $content = $this->convert_markdown_to_html($content);
+        
         // 免責事項を追加
         $settings = get_option('ai_news_autoposter_settings', array());
         $enable_disclaimer = $settings['enable_disclaimer'] ?? true;
@@ -1326,6 +1356,134 @@ class AINewsAutoPoster {
         }
         
         return trim($content);
+    }
+    
+    /**
+     * MarkdownをHTMLに変換
+     */
+    private function convert_markdown_to_html($content) {
+        // 見出し変換
+        $content = preg_replace('/^### (.+)$/m', '<h3>$1</h3>', $content);
+        $content = preg_replace('/^## (.+)$/m', '<h2>$1</h2>', $content);
+        $content = preg_replace('/^# (.+)$/m', '<h1>$1</h1>', $content);
+        
+        // 太字変換
+        $content = preg_replace('/\*\*(.+?)\*\*/', '<strong>$1</strong>', $content);
+        $content = preg_replace('/__(.+?)__/', '<strong>$1</strong>', $content);
+        
+        // 斜体変換
+        $content = preg_replace('/\*(.+?)\*/', '<em>$1</em>', $content);
+        $content = preg_replace('/_(.+?)_/', '<em>$1</em>', $content);
+        
+        // リンク変換
+        $content = preg_replace('/\[(.+?)\]\((.+?)\)/', '<a href="$2" target="_blank">$1</a>', $content);
+        
+        // リスト変換
+        $content = preg_replace('/^- (.+)$/m', '<li>$1</li>', $content);
+        $content = preg_replace('/^\* (.+)$/m', '<li>$1</li>', $content);
+        
+        // 連続するliタグをulで囲む
+        $content = preg_replace('/(<li>.*<\/li>(?:\s*<li>.*<\/li>)*)/s', '<ul>$1</ul>', $content);
+        
+        // 段落変換（2つ以上の改行を段落区切りとする）
+        $paragraphs = preg_split('/\n\s*\n/', $content);
+        $processed_paragraphs = array();
+        
+        foreach ($paragraphs as $paragraph) {
+            $paragraph = trim($paragraph);
+            if (!empty($paragraph)) {
+                // 見出しやリストでない場合のみpタグで囲む
+                if (!preg_match('/^<(h[1-6]|ul|ol|li|div)/', $paragraph)) {
+                    $paragraph = '<p>' . nl2br($paragraph) . '</p>';
+                }
+                $processed_paragraphs[] = $paragraph;
+            }
+        }
+        
+        return implode("\n\n", $processed_paragraphs);
+    }
+    
+    /**
+     * Gemini API呼び出し（Google Search Grounding付き）
+     */
+    private function call_gemini_api($prompt, $api_key, $model = 'gemini-1.5-flash') {
+        if (empty($api_key)) {
+            return new WP_Error('gemini_api_error', 'Gemini APIキーが設定されていません。');
+        }
+        
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . $model . ':generateContent?key=' . $api_key;
+        
+        $this->log('info', 'Gemini API呼び出しを開始します。モデル: ' . $model);
+        
+        $body = array(
+            'contents' => array(
+                array(
+                    'parts' => array(
+                        array('text' => $prompt)
+                    )
+                )
+            ),
+            'tools' => array(
+                array(
+                    'googleSearchRetrieval' => array(
+                        'dynamicRetrievalConfig' => array(
+                            'mode' => 'MODE_DYNAMIC',
+                            'dynamicThreshold' => 0.7
+                        )
+                    )
+                )
+            ),
+            'generationConfig' => array(
+                'maxOutputTokens' => 2000,
+                'temperature' => 0.7
+            )
+        );
+        
+        $response = wp_remote_post($url, array(
+            'headers' => array(
+                'Content-Type' => 'application/json'
+            ),
+            'body' => json_encode($body),
+            'timeout' => 360 // 6分
+        ));
+        
+        if (is_wp_error($response)) {
+            $this->log('error', 'Gemini API リクエストエラー: ' . $response->get_error_message());
+            return $response;
+        }
+        
+        $response_code = wp_remote_retrieve_response_code($response);
+        $response_body = wp_remote_retrieve_body($response);
+        
+        $this->log('info', 'Gemini API レスポンスコード: ' . $response_code);
+        
+        if ($response_code !== 200) {
+            $this->log('error', 'Gemini API エラーレスポンス: ' . $response_body);
+            return new WP_Error('gemini_api_error', 'Gemini API エラー: ' . $response_body);
+        }
+        
+        $response_data = json_decode($response_body, true);
+        
+        if (empty($response_data['candidates'][0]['content']['parts'][0]['text'])) {
+            $this->log('error', 'Gemini API レスポンスの形式が不正です: ' . $response_body);
+            return new WP_Error('gemini_api_error', 'Gemini API レスポンスの形式が不正です。');
+        }
+        
+        $generated_text = $response_data['candidates'][0]['content']['parts'][0]['text'];
+        
+        // Grounding情報をログに記録
+        if (isset($response_data['candidates'][0]['groundingMetadata'])) {
+            $grounding_sources = $response_data['candidates'][0]['groundingMetadata']['groundingSources'] ?? array();
+            $this->log('info', 'Web検索ソース数: ' . count($grounding_sources) . '件');
+            foreach ($grounding_sources as $source) {
+                if (isset($source['uri'])) {
+                    $this->log('info', '参考URL: ' . $source['uri']);
+                }
+            }
+        }
+        
+        $this->log('info', 'Gemini API呼び出し完了。生成文字数: ' . mb_strlen($generated_text));
+        return $generated_text;
     }
     
     /**
