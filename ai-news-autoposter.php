@@ -1031,17 +1031,23 @@ class AINewsAutoPoster {
         $this->log('info', 'WordPressに投稿を作成中...');
         
         // WordPressエラーログを有効化
+        $this->log('info', 'WordPressエラーログを有効化中...');
         $original_error_reporting = error_reporting();
         error_reporting(E_ALL);
+        $this->log('info', 'WordPressエラーログ有効化完了');
         
         // 投稿データの詳細検証
+        $this->log('info', '投稿データの必須フィールドを検証中...');
         $required_fields = ['post_title', 'post_content', 'post_status', 'post_type'];
         foreach ($required_fields as $field) {
+            $this->log('info', 'フィールド検証中: ' . $field);
             if (empty($post_data[$field])) {
                 $this->log('error', '必須フィールドが空です: ' . $field);
                 return new WP_Error('missing_required_field', '必須フィールドが不足しています: ' . $field);
             }
+            $this->log('info', 'フィールドOK: ' . $field);
         }
+        $this->log('info', '必須フィールド検証完了');
         
         // データベース接続状態を確認
         global $wpdb;
