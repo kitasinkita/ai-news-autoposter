@@ -1152,7 +1152,7 @@ class AINewsAutoPoster {
             $prompt .= "- Search Google for real news articles\n";
             $prompt .= "- Include actual URLs from news websites\n";
             $prompt .= "- Write entire article in Japanese\n";
-            $prompt .= "- Use approximately {$word_count} characters\n";
+            $prompt .= "- Use approximately 400-500 characters (keep it concise)\n";
             $prompt .= "- Include proper headings and structure\n\n";
         } else {
             // その他のGeminiモデル用プロンプト
@@ -1170,7 +1170,7 @@ class AINewsAutoPoster {
         
         $prompt .= "【記事要求】:\n";
         $prompt .= "- 最新の業界動向を総合的にまとめた記事\n";
-        $prompt .= "- 全体で【{$word_count}文字】程度\n";
+        $prompt .= "- 全体で【400-500文字】程度（簡潔に）\n";
         $prompt .= "- なぜ今これが起こっているのか、今後の影響についての分析を含む\n";
         if ($writing_style !== '標準') {
             $prompt .= "- 文体は{$writing_style}風\n";
@@ -1763,7 +1763,7 @@ class AINewsAutoPoster {
                 )
             ),
             'generationConfig' => array(
-                'maxOutputTokens' => 4000,
+                'maxOutputTokens' => 2000,
                 'temperature' => 0.7
             )
         );
@@ -1818,15 +1818,31 @@ class AINewsAutoPoster {
             // 代替形式2
             $generated_text = $response_data['candidates'][0]['text'];
         } else {
-            $this->log('error', 'Gemini API レスポンスの形式が不正です: ' . $response_body);
-            
             // finishReasonをチェック
             $finish_reason = $response_data['candidates'][0]['finishReason'] ?? 'UNKNOWN';
+            $this->log('info', 'Gemini API finishReason: ' . $finish_reason);
+            
             if ($finish_reason === 'MAX_TOKENS') {
-                return new WP_Error('gemini_api_error', 'Gemini API: トークン上限に達しました。記事の文字数を減らしてください。');
+                // トークン制限に達した場合でも、部分的なコンテンツが取得できるかチェック
+                $potential_content_paths = [
+                    $response_data['candidates'][0]['content']['parts'][0]['text'] ?? '',
+                    $response_data['candidates'][0]['content']['text'] ?? '',
+                    $response_data['candidates'][0]['text'] ?? ''
+                ];
+                
+                foreach ($potential_content_paths as $content) {
+                    if (!empty($content) && strlen($content) > 100) { // 最低限の長さをチェック
+                        $this->log('warning', 'Gemini API: トークン制限に達しましたが、部分的なコンテンツ(' . strlen($content) . '文字)を返します。');
+                        return $content;
+                    }
+                }
+                
+                $this->log('error', 'Gemini API: トークン上限に達し、利用可能なコンテンツがありません。');
+                return new WP_Error('gemini_api_error', 'Gemini API: トークン上限に達しました。プロンプトを短くしてください。');
             }
             
-            return new WP_Error('gemini_api_error', 'Gemini API レスポンスの形式が不正です。');
+            $this->log('error', 'Gemini API レスポンスの形式が不正です: ' . $response_body);
+            return new WP_Error('gemini_api_error', 'Gemini API レスポンスの形式が不正です。finishReason: ' . $finish_reason);
         }
         
         // Grounding情報を詳細にログ記録
