@@ -1002,6 +1002,8 @@ class AINewsAutoPoster {
                 $this->log('error', 'コンテンツが空になりました');
                 return new WP_Error('empty_content', 'エンコーディング修正後にコンテンツが空になりました');
             }
+        } else {
+            $this->log('info', 'コンテンツのUTF-8エンコーディングは正常です');
         }
         
         // 最小限のテストデータで投稿を試行
