@@ -956,11 +956,30 @@ class AINewsAutoPoster {
         $this->log('info', 'WordPress投稿データを準備中...');
         
         // カテゴリ設定を確認
+        $this->log('info', 'カテゴリ設定を確認中...');
+        
         $category = $settings['post_category'] ?? get_option('default_category');
-        if (empty($category) || !category_exists($category)) {
-            $category = 1; // デフォルトカテゴリ「未分類」
-            $this->log('warning', 'カテゴリが無効のため、デフォルトカテゴリ(1)を使用します');
+        $this->log('info', '初期カテゴリ設定: ' . ($category ?? 'null'));
+        
+        if (empty($category)) {
+            $this->log('info', 'カテゴリが空のためデフォルトカテゴリ(1)を使用');
+            $category = 1;
+        } else {
+            // category_exists関数の代わりに安全なチェック
+            $this->log('info', 'category_existsをチェック中: ' . $category);
+            $cat_obj = get_category($category);
+            if (!$cat_obj || is_wp_error($cat_obj)) {
+                $this->log('warning', 'カテゴリ(' . $category . ')が存在しないため、デフォルトカテゴリ(1)を使用します');
+                $category = 1;
+            } else {
+                $this->log('info', 'カテゴリ(' . $category . ')の存在を確認しました');
+            }
         }
+        
+        $this->log('info', '投稿データ配列を作成中...');
+        
+        // メタディスクリプションを安全に生成
+        $this->log('info', 'メタディスクリプションを生成中...');
         
         $post_data = array(
             'post_title' => $article_data['title'],
@@ -972,7 +991,7 @@ class AINewsAutoPoster {
                 '_ai_generated' => true,
                 '_ai_post_type' => $is_test ? 'test' : $post_type, // 投稿タイプを記録
                 '_seo_focus_keyword' => $settings['seo_focus_keyword'] ?? '',
-                '_meta_description' => $this->generate_meta_description($article_data['title'], $settings)
+                '_meta_description' => $this->safe_generate_meta_description($article_data['title'], $settings)
             )
         );
         
@@ -2513,6 +2532,21 @@ class AINewsAutoPoster {
     private function generate_meta_description($title, $settings) {
         $template = $settings['meta_description_template'] ?? '最新の業界ニュースをお届けします。{title}について詳しく解説いたします。';
         return str_replace('{title}', $title, $template);
+    }
+    
+    /**
+     * 安全なメタディスクリプション生成
+     */
+    private function safe_generate_meta_description($title, $settings) {
+        try {
+            $this->log('info', 'メタディスクリプション生成開始');
+            $result = $this->generate_meta_description($title, $settings);
+            $this->log('info', 'メタディスクリプション生成完了');
+            return $result;
+        } catch (Exception $e) {
+            $this->log('error', 'メタディスクリプション生成エラー: ' . $e->getMessage());
+            return '最新の業界ニュースをお届けします。';
+        }
     }
     
     /**
