@@ -1696,29 +1696,101 @@ class AINewsAutoPoster {
      * MarkdownをHTMLに変換
      */
     private function convert_markdown_to_html($content) {
+        // 既にHTMLタグが含まれている場合は軽微な処理のみ
+        if (strpos($content, '<') !== false && strpos($content, '>') !== false) {
+            // 基本的なクリーニングのみ
+            return $this->clean_html_content($content);
+        }
+        
         // 見出し変換
         $content = preg_replace('/^### (.+)$/m', '<h3>$1</h3>', $content);
         $content = preg_replace('/^## (.+)$/m', '<h2>$1</h2>', $content);
         $content = preg_replace('/^# (.+)$/m', '<h1>$1</h1>', $content);
         
-        // 太字変換
-        $content = preg_replace('/\*\*(.+?)\*\*/', '<strong>$1</strong>', $content);
-        $content = preg_replace('/__(.+?)__/', '<strong>$1</strong>', $content);
+        // 太字変換（既存のHTMLタグと競合しないよう調整）
+        $content = preg_replace('/\*\*([^*<>]+?)\*\*/', '<strong>$1</strong>', $content);
+        $content = preg_replace('/__([^_<>]+?)__/', '<strong>$1</strong>', $content);
         
         // 斜体変換
-        $content = preg_replace('/\*(.+?)\*/', '<em>$1</em>', $content);
-        $content = preg_replace('/_(.+?)_/', '<em>$1</em>', $content);
+        $content = preg_replace('/\*([^*<>]+?)\*/', '<em>$1</em>', $content);
+        $content = preg_replace('/_([^_<>]+?)_/', '<em>$1</em>', $content);
         
         // リンク変換
-        $content = preg_replace('/\[(.+?)\]\((.+?)\)/', '<a href="$2" target="_blank">$1</a>', $content);
+        $content = preg_replace('/\[([^\]]+?)\]\(([^)]+?)\)/', '<a href="$2" target="_blank">$1</a>', $content);
         
-        // リスト変換
-        $content = preg_replace('/^- (.+)$/m', '<li>$1</li>', $content);
-        $content = preg_replace('/^\* (.+)$/m', '<li>$1</li>', $content);
+        // リスト変換を改善
+        $content = $this->convert_lists($content);
         
-        // 連続するliタグをulで囲む
-        $content = preg_replace('/(<li>.*<\/li>(?:\s*<li>.*<\/li>)*)/s', '<ul>$1</ul>', $content);
+        // 段落変換を改善
+        $content = $this->convert_paragraphs($content);
         
+        return $content;
+    }
+    
+    /**
+     * HTMLコンテンツをクリーニング
+     */
+    private function clean_html_content($content) {
+        // 不適切な改行を修正
+        $content = preg_replace('/\n+/', "\n", $content);
+        $content = preg_replace('/>\s*\n\s*</', '><', $content);
+        
+        // 基本的な段落構造を確保
+        if (!preg_match('/<p>|<div>|<h[1-6]>/', $content)) {
+            $lines = explode("\n", $content);
+            $processed_lines = array();
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if (!empty($line) && !preg_match('/^</', $line)) {
+                    $line = '<p>' . $line . '</p>';
+                }
+                if (!empty($line)) {
+                    $processed_lines[] = $line;
+                }
+            }
+            $content = implode("\n", $processed_lines);
+        }
+        
+        return $content;
+    }
+    
+    /**
+     * リスト変換を改善
+     */
+    private function convert_lists($content) {
+        $lines = explode("\n", $content);
+        $result = array();
+        $in_list = false;
+        
+        foreach ($lines as $line) {
+            $trimmed = trim($line);
+            
+            if (preg_match('/^[-*] (.+)/', $trimmed, $matches)) {
+                if (!$in_list) {
+                    $result[] = '<ul>';
+                    $in_list = true;
+                }
+                $result[] = '<li>' . $matches[1] . '</li>';
+            } else {
+                if ($in_list) {
+                    $result[] = '</ul>';
+                    $in_list = false;
+                }
+                $result[] = $line;
+            }
+        }
+        
+        if ($in_list) {
+            $result[] = '</ul>';
+        }
+        
+        return implode("\n", $result);
+    }
+    
+    /**
+     * 段落変換を改善
+     */
+    private function convert_paragraphs($content) {
         // 段落変換（2つ以上の改行を段落区切りとする）
         $paragraphs = preg_split('/\n\s*\n/', $content);
         $processed_paragraphs = array();
@@ -1726,9 +1798,26 @@ class AINewsAutoPoster {
         foreach ($paragraphs as $paragraph) {
             $paragraph = trim($paragraph);
             if (!empty($paragraph)) {
-                // 見出しやリストでない場合のみpタグで囲む
-                if (!preg_match('/^<(h[1-6]|ul|ol|li|div)/', $paragraph)) {
-                    $paragraph = '<p>' . nl2br($paragraph) . '</p>';
+                // 見出し、リスト、divタグでない場合のみpタグで囲む
+                if (!preg_match('/^<(h[1-6]|ul|ol|li|div|p)/', $paragraph)) {
+                    // 単一行の場合のみpタグで囲む（複数行は既にタグ構造がある可能性）
+                    if (strpos($paragraph, "\n") === false) {
+                        $paragraph = '<p>' . $paragraph . '</p>';
+                    } else {
+                        // 複数行の場合は行単位でpタグ処理
+                        $lines = explode("\n", $paragraph);
+                        $tagged_lines = array();
+                        foreach ($lines as $line) {
+                            $line = trim($line);
+                            if (!empty($line) && !preg_match('/^</', $line)) {
+                                $line = '<p>' . $line . '</p>';
+                            }
+                            if (!empty($line)) {
+                                $tagged_lines[] = $line;
+                            }
+                        }
+                        $paragraph = implode("\n", $tagged_lines);
+                    }
                 }
                 $processed_paragraphs[] = $paragraph;
             }
