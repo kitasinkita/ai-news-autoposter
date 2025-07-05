@@ -1025,7 +1025,26 @@ class AINewsAutoPoster {
         
         // 基本的な制御文字のみ除去
         $post_data['post_content'] = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $post_data['post_content']);
-        $this->log('info', '制御文字を除去しました。コンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字');
+        
+        // 問題のある文字を追加除去
+        $post_data['post_content'] = str_replace(array("\r", "\0"), '', $post_data['post_content']);
+        
+        // 長いURLを短縮
+        $post_data['post_content'] = preg_replace('/https:\/\/vertexaisearch\.cloud\.google\.com\/grounding-api-redirect\/[A-Za-z0-9_-]{100,}/', '[参考リンク]', $post_data['post_content']);
+        
+        $this->log('info', '制御文字を除去し、長いURLを短縮しました。コンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字');
+        
+        // 追加のコンテンツ検証とクリーニング
+        if (mb_strlen($post_data['post_content']) > 8000) {
+            $post_data['post_content'] = mb_substr($post_data['post_content'], 0, 7500) . "\n\n※ 記事が長いため一部を省略して表示しています。";
+            $this->log('warning', 'コンテンツが長すぎるため8000文字に制限しました');
+        }
+        
+        // 特殊文字のエスケープ
+        $post_data['post_content'] = addslashes($post_data['post_content']);
+        $post_data['post_content'] = stripslashes($post_data['post_content']); // 二重エスケープを防ぐ
+        
+        $this->log('info', '最終処理後のコンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字');
         
         // 最小限のテストデータで投稿を試行
         $test_post_data = array(
