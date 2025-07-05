@@ -1488,40 +1488,38 @@ class AINewsAutoPoster {
      * シンプルレスポンス解析
      */
     private function parse_simple_response($response) {
+        // マークダウンの見出しを除去
+        $response = preg_replace('/^#{1,6}\s+/', '', $response, 1);
+        $response = preg_replace('/^#{1,6}\s+/m', '', $response);
+        
         $lines = explode("\n", $response);
         $title = '';
         $content = '';
         $tags = array();
         
-        // 最初の非空行から適切な長さのタイトルを生成
+        // タイトル抽出の改善
         foreach ($lines as $index => $line) {
             $line = trim($line);
-            if (!empty($line) && strpos($line, '#') !== 0) {
-                // タイトルを25-30文字に制限
-                if (mb_strlen($line) > 30) {
-                    // 文章の意味のある区切りで短縮
-                    $truncated = mb_substr($line, 0, 25);
-                    // 最後の句読点で切る
-                    $lastPunctuation = max(
-                        mb_strrpos($truncated, '。'),
-                        mb_strrpos($truncated, '、'),
-                        mb_strrpos($truncated, '：'),
-                        mb_strrpos($truncated, 'は'),
-                        mb_strrpos($truncated, 'が')
-                    );
-                    if ($lastPunctuation !== false) {
-                        $title = mb_substr($truncated, 0, $lastPunctuation + 1);
-                    } else {
-                        $title = $truncated . '...';
-                    }
-                } else {
-                    $title = $line;
-                }
-                // タイトル以降をコンテンツとして使用
-                $content = implode("\n", array_slice($lines, $index + 1));
+            
+            // 空行やマークダウン記法をスキップ
+            if (empty($line) || strpos($line, '#') === 0 || strpos($line, '**') === 0) {
+                continue;
+            }
+            
+            // 最初の有効な行をタイトルとして使用
+            if (empty($title)) {
+                // タイトルをクリーンアップ
+                $title = $this->clean_title($line);
+                
+                // タイトル以降をコンテンツとして取得
+                $remaining_lines = array_slice($lines, $index + 1);
+                $content = implode("\n", $remaining_lines);
                 break;
             }
         }
+        
+        // コンテンツのクリーンアップ
+        $content = $this->clean_content($content);
         
         // タイトルからタグを生成
         if (stripos($title . $content, 'AI') !== false) $tags[] = 'AI';
@@ -1530,15 +1528,77 @@ class AINewsAutoPoster {
         if (stripos($title . $content, 'OpenAI') !== false) $tags[] = 'OpenAI';
         if (stripos($title . $content, 'Google') !== false) $tags[] = 'Google';
         
-        // タイトルはLLMが適切な長さで生成するため、短縮処理は無効化
+        // タイトルが空の場合はデフォルトを設定
         $title = $title ?: '最新AIニュース: ' . date('Y年m月d日');
-        // $title = $this->shorten_title($title); // 無効化
         
         return array(
             'title' => $title,
-            'content' => trim($content), // post_process_contentは後で呼ぶ
+            'content' => trim($content),
             'tags' => array_filter($tags)
         );
+    }
+    
+    /**
+     * タイトルをクリーンアップ
+     */
+    private function clean_title($title) {
+        // マークダウン記法を除去
+        $title = preg_replace('/^#{1,6}\s+/', '', $title);
+        $title = preg_replace('/\*\*(.+?)\*\*/', '$1', $title);
+        $title = preg_replace('/__(.+?)__/', '$1', $title);
+        
+        // 不適切な終わり方を修正
+        if (preg_match('/^(.+?)(?:と|が|は|を|に|で|の)$/', $title, $matches)) {
+            $title = $matches[1];
+        }
+        
+        // 長すぎる場合は適切に短縮
+        if (mb_strlen($title) > 50) {
+            $title = mb_substr($title, 0, 47) . '...';
+        }
+        
+        return trim($title);
+    }
+    
+    /**
+     * コンテンツをクリーンアップ
+     */
+    private function clean_content($content) {
+        // 余分な空行を除去
+        $content = preg_replace('/\n\s*\n\s*\n/', "\n\n", $content);
+        
+        // 不完全な文章で終わっている場合は適切に処理
+        $content = trim($content);
+        
+        // 最低限の文字数チェック
+        if (mb_strlen($content) < 100) {
+            $content .= "\n\n※ この記事は途中で生成が中断されました。より詳細な情報については、関連するニュースソースをご確認ください。";
+        }
+        
+        return $content;
+    }
+    
+    /**
+     * 部分的なコンテンツが記事として成り立つかチェック
+     */
+    private function is_viable_partial_content($content) {
+        // 最低限の条件をチェック
+        if (mb_strlen($content) < 200) {
+            return false;
+        }
+        
+        // タイトルらしき行があるかチェック
+        $lines = explode("\n", $content);
+        $has_title = false;
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (!empty($line) && mb_strlen($line) > 10 && mb_strlen($line) < 100) {
+                $has_title = true;
+                break;
+            }
+        }
+        
+        return $has_title;
     }
     
     /**
@@ -1933,8 +1993,11 @@ class AINewsAutoPoster {
                 
                 foreach ($potential_content_paths as $content) {
                     if (!empty($content) && strlen($content) > 100) { // 最低限の長さをチェック
-                        $this->log('warning', 'Gemini API: トークン制限に達しましたが、部分的なコンテンツ(' . strlen($content) . '文字)を返します。');
-                        return $content;
+                        // 部分的なコンテンツでも記事として成り立つかチェック
+                        if ($this->is_viable_partial_content($content)) {
+                            $this->log('warning', 'Gemini API: トークン制限に達しましたが、部分的なコンテンツ(' . strlen($content) . '文字)を返します。');
+                            return $content;
+                        }
                     }
                 }
                 
