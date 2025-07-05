@@ -1996,7 +1996,28 @@ class AINewsAutoPoster {
                         // 部分的なコンテンツでも記事として成り立つかチェック
                         if ($this->is_viable_partial_content($content)) {
                             $this->log('warning', 'Gemini API: トークン制限に達しましたが、部分的なコンテンツ(' . strlen($content) . '文字)を返します。');
-                            return $content;
+                            
+                            // 部分的なコンテンツでもGrounding情報を含む構造化レスポンスを返す
+                            $result = array(
+                                'text' => $content,
+                                'grounding_sources' => array()
+                            );
+                            
+                            // Grounding情報を抽出
+                            if (isset($response_data['candidates'][0]['groundingMetadata']['groundingChunks'])) {
+                                $grounding_chunks = $response_data['candidates'][0]['groundingMetadata']['groundingChunks'];
+                                foreach ($grounding_chunks as $chunk) {
+                                    if (isset($chunk['web']['uri']) && isset($chunk['web']['title'])) {
+                                        $result['grounding_sources'][] = array(
+                                            'title' => $chunk['web']['title'],
+                                            'url' => $chunk['web']['uri']
+                                        );
+                                    }
+                                }
+                                $this->log('info', 'MAX_TOKENS状態で' . count($result['grounding_sources']) . '件のGrounding情報を抽出しました');
+                            }
+                            
+                            return $result;
                         }
                     }
                 }
