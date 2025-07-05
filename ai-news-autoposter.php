@@ -928,7 +928,15 @@ class AINewsAutoPoster {
         );
         
         // 投稿データをデバッグログに記録
-        $this->log('info', '投稿データ詳細: タイトル=' . mb_strlen($post_data['post_title']) . '文字、コンテンツ=' . mb_strlen($post_data['post_content']) . '文字、ステータス=' . $post_data['post_status'] . '、カテゴリ=' . json_encode($post_data['post_category']));
+        $content_length = mb_strlen($post_data['post_content']);
+        $this->log('info', '投稿データ詳細: タイトル=' . mb_strlen($post_data['post_title']) . '文字、コンテンツ=' . $content_length . '文字、ステータス=' . $post_data['post_status'] . '、カテゴリ=' . json_encode($post_data['post_category']));
+        
+        // コンテンツが長すぎる場合は短縮
+        if ($content_length > 10000) {
+            $this->log('warning', 'コンテンツが長すぎます(' . $content_length . '文字)。10,000文字に短縮します。');
+            $post_data['post_content'] = mb_substr($post_data['post_content'], 0, 9500) . "\n\n※ この記事は長すぎるため短縮表示されています。";
+            $this->log('info', '短縮後のコンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字');
+        }
         
         // 投稿作成
         $this->log('info', 'WordPressに投稿を作成中...');
