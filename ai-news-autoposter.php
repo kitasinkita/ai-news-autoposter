@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.10
+ * Version: 1.2.11
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.10');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.11');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1179,7 +1179,7 @@ class AINewsAutoPoster {
         
         $prompt .= "【記事構成】:\n";
         $prompt .= "```\n";
-        $prompt .= "記事タイトル\n";
+        $prompt .= "記事タイトル（25文字程度の簡潔なタイトル）\n";
         $prompt .= "\n";
         $prompt .= "リード文（概要）\n";
         $prompt .= "\n";
@@ -1193,6 +1193,11 @@ class AINewsAutoPoster {
         $prompt .= "- [主要ニュースサイトの記事タイトル](実在の可能性が高いURL)\n";
         $prompt .= "- [業界レポートのタイトル](実在の可能性が高いURL)\n";
         $prompt .= "```\n\n";
+        
+        $prompt .= "【タイトル要件】:\n";
+        $prompt .= "- 記事のタイトルは必ず25文字程度で簡潔にまとめる\n";
+        $prompt .= "- 内容を的確に表現した魅力的なタイトルにする\n";
+        $prompt .= "- 長いタイトルは避け、核心をついた短いタイトルを作成する\n\n";
         
         $prompt .= "【重要】: 参考情報源は実在する可能性の高い主要ニュースサイト（ITmedia、TechCrunch、Wiredなど）のURLパターンを使用し、架空の詳細情報は避けてください。";
         
@@ -1467,9 +1472,9 @@ class AINewsAutoPoster {
             }
         }
         
-        // タイトルを短縮
+        // タイトルはLLMが適切な長さで生成するため、短縮処理は無効化
         $title = $title ?: '最新AIニュース: ' . date('Y年m月d日');
-        $title = $this->shorten_title($title);
+        // $title = $this->shorten_title($title); // 無効化
         
         return array(
             'title' => $title,
@@ -1505,9 +1510,9 @@ class AINewsAutoPoster {
         if (stripos($title . $content, 'OpenAI') !== false) $tags[] = 'OpenAI';
         if (stripos($title . $content, 'Google') !== false) $tags[] = 'Google';
         
-        // タイトルを短縮
+        // タイトルはLLMが適切な長さで生成するため、短縮処理は無効化
         $title = $title ?: '最新AIニュース: ' . date('Y年m月d日');
-        $title = $this->shorten_title($title);
+        // $title = $this->shorten_title($title); // 無効化
         
         return array(
             'title' => $title,
@@ -1588,29 +1593,56 @@ class AINewsAutoPoster {
             // デバッグ: ソースの完全な内容をログ出力
             $this->log('info', "ソース[" . ($index + 1) . "]の内容: " . json_encode($source, JSON_UNESCAPED_UNICODE));
             
-            // 記事タイトルを使用（利用可能な場合）
-            $display_title = $source['title'] ?? 'AI関連記事';
+            $original_title = $source['title'] ?? 'AI関連記事';
+            $original_url = $source['url'] ?? '';
+            
+            // タイトルがドメイン名のみの場合は、汎用的なタイトルを生成
+            $domain_only_patterns = array(
+                '/^[a-zA-Z0-9\-\.]+\.(com|co\.jp|jp|net|org)$/i',
+                '/^www\.[a-zA-Z0-9\-\.]+\.(com|co\.jp|jp|net|org)$/i'
+            );
+            
+            $is_domain_only = false;
+            foreach ($domain_only_patterns as $pattern) {
+                if (preg_match($pattern, $original_title)) {
+                    $is_domain_only = true;
+                    break;
+                }
+            }
+            
+            if ($is_domain_only) {
+                // ドメイン名のみの場合は、汎用的なタイトルを作成
+                $domain_to_name = array(
+                    'itmedia.co.jp' => 'ITmedia記事',
+                    'hitachi.co.jp' => '日立公式発表',
+                    'note.com' => 'Note記事',
+                    'lion.co.jp' => 'ライオン企業情報',
+                    'nttdata.com' => 'NTTデータ発表',
+                    'microsoft.com' => 'Microsoft公式情報',
+                    'gartner.co.jp' => 'ガートナー分析',
+                    'hp.com' => 'HP公式発表'
+                );
+                
+                $display_title = $domain_to_name[$original_title] ?? ($original_title . '関連記事');
+            } else {
+                $display_title = $original_title;
+            }
             
             // タイトルが長すぎる場合は短縮
             if (mb_strlen($display_title) > 50) {
                 $display_title = mb_substr($display_title, 0, 47) . '...';
             }
             
-            // HTMLエスケープとURL処理を確実に行う
             $title = esc_html($display_title);
-            $original_url = $source['url'] ?? '';
             
             // リダイレクトURLの場合は、ベースURLを生成
             if (strpos($original_url, 'vertexaisearch.cloud.google.com') !== false) {
                 $domain_hints = array(
                     'itmedia.co.jp' => 'https://www.itmedia.co.jp/',
                     'hitachi.co.jp' => 'https://www.hitachi.co.jp/',
-                    'hitamuki-inc.com' => 'https://hitamuki-inc.com/',
-                    'weel.co.jp' => 'https://weel.co.jp/',
-                    'aismiley.co.jp' => 'https://aismiley.co.jp/',
                     'note.com' => 'https://note.com/',
-                    'appswingby.com' => 'https://appswingby.com/',
-                    'globalxetfs.co.jp' => 'https://www.globalxetfs.co.jp/',
+                    'lion.co.jp' => 'https://www.lion.co.jp/',
+                    'nttdata.com' => 'https://www.nttdata.com/',
                     'microsoft.com' => 'https://www.microsoft.com/',
                     'gartner.co.jp' => 'https://www.gartner.co.jp/',
                     'hp.com' => 'https://www.hp.com/'
@@ -1618,13 +1650,13 @@ class AINewsAutoPoster {
                 
                 $found_url = null;
                 foreach ($domain_hints as $domain => $base_url) {
-                    if (stripos($title, $domain) !== false || stripos($original_url, $domain) !== false) {
+                    if (stripos($original_title, $domain) !== false || stripos($original_url, $domain) !== false) {
                         $found_url = $base_url;
                         break;
                     }
                 }
                 
-                $url = $found_url ? esc_url($found_url) : esc_url('https://google.com/search?q=' . urlencode($title));
+                $url = $found_url ? esc_url($found_url) : esc_url('https://google.com/search?q=' . urlencode($display_title));
             } else {
                 $url = esc_url($original_url);
             }
