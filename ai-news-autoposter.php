@@ -1592,12 +1592,18 @@ class AINewsAutoPoster {
         $incomplete_patterns = array(
             // 助詞で終わっている場合（「また、大規模」など）
             '/[、が、は、を、に、で、の、と、も、から、まで、より、について、に関して、として]$/',
+            // 「〜など、」「〜等、」のパターン
+            '/(?:など|等)[、,]$/',
             // 数字や英字で終わっている場合
             '/[0-9a-zA-Z]$/',
             // カンマで終わっている場合
             '/[、,]$/',
             // 接続詞で終わっている場合
             '/(?:しかし|また|さらに|一方|このため|その結果|つまり|なお|ちなみに|ただし)$/',
+            // 動詞の連用形で終わっている場合
+            '/(?:開始|実施|展開|推進|発表|導入|提供|支援|対応|実現)(?:する|し|した)(?:など|等)[、,]?$/',
+            // 「〜するなど、」のような不完全な列挙
+            '/[ぁ-ん](?:する|した|している)(?:など|等)[、,]?$/',
         );
         
         $is_incomplete = false;
@@ -1806,6 +1812,9 @@ class AINewsAutoPoster {
      * 記事内容の後処理（Markdown変換、免責事項追加など）
      */
     private function post_process_content($content) {
+        // コンテンツの最終クリーンアップ（不完全な文末を修正）
+        $content = $this->fix_incomplete_ending($content);
+        
         // MarkdownをHTMLに変換
         $content = $this->convert_markdown_to_html($content);
         
