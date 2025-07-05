@@ -971,23 +971,22 @@ class AINewsAutoPoster {
         $wpdb->flush();
         $wpdb->last_error = '';
         
-        // 投稿データをサニタイズ
-        $post_data['post_title'] = sanitize_text_field($post_data['post_title']);
-        $post_data['post_content'] = wp_kses_post($post_data['post_content']);
-        $post_data['post_excerpt'] = isset($post_data['post_excerpt']) ? sanitize_text_field($post_data['post_excerpt']) : '';
+        // 文字化けを防ぐため、最小限のサニタイズのみ実行
+        // タイトルのHTMLタグを削除
+        $post_data['post_title'] = strip_tags($post_data['post_title']);
         
-        // 特殊文字の問題を確認
-        $title_clean = mb_convert_encoding($post_data['post_title'], 'UTF-8', 'UTF-8');
-        $content_clean = mb_convert_encoding($post_data['post_content'], 'UTF-8', 'UTF-8');
+        // コンテンツのサニタイズは行わず、そのまま使用
+        // （WordPressが自動的に適切に処理する）
         
-        if ($title_clean !== $post_data['post_title']) {
-            $this->log('warning', 'タイトルに不正な文字が含まれています');
-            $post_data['post_title'] = $title_clean;
+        $post_data['post_excerpt'] = isset($post_data['post_excerpt']) ? strip_tags($post_data['post_excerpt']) : '';
+        
+        // UTF-8エンコーディングの確認のみ（変換は行わない）
+        if (!mb_check_encoding($post_data['post_title'], 'UTF-8')) {
+            $this->log('error', 'タイトルのUTF-8エンコーディングが不正です');
         }
         
-        if ($content_clean !== $post_data['post_content']) {
-            $this->log('warning', 'コンテンツに不正な文字が含まれています');
-            $post_data['post_content'] = $content_clean;
+        if (!mb_check_encoding($post_data['post_content'], 'UTF-8')) {
+            $this->log('error', 'コンテンツのUTF-8エンコーディングが不正です');
         }
         
         // 最小限のテストデータで投稿を試行
