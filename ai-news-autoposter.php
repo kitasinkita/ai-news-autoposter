@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.8
+ * Version: 1.2.9
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.8');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.9');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -205,6 +205,11 @@ class AINewsAutoPoster {
                 <p><strong>プラグインの状態:</strong> 
                     <span id="auto-publish-status" class="<?php echo $settings['auto_publish'] ? 'ai-news-status-enabled' : 'ai-news-status-disabled'; ?>">
                         <?php echo $settings['auto_publish'] ? '自動投稿有効' : '自動投稿無効'; ?>
+                    </span>
+                    &nbsp;|&nbsp;
+                    <strong>現在のモデル:</strong> 
+                    <span class="ai-news-status-enabled">
+                        <?php echo esc_html($settings['claude_model'] ?? 'claude-3-5-haiku-20241022'); ?>
                     </span>
                 </p>
             </div>
@@ -894,6 +899,10 @@ class AINewsAutoPoster {
         
         $this->log('info', '記事データ解析完了。タイトル: ' . $article_data['title']);
         
+        // 最終的なコンテンツ処理（免責事項追加）
+        $this->log('info', '最終コンテンツ処理を実行中...');
+        $article_data['content'] = $this->post_process_content($article_data['content']);
+        
         // 投稿データを準備
         $this->log('info', 'WordPress投稿データを準備中...');
         $post_data = array(
@@ -1392,6 +1401,27 @@ class AINewsAutoPoster {
     }
     
     /**
+     * タイトルを適切な長さに短縮
+     */
+    private function shorten_title($title, $max_length = 25) {
+        if (mb_strlen($title) <= $max_length) {
+            return $title;
+        }
+        
+        // 句読点で区切って最初の部分を使用
+        $punctuation = array('。', '、', '：', ':', '！', '!', '？', '?', '）', ')');
+        foreach ($punctuation as $punct) {
+            $pos = mb_strpos($title, $punct);
+            if ($pos !== false && $pos < $max_length) {
+                return mb_substr($title, 0, $pos + 1);
+            }
+        }
+        
+        // 句読点がない場合は単純に切り詰め
+        return mb_substr($title, 0, $max_length - 3) . '...';
+    }
+    
+    /**
      * 構造化レスポンス解析
      */
     private function parse_structured_response($response) {
@@ -1419,9 +1449,13 @@ class AINewsAutoPoster {
             }
         }
         
+        // タイトルを短縮
+        $title = $title ?: '最新AIニュース: ' . date('Y年m月d日');
+        $title = $this->shorten_title($title);
+        
         return array(
-            'title' => $title ?: '最新AIニュース: ' . date('Y年m月d日'),
-            'content' => $this->post_process_content(trim($content)),
+            'title' => $title,
+            'content' => trim($content), // post_process_contentは後で呼ぶ
             'tags' => array_filter($tags)
         );
     }
@@ -1453,9 +1487,13 @@ class AINewsAutoPoster {
         if (stripos($title . $content, 'OpenAI') !== false) $tags[] = 'OpenAI';
         if (stripos($title . $content, 'Google') !== false) $tags[] = 'Google';
         
+        // タイトルを短縮
+        $title = $title ?: '最新AIニュース: ' . date('Y年m月d日');
+        $title = $this->shorten_title($title);
+        
         return array(
-            'title' => $title ?: '最新AIニュース: ' . date('Y年m月d日'),
-            'content' => $this->post_process_content(trim($content)),
+            'title' => $title,
+            'content' => trim($content), // post_process_contentは後で呼ぶ
             'tags' => array_filter($tags)
         );
     }
@@ -1529,7 +1567,15 @@ class AINewsAutoPoster {
         // 新しい統合された参考情報源セクションを生成
         $sources_section = "\n\n## 参考情報源\n";
         foreach ($grounding_sources as $index => $source) {
-            $title = esc_html($source['title']);
+            // 記事タイトルを使用（利用可能な場合）
+            $display_title = $source['title'] ?? 'AI関連記事';
+            
+            // タイトルが長すぎる場合は短縮
+            if (mb_strlen($display_title) > 50) {
+                $display_title = mb_substr($display_title, 0, 47) . '...';
+            }
+            
+            $title = esc_html($display_title);
             $url = esc_url($source['url']);
             $sources_section .= "- <a href=\"{$url}\" target=\"_blank\">{$title}</a>\n";
             $this->log('info', "統合URL[" . ($index + 1) . "]: {$title} - {$url}");

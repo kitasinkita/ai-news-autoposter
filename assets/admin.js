@@ -153,9 +153,7 @@
             }
             
             // プログレスバー表示
-            const currentModel = $('#claude_model').val() || 'claude-3-5-haiku-20241022';
-            const isGeminiModel = currentModel.includes('gemini');
-            const initialMessage = isGeminiModel ? 'Gemini AIで記事を生成中...' : 'Claude AIで記事を生成中...';
+            const initialMessage = 'AIで記事を生成中...';
             AINewsAutoPoster.showProgress(initialMessage, 0);
             
             // ボタン状態変更
@@ -165,7 +163,7 @@
             
             // プログレス更新シミュレーション
             let progress = 0;
-            const progressMessage = isGeminiModel ? 'Gemini AIで記事生成中...' : 'Claude AIで記事生成中...';
+            const progressMessage = '記事を生成中...';
             
             const progressInterval = setInterval(function() {
                 progress += Math.random() * 15;
@@ -474,9 +472,7 @@
             }
             
             // プログレスバー表示
-            const postModel = $('#claude_model').val() || 'claude-3-5-haiku-20241022';
-            const isGeminiPost = postModel.includes('gemini');
-            const initialMessage = isGeminiPost ? 'Gemini AIで記事を生成・投稿中...' : 'Claude AIで記事を生成・投稿中...';
+            const initialMessage = 'AIで記事を生成・投稿中...';
             AINewsAutoPoster.showProgress(initialMessage, 0);
             
             // ボタン状態変更
@@ -488,8 +484,8 @@
             let progress = 0;
             let progressMessages = [
                 '記事を生成・投稿中...',
-                isGeminiPost ? 'Gemini AIで記事作成中...' : 'Claude AIで記事を作成中...',
-                isGeminiPost ? 'Gemini AIで高品質な記事を生成中...' : '高品質な記事を生成中...',
+                'AIで記事作成中...',
+                '高品質な記事を生成中...',
                 '記事の最終調整中...',
                 '投稿準備中...'
             ];
