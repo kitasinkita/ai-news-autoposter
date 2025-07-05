@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.19
+ * Version: 1.2.20
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.19');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.20');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1097,26 +1097,37 @@ class AINewsAutoPoster {
         $this->log('info', 'タイトルのUTF-8エンコーディングチェック完了');
         
         // UTF-8エンコーディングチェックを一時的に無効化（緊急回避）
-        $this->log('info', '【緊急回避モード v1.2.19】UTF-8エンコーディングチェックをスキップします');
+        $this->log('info', '【緊急回避モード v1.2.20】UTF-8エンコーディングチェックをスキップします');
+        
+        // 初期コンテンツ長をログ
+        $this->log('info', '処理開始時のコンテンツ長: ' . strlen($post_data['post_content']) . ' bytes');
         
         $this->log('info', '制御文字の除去を開始します...');
-        // 全ての制御文字、非印刷可能文字、異常文字を除去
-        $post_data['post_content'] = preg_replace('/[\x00-\x1F\x7F-\x9F]/', '', $post_data['post_content']);
+        $this->log('info', '制御文字除去前のコンテンツ長: ' . strlen($post_data['post_content']) . ' bytes');
+        // より保守的な制御文字除去（改行とタブは保持）
+        $post_data['post_content'] = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/', '', $post_data['post_content']);
+        $this->log('info', '制御文字除去後のコンテンツ長: ' . strlen($post_data['post_content']) . ' bytes');
         $this->log('info', '制御文字除去完了');
         
         $this->log('info', '特殊文字の除去を開始します...');
-        // 特殊文字、非打印可能文字を除去
-        $post_data['post_content'] = preg_replace('/[\p{C}]+/u', '', $post_data['post_content']);
+        $this->log('info', '特殊文字除去前のコンテンツ長: ' . strlen($post_data['post_content']) . ' bytes');
+        // より保守的な特殊文字除去（破壊的すぎる\p{C}を避ける）
+        $post_data['post_content'] = preg_replace('/[\x00\x01\x02\x03\x04\x05\x06\x07\x08\x0B\x0C\x0E\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F\x7F]/', '', $post_data['post_content']);
+        $this->log('info', '特殊文字除去後のコンテンツ長: ' . strlen($post_data['post_content']) . ' bytes');
         $this->log('info', '特殊文字除去完了');
         
         $this->log('info', '問題のある文字の除去を開始します...');
+        $this->log('info', '問題文字除去前のコンテンツ長: ' . strlen($post_data['post_content']) . ' bytes');
         // 問題のある文字を追加除去
         $post_data['post_content'] = str_replace(array("\r", "\0", "\x00", "\xFF", "\xFE"), '', $post_data['post_content']);
+        $this->log('info', '問題文字除去後のコンテンツ長: ' . strlen($post_data['post_content']) . ' bytes');
         $this->log('info', '問題のある文字除去完了');
         
         $this->log('info', '長いURLの短縮を開始します...');
+        $this->log('info', 'URL短縮前のコンテンツ長: ' . strlen($post_data['post_content']) . ' bytes');
         // 長いURLを短縮
         $post_data['post_content'] = preg_replace('/https:\/\/vertexaisearch\.cloud\.google\.com\/grounding-api-redirect\/[A-Za-z0-9_-]{50,}/', '[参考リンク]', $post_data['post_content']);
+        $this->log('info', 'URL短縮後のコンテンツ長: ' . strlen($post_data['post_content']) . ' bytes');
         $this->log('info', '長いURL短縮完了');
         
         $this->log('info', 'UTF-8エンコーディング強制変換を開始します...');
