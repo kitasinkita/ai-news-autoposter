@@ -1152,7 +1152,7 @@ class AINewsAutoPoster {
             $prompt .= "- Search Google for real news articles\n";
             $prompt .= "- Include actual URLs from news websites\n";
             $prompt .= "- Write entire article in Japanese\n";
-            $prompt .= "- Use approximately 400-500 characters (keep it concise)\n";
+            $prompt .= "- Use approximately {$word_count} characters\n";
             $prompt .= "- Include proper headings and structure\n\n";
         } else {
             // その他のGeminiモデル用プロンプト
@@ -1170,7 +1170,7 @@ class AINewsAutoPoster {
         
         $prompt .= "【記事要求】:\n";
         $prompt .= "- 最新の業界動向を総合的にまとめた記事\n";
-        $prompt .= "- 全体で【400-500文字】程度（簡潔に）\n";
+        $prompt .= "- 全体で【{$word_count}文字】程度\n";
         $prompt .= "- なぜ今これが起こっているのか、今後の影響についての分析を含む\n";
         if ($writing_style !== '標準') {
             $prompt .= "- 文体は{$writing_style}風\n";
@@ -1754,6 +1754,18 @@ class AINewsAutoPoster {
         
         $this->log('info', 'Gemini API呼び出しを開始します。モデル: ' . $model);
         
+        // プロンプトの長さに基づいてmaxOutputTokensを動的に設定
+        $prompt_length = strlen($prompt);
+        $max_tokens = 2000; // デフォルト
+        
+        if ($prompt_length > 2000) {
+            $max_tokens = 1500; // 長いプロンプトの場合は出力を制限
+        } elseif ($prompt_length > 1500) {
+            $max_tokens = 1800;
+        }
+        
+        $this->log('info', 'プロンプト長: ' . $prompt_length . '文字、maxOutputTokens: ' . $max_tokens);
+        
         $body = array(
             'contents' => array(
                 array(
@@ -1763,7 +1775,7 @@ class AINewsAutoPoster {
                 )
             ),
             'generationConfig' => array(
-                'maxOutputTokens' => 2000,
+                'maxOutputTokens' => $max_tokens,
                 'temperature' => 0.7
             )
         );
