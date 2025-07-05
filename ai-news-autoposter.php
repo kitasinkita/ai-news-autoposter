@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.4
+ * Version: 1.2.5
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.4');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.5');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1603,14 +1603,24 @@ class AINewsAutoPoster {
         // Grounding情報を詳細にログ記録
         if (isset($response_data['candidates'][0]['groundingMetadata'])) {
             $grounding_metadata = $response_data['candidates'][0]['groundingMetadata'];
-            $this->log('info', 'Grounding Metadata: ' . json_encode($grounding_metadata));
             
-            $grounding_sources = $grounding_metadata['groundingSources'] ?? array();
-            $this->log('info', 'Web検索ソース数: ' . count($grounding_sources) . '件');
-            
-            foreach ($grounding_sources as $index => $source) {
-                if (isset($source['uri'])) {
-                    $this->log('info', '参考URL[' . ($index + 1) . ']: ' . $source['uri']);
+            // 新しい形式: groundingChunks
+            $grounding_chunks = $grounding_metadata['groundingChunks'] ?? array();
+            if (!empty($grounding_chunks)) {
+                $this->log('info', 'Web検索ソース数: ' . count($grounding_chunks) . '件');
+                foreach ($grounding_chunks as $index => $chunk) {
+                    if (isset($chunk['web']['uri']) && isset($chunk['web']['title'])) {
+                        $this->log('info', '参考URL[' . ($index + 1) . ']: ' . $chunk['web']['title'] . ' - ' . $chunk['web']['uri']);
+                    }
+                }
+            } else {
+                // 古い形式: groundingSources（念のため）
+                $grounding_sources = $grounding_metadata['groundingSources'] ?? array();
+                $this->log('info', 'Web検索ソース数: ' . count($grounding_sources) . '件');
+                foreach ($grounding_sources as $index => $source) {
+                    if (isset($source['uri'])) {
+                        $this->log('info', '参考URL[' . ($index + 1) . ']: ' . $source['uri']);
+                    }
                 }
             }
             
@@ -1620,7 +1630,6 @@ class AINewsAutoPoster {
             }
         } else {
             $this->log('warning', 'Grounding Metadataが見つかりません。Google Search Groundingが動作していない可能性があります。');
-            $this->log('info', 'レスポンス全体: ' . json_encode($response_data));
         }
         
         $this->log('info', 'Gemini API呼び出し完了。生成文字数: ' . mb_strlen($generated_text));
