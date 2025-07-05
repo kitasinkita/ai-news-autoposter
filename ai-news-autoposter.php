@@ -1570,9 +1570,78 @@ class AINewsAutoPoster {
         // 不完全な文章で終わっている場合は適切に処理
         $content = trim($content);
         
+        // 文章の終わり方をチェックして修正
+        $content = $this->fix_incomplete_ending($content);
+        
         // 最低限の文字数チェック
         if (mb_strlen($content) < 100) {
             $content .= "\n\n※ この記事は途中で生成が中断されました。より詳細な情報については、関連するニュースソースをご確認ください。";
+        }
+        
+        return $content;
+    }
+    
+    /**
+     * 不完全な文末を修正
+     */
+    private function fix_incomplete_ending($content) {
+        // 最後の文字を確認
+        $last_char = mb_substr($content, -1);
+        
+        // 不完全な終わり方のパターンを検出
+        $incomplete_patterns = array(
+            // 助詞で終わっている場合（「また、大規模」など）
+            '/[、が、は、を、に、で、の、と、も、から、まで、より、について、に関して、として]$/',
+            // 数字や英字で終わっている場合
+            '/[0-9a-zA-Z]$/',
+            // カンマで終わっている場合
+            '/[、,]$/',
+            // 接続詞で終わっている場合
+            '/(?:しかし|また|さらに|一方|このため|その結果|つまり|なお|ちなみに|ただし)$/',
+        );
+        
+        $is_incomplete = false;
+        foreach ($incomplete_patterns as $pattern) {
+            if (preg_match($pattern, $content)) {
+                $is_incomplete = true;
+                break;
+            }
+        }
+        
+        // 適切な句読点で終わっていない場合
+        if (!in_array($last_char, array('。', '！', '？', '」', '』', ')', '）'))) {
+            $is_incomplete = true;
+        }
+        
+        // 不完全な場合は適切に修正
+        if ($is_incomplete) {
+            // 最後の完全な文を見つける
+            $sentences = preg_split('/[。！？]/', $content);
+            
+            if (count($sentences) > 1) {
+                // 最後の不完全な文を除去し、その前の完全な文で終わらせる
+                array_pop($sentences); // 最後の不完全な部分を削除
+                $last_complete = array_pop($sentences);
+                
+                if (!empty($last_complete)) {
+                    $complete_content = implode('。', $sentences);
+                    if (!empty($complete_content)) {
+                        $complete_content .= '。' . $last_complete . '。';
+                    } else {
+                        $complete_content = $last_complete . '。';
+                    }
+                    
+                    // 継続感を示す文を追加
+                    $complete_content .= "\n\n※ この分野の最新動向については、引き続き注目が集まっています。";
+                    
+                    return $complete_content;
+                }
+            } else {
+                // 文全体が不完全な場合
+                $content = rtrim($content, '、。！？');
+                $content .= "。";
+                $content .= "\n\n※ この分野の詳細については、関連するニュースソースをご確認ください。";
+            }
         }
         
         return $content;
@@ -1903,17 +1972,31 @@ class AINewsAutoPoster {
         
         $this->log('info', 'Gemini API呼び出しを開始します。モデル: ' . $model);
         
-        // プロンプトの長さに基づいてmaxOutputTokensを動的に設定
+        // プロンプトの長さと設定に基づいてmaxOutputTokensを動的に設定
         $prompt_length = strlen($prompt);
-        $max_tokens = 2000; // デフォルト
+        
+        // 設定から期待文字数を取得
+        $settings = get_option('ai_news_autoposter_settings', array());
+        $expected_chars = $settings['article_word_count'] ?? 500;
+        
+        // 文字数をトークン数に変換（1トークン ≈ 0.7文字として計算）
+        $expected_tokens = intval($expected_chars / 0.7);
+        
+        // プロンプト長に応じた調整
+        $max_tokens = $expected_tokens;
         
         if ($prompt_length > 2000) {
-            $max_tokens = 1500; // 長いプロンプトの場合は出力を制限
+            $max_tokens = min($expected_tokens, 1500); // 長いプロンプトの場合は制限
         } elseif ($prompt_length > 1500) {
-            $max_tokens = 1800;
+            $max_tokens = min($expected_tokens, 1800);
+        } else {
+            $max_tokens = min($expected_tokens, 2500); // 最大値制限
         }
         
-        $this->log('info', 'プロンプト長: ' . $prompt_length . '文字、maxOutputTokens: ' . $max_tokens);
+        // 最低限の長さを保証
+        $max_tokens = max($max_tokens, 800);
+        
+        $this->log('info', '設定文字数: ' . $expected_chars . '、プロンプト長: ' . $prompt_length . '文字、maxOutputTokens: ' . $max_tokens);
         
         $body = array(
             'contents' => array(
