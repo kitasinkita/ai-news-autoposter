@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.16
+ * Version: 1.2.17
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.16');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.17');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -961,10 +961,10 @@ class AINewsAutoPoster {
         $content_length = mb_strlen($post_data['post_content']);
         $this->log('info', '投稿データ詳細: タイトル=' . mb_strlen($post_data['post_title']) . '文字、コンテンツ=' . $content_length . '文字、ステータス=' . $post_data['post_status'] . '、カテゴリ=' . json_encode($post_data['post_category']));
         
-        // コンテンツが長すぎる場合は短縮
-        if ($content_length > 10000) {
-            $this->log('warning', 'コンテンツが長すぎます(' . $content_length . '文字)。10,000文字に短縮します。');
-            $post_data['post_content'] = mb_substr($post_data['post_content'], 0, 9500) . "\n\n※ この記事は長すぎるため短縮表示されています。";
+        // コンテンツが長すぎる場合は短縮（データベースエラー回避）
+        if ($content_length > 4000) {
+            $this->log('warning', 'コンテンツが長すぎます(' . $content_length . '文字)。4,000文字に短縮します。');
+            $post_data['post_content'] = mb_substr($post_data['post_content'], 0, 3800) . "\n\n※ 記事が長いため一部を省略して表示しています。";
             $this->log('info', '短縮後のコンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字');
         }
         
@@ -1023,14 +1023,23 @@ class AINewsAutoPoster {
         // UTF-8エンコーディングチェックを一時的に無効化（緊急回避）
         $this->log('info', '【緊急回避モード v1.2.16】UTF-8エンコーディングチェックをスキップします');
         
-        // 基本的な制御文字のみ除去
-        $post_data['post_content'] = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $post_data['post_content']);
+        // 全ての制御文字、非印刷可能文字、異常文字を除去
+        $post_data['post_content'] = preg_replace('/[\x00-\x1F\x7F-\x9F]/', '', $post_data['post_content']);
+        
+        // 特殊文字、非打印可能文字を除去
+        $post_data['post_content'] = preg_replace('/[\p{C}]+/u', '', $post_data['post_content']);
         
         // 問題のある文字を追加除去
-        $post_data['post_content'] = str_replace(array("\r", "\0"), '', $post_data['post_content']);
+        $post_data['post_content'] = str_replace(array("\r", "\0", "\x00", "\xFF", "\xFE"), '', $post_data['post_content']);
         
         // 長いURLを短縮
-        $post_data['post_content'] = preg_replace('/https:\/\/vertexaisearch\.cloud\.google\.com\/grounding-api-redirect\/[A-Za-z0-9_-]{100,}/', '[参考リンク]', $post_data['post_content']);
+        $post_data['post_content'] = preg_replace('/https:\/\/vertexaisearch\.cloud\.google\.com\/grounding-api-redirect\/[A-Za-z0-9_-]{50,}/', '[参考リンク]', $post_data['post_content']);
+        
+        // UTF-8エンコーディングを強制し、不正文字を除去
+        $post_data['post_content'] = mb_convert_encoding($post_data['post_content'], 'UTF-8', 'UTF-8//IGNORE');
+        
+        // 空白文字の正規化
+        $post_data['post_content'] = preg_replace('/\s+/', ' ', $post_data['post_content']);
         
         $this->log('info', '制御文字を除去し、長いURLを短縮しました。コンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字');
         
@@ -1122,8 +1131,10 @@ class AINewsAutoPoster {
             $this->log('error', '投稿作成に失敗: ' . implode(' | ', $error_messages));
             
             // 追加のデバッグ情報
-            $this->log('error', 'カテゴリ詳細: ' . json_encode($post_data['post_category']));
-            $this->log('error', 'メタ情報: ' . json_encode($post_data['meta_input']));
+            $this->log('error', 'カテゴリ詳細: ' . json_encode($post_data['post_category'], JSON_UNESCAPED_UNICODE));
+            if (isset($post_data['meta_input'])) {
+                $this->log('error', 'メタ情報: ' . json_encode($post_data['meta_input'], JSON_UNESCAPED_UNICODE));
+            }
             
             // データベースエラーもチェック
             if ($wpdb->last_error) {
@@ -2027,8 +2038,13 @@ class AINewsAutoPoster {
             
             $title = esc_html($display_title);
             
-            // URLは基本的にそのまま使用（Geminiが返すURLを信頼）
-            $url = esc_url($original_url);
+            // 長いグラウンディングURLを簡潔に置換（データベース負荷軽減）
+            if (strpos($original_url, 'vertexaisearch.cloud.google.com') !== false) {
+                // グラウンディングURLは検索リンクに置換
+                $url = esc_url('https://google.com/search?q=' . urlencode($original_title));
+            } else {
+                $url = esc_url($original_url);
+            }
             
             // URLが空の場合のみ、検索URLを生成
             if (empty($url) || $url === 'https://') {
