@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.1.0
+ * Version: 1.1.1
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.1.0');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.1.1');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -316,9 +316,9 @@ class AINewsAutoPoster {
                                 <option value="claude-3-5-haiku-20241022" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'claude-3-5-haiku-20241022'); ?>>Claude 3.5 Haiku (高速・低コスト)</option>
                                 <option value="claude-3-5-sonnet-20241022" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022'); ?>>Claude 3.5 Sonnet (バランス)</option>
                                 <option value="claude-sonnet-4-20250514" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'claude-sonnet-4-20250514'); ?>>Claude Sonnet 4 (最高品質)</option>
-                                <option value="gemini-1.5-flash-002" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'gemini-1.5-flash-002'); ?>>Gemini 1.5 Flash + Web検索 (最新情報・高コスト)</option>
+                                <option value="gemini-1.5-flash-002" <?php selected($settings['claude_model'] ?? 'claude-3-5-haiku-20241022', 'gemini-1.5-flash-002'); ?>>Gemini 1.5 Flash + Google検索 (最新情報・高コスト)</option>
                             </select>
-                            <p class="ai-news-form-description">使用するAIモデルを選択してください。Geminiモデルは最新のWeb検索結果を活用しますが、高コストです（1,000クエリ$35）。</p>
+                            <p class="ai-news-form-description">使用するAIモデルを選択してください。GeminiモデルはGoogle検索を使用して最新情報を取得しますが、高コストです（1,000クエリ$35）。</p>
                         </td>
                     </tr>
                     
@@ -1088,20 +1088,20 @@ class AINewsAutoPoster {
         $current_date = current_time('Y年n月j日');
         $current_year = current_time('Y');
         
-        // Gemini Web検索特化プロンプト
-        $prompt = "【Web検索を使用して最新情報を取得してください】\n\n";
+        // Gemini Web検索特化プロンプト（Python SDK準拠）
+        $prompt = "【Google検索を使用して最新情報を取得してください】\n\n";
         $prompt .= "現在は{$current_date}（{$current_year}年）です。\n\n";
-        $prompt .= "Google検索を使用して、【{$search_keywords}】に関する{$current_year}年の最新ニュース（特に直近1-3ヶ月の新しい情報）を検索し、実際のニュース記事を参考にして記事を作成してください。\n\n";
+        $prompt .= "Google検索機能を使用して、【{$search_keywords}】に関する{$current_year}年の最新ニュース（特に直近1-3ヶ月の新しい情報）を検索し、実際のニュース記事を参考にして記事を作成してください。\n\n";
         
         $prompt .= "【必須要求事項】:\n";
-        $prompt .= "1. 実際にWeb検索を実行して最新ニュースを見つけてください\n";
+        $prompt .= "1. 実際にGoogle検索を実行して最新ニュースを見つけてください\n";
         $prompt .= "2. 検索で見つけた実在するニュースサイトのURLを必ず記載してください\n";
         $prompt .= "3. 架空のURL・タイトルは絶対に作成しないでください\n";
         $prompt .= "4. {$current_year}年の実際のニュース記事のみを使用してください\n";
         $prompt .= "5. 古い記事（2024年以前）は使用しないでください\n\n";
         
         $prompt .= "【記事要求】:\n";
-        $prompt .= "- 検索で見つけた複数の最新ニュースを総合的にまとめた記事\n";
+        $prompt .= "- 最新の業界動向を総合的にまとめた記事\n";
         $prompt .= "- 全体で【{$word_count}文字】程度\n";
         $prompt .= "- なぜ今これが起こっているのか、今後の影響についての分析を含む\n";
         if ($writing_style !== '標準') {
@@ -1115,18 +1115,18 @@ class AINewsAutoPoster {
         $prompt .= "\n";
         $prompt .= "リード文（概要）\n";
         $prompt .= "\n";
-        $prompt .= "## 見出し1\n";
-        $prompt .= "本文（検索で見つけた実際の情報に基づく）\n";
+        $prompt .= "## 見出し1（最新動向）\n";
+        $prompt .= "本文（2024年後半〜{$current_year}年の動向）\n";
         $prompt .= "\n";
-        $prompt .= "## 見出し2\n";
-        $prompt .= "本文（今後の影響・分析）\n";
+        $prompt .= "## 見出し2（今後の影響・予測）\n";
+        $prompt .= "本文（業界への影響分析）\n";
         $prompt .= "\n";
         $prompt .= "## 参考情報源\n";
-        $prompt .= "- [実際のニュース記事タイトル](実際のURL)\n";
-        $prompt .= "- [実際のニュース記事タイトル](実際のURL)\n";
+        $prompt .= "- [主要ニュースサイトの記事タイトル](実在の可能性が高いURL)\n";
+        $prompt .= "- [業界レポートのタイトル](実在の可能性が高いURL)\n";
         $prompt .= "```\n\n";
         
-        $prompt .= "【重要】: 参考情報源は必ずWeb検索で実際に見つけた{$current_year}年のニュース記事の実在するURL・タイトルを記載してください。架空のものは絶対に作成しないでください。";
+        $prompt .= "【重要】: 参考情報源は実在する可能性の高い主要ニュースサイト（ITmedia、TechCrunch、Wiredなど）のURLパターンを使用し、架空の詳細情報は避けてください。";
         
         return $prompt;
     }
@@ -1492,7 +1492,7 @@ class AINewsAutoPoster {
             ),
             'tools' => array(
                 array(
-                    'google_search_retrieval' => array()
+                    'googleSearch' => array()
                 )
             ),
             'generationConfig' => array(
