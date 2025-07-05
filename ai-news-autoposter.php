@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.1
+ * Version: 1.2.2
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.1');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.2');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -164,9 +164,24 @@ class AINewsAutoPoster {
      */
     public function admin_init() {
         register_setting('ai_news_autoposter_settings', 'ai_news_autoposter_settings');
+        
+        // プラグインの管理画面でのみスクリプトを読み込み
+        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
+    }
+    
+    /**
+     * 管理画面スクリプト読み込み
+     */
+    public function enqueue_admin_scripts($hook) {
+        // プラグインの管理画面でのみ読み込み
+        if (strpos($hook, 'ai-news-autoposter') === false) {
+            return;
+        }
+        
         wp_enqueue_script('jquery');
-        wp_enqueue_script('ai-news-autoposter-admin', AI_NEWS_AUTOPOSTER_PLUGIN_URL . 'assets/admin.js', array('jquery'), AI_NEWS_AUTOPOSTER_VERSION);
+        wp_enqueue_script('ai-news-autoposter-admin', AI_NEWS_AUTOPOSTER_PLUGIN_URL . 'assets/admin.js', array('jquery'), AI_NEWS_AUTOPOSTER_VERSION, true);
         wp_enqueue_style('ai-news-autoposter-admin', AI_NEWS_AUTOPOSTER_PLUGIN_URL . 'assets/admin.css', array(), AI_NEWS_AUTOPOSTER_VERSION);
+        
         wp_localize_script('ai-news-autoposter-admin', 'ai_news_autoposter_ajax', array(
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('ai_news_autoposter_nonce')

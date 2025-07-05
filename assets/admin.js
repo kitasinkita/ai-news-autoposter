@@ -9,10 +9,17 @@
     const AINewsAutoPoster = {
         
         init: function() {
+            console.log('AINewsAutoPoster init開始');
             this.bindEvents();
             this.initializeComponents();
             this.checkStatus();
             this.createNotificationContainer();
+            console.log('AINewsAutoPoster init完了');
+            
+            // ボタンの存在確認
+            console.log('API接続テストボタン:', $('#test-api-connection').length);
+            console.log('テスト記事生成ボタン:', $('#generate-test-article').length);
+            console.log('今すぐ投稿ボタン:', $('#manual-post-now').length);
         },
         
         bindEvents: function() {
@@ -79,6 +86,7 @@
         
         testApiConnection: function(e) {
             e.preventDefault();
+            console.log('API接続テストボタンがクリックされました');
             
             const $button = $(this);
             const originalText = $button.text();
@@ -662,7 +670,11 @@
 
     // DOM Ready
     $(document).ready(function() {
+        console.log('AI News AutoPoster: DOM Ready');
+        console.log('Ajax URL:', ai_news_autoposter_ajax.ajax_url);
+        console.log('Nonce:', ai_news_autoposter_ajax.nonce);
         AINewsAutoPoster.init();
+        console.log('AI News AutoPoster: Initialized');
     });
 
     // グローバル公開
