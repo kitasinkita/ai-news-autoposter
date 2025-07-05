@@ -1046,6 +1046,32 @@ class AINewsAutoPoster {
         
         $this->log('info', '最終処理後のコンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字');
         
+        // 実際のデータでテスト投稿を試行（メタデータなし）
+        $test_post_data_real = array(
+            'post_title' => $post_data['post_title'],
+            'post_content' => $post_data['post_content'],
+            'post_status' => 'draft',
+            'post_type' => 'post',
+            'post_category' => array(1)
+            // メタデータを除外
+        );
+        
+        $this->log('info', '実際のコンテンツでメタデータなしテスト投稿を試行');
+        $test_id_real = wp_insert_post($test_post_data_real, true);
+        
+        if (is_wp_error($test_id_real)) {
+            $this->log('error', '実際のコンテンツでもテスト投稿失敗: ' . $test_id_real->get_error_message());
+        } else if ($test_id_real === 0) {
+            $this->log('error', '実際のコンテンツでもwp_insert_postが0を返しました');
+        } else {
+            $this->log('info', '実際のコンテンツテスト投稿成功。ID: ' . $test_id_real . ' - 削除します');
+            wp_delete_post($test_id_real, true);
+            
+            // メタデータが原因の可能性が高いため、メタデータを一時的に無効化
+            $this->log('warning', 'メタデータが原因の可能性があります。メタデータを無効化して投稿を試行します');
+            unset($post_data['meta_input']);
+        }
+        
         // 最小限のテストデータで投稿を試行
         $test_post_data = array(
             'post_title' => 'テスト投稿',
