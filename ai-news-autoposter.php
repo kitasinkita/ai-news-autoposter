@@ -1022,15 +1022,51 @@ class AINewsAutoPoster {
         
         if (!mb_check_encoding($post_data['post_content'], 'UTF-8')) {
             $this->log('warning', 'コンテンツのUTF-8エンコーディングが不正です - 修正します');
-            // 不正な文字を削除して再エンコード
-            $original_length = mb_strlen($post_data['post_content']);
-            $post_data['post_content'] = mb_convert_encoding($post_data['post_content'], 'UTF-8', 'UTF-8//IGNORE');
-            $new_length = mb_strlen($post_data['post_content']);
-            $this->log('info', "エンコーディング修正: {$original_length}文字 → {$new_length}文字");
             
-            if (empty($post_data['post_content'])) {
-                $this->log('error', 'コンテンツが空になりました');
-                return new WP_Error('empty_content', 'エンコーディング修正後にコンテンツが空になりました');
+            // より安全なエンコーディング修正方法
+            try {
+                $original_length = mb_strlen($post_data['post_content'], '8bit');
+                
+                // 複数の方法で修正を試行
+                $fixed_content = false;
+                
+                // 方法1: mb_convert_encoding with IGNORE
+                $method1 = mb_convert_encoding($post_data['post_content'], 'UTF-8', 'UTF-8//IGNORE');
+                if (!empty($method1) && mb_check_encoding($method1, 'UTF-8')) {
+                    $fixed_content = $method1;
+                    $this->log('info', 'エンコーディング修正（方法1）成功');
+                }
+                
+                // 方法2: iconv fallback
+                if (!$fixed_content) {
+                    $method2 = @iconv('UTF-8', 'UTF-8//IGNORE', $post_data['post_content']);
+                    if (!empty($method2) && mb_check_encoding($method2, 'UTF-8')) {
+                        $fixed_content = $method2;
+                        $this->log('info', 'エンコーディング修正（方法2）成功');
+                    }
+                }
+                
+                // 方法3: preg_replace で不正文字を削除
+                if (!$fixed_content) {
+                    $method3 = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $post_data['post_content']);
+                    if (!empty($method3) && mb_check_encoding($method3, 'UTF-8')) {
+                        $fixed_content = $method3;
+                        $this->log('info', 'エンコーディング修正（方法3）成功');
+                    }
+                }
+                
+                if ($fixed_content) {
+                    $post_data['post_content'] = $fixed_content;
+                    $new_length = mb_strlen($post_data['post_content'], 'UTF-8');
+                    $this->log('info', "エンコーディング修正完了: {$original_length}バイト → {$new_length}文字");
+                } else {
+                    $this->log('error', 'エンコーディング修正に失敗しました');
+                    return new WP_Error('encoding_fix_failed', 'コンテンツのエンコーディング修正に失敗しました');
+                }
+                
+            } catch (Exception $e) {
+                $this->log('error', 'エンコーディング修正中にエラー: ' . $e->getMessage());
+                return new WP_Error('encoding_exception', 'エンコーディング修正中にエラーが発生しました');
             }
         } else {
             $this->log('info', 'コンテンツのUTF-8エンコーディングは正常です');
