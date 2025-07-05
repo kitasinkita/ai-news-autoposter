@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.1.6
+ * Version: 1.1.7
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.1.6');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.1.7');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1089,17 +1089,15 @@ class AINewsAutoPoster {
         $current_date = current_time('Y年n月j日');
         $current_year = current_time('Y');
         
-        // Gemini Google Search Grounding 特化プロンプト
-        $prompt = "【IMPORTANT: Use Google Search to find real, current news articles】\n\n";
+        // Gemini Google Search 強制実行プロンプト
+        $prompt = "I need you to search Google for recent news about {$search_keywords}. ";
         $prompt .= "Current date: {$current_date} ({$current_year})\n\n";
-        $prompt .= "Please use your Google Search capability to find actual news articles about 【{$search_keywords}】 from {$current_year} (especially recent 1-3 months).\n\n";
-        
-        $prompt .= "【CRITICAL REQUIREMENTS】:\n";
-        $prompt .= "1. MUST use Google Search to find real news articles\n";
-        $prompt .= "2. MUST include actual URLs from real news websites\n";
-        $prompt .= "3. NEVER create fake URLs or article titles\n";
-        $prompt .= "4. ONLY use {$current_year} news articles\n";
-        $prompt .= "5. NEVER use old articles (before 2024)\n\n";
+        $prompt .= "Search Google for: \"{$search_keywords} {$current_year} news latest\" and find 3-5 recent news articles.\n\n";
+        $prompt .= "Requirements:\n";
+        $prompt .= "- Search for current {$current_year} news only\n";
+        $prompt .= "- Include real URLs from news websites\n";
+        $prompt .= "- Write article in Japanese\n";
+        $prompt .= "- No fake URLs allowed\n\n";
         
         $prompt .= "【記事要求】:\n";
         $prompt .= "- 最新の業界動向を総合的にまとめた記事\n";
@@ -1491,15 +1489,10 @@ class AINewsAutoPoster {
                     )
                 )
             ),
-            // Google Search Grounding - google_search_retrieval使用
+            // Google Search Grounding - google_search使用
             'tools' => array(
                 array(
-                    'google_search_retrieval' => array(
-                        'dynamic_retrieval_config' => array(
-                            'mode' => 'MODE_DYNAMIC',
-                            'dynamic_threshold' => 0.7
-                        )
-                    )
+                    'google_search' => array()
                 )
             ),
             'generationConfig' => array(
