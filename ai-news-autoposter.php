@@ -995,8 +995,19 @@ class AINewsAutoPoster {
             )
         );
         
+        $this->log('info', '投稿データ配列作成完了。コンテンツサイズチェックを開始します。');
+        
         // 投稿データをデバッグログに記録
-        $content_length = mb_strlen($post_data['post_content']);
+        $this->log('info', 'コンテンツ長を計算中...');
+        
+        try {
+            $content_length = mb_strlen($post_data['post_content']);
+            $this->log('info', 'コンテンツ長計算完了: ' . $content_length . '文字');
+        } catch (Exception $e) {
+            $this->log('error', 'コンテンツ長計算エラー: ' . $e->getMessage());
+            $content_length = strlen($post_data['post_content']); // フォールバック
+        }
+        
         $this->log('info', '投稿データ詳細: タイトル=' . mb_strlen($post_data['post_title']) . '文字、コンテンツ=' . $content_length . '文字、ステータス=' . $post_data['post_status'] . '、カテゴリ=' . json_encode($post_data['post_category']));
         
         // コンテンツが長すぎる場合は短縮（データベースエラー回避）
