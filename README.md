@@ -6,7 +6,7 @@
 [![PHP](https://img.shields.io/badge/PHP-7.4+-purple.svg)](https://php.net)
 [![License](https://img.shields.io/badge/License-GPL%20v2-green.svg)](LICENSE)
 [![Claude AI](https://img.shields.io/badge/AI-Claude%20Sonnet%204-orange.svg)](https://anthropic.com)
-[![Version](https://img.shields.io/badge/Version-1.0.5-green.svg)](https://github.com/kitasinkita/ai-news-autoposter/releases)
+[![Version](https://img.shields.io/badge/Version-1.2.15-green.svg)](https://github.com/kitasinkita/ai-news-autoposter/releases)
 
 ## 📖 概要
 
@@ -250,19 +250,38 @@ ai-news-autoposter/
 
 ## 🔄 バージョン履歴
 
-### v1.0.5 (現在) ✅
+### v1.2.15 (現在) ✅
+- ✅ **タイトル解析機能向上** - 参考情報源のタイトル適切処理
+- ✅ **参考情報源表示改善** - HTMLタグ形式での表示
+- ✅ **LLMベースタイトル生成** - 機械的短縮から適切なタイトル生成へ
+- ✅ **Google Search Grounding対応** - 実URLでの記事統合
+- ✅ **UI/UX大幅改善** - 管理画面の使いやすさ向上
 - ✅ **Claudeモデル選択機能** - Haiku/Sonnet 3.5/Sonnet 4から選択可能
-- ✅ Claude Sonnet 4 モデル対応
-- ✅ 1時間間隔自動投稿システム
-- ✅ 多言語ニュース収集 (日本語・英語・中国語)
-- ✅ RSS依存排除 - Claude知識ベース活用
-- ✅ カスタムプロンプト機能
-- ✅ ネットワークタイムアウト対策 (360秒)
-- ✅ 参考リンク自動生成・クリック可能化
+- ✅ **多言語ニュース収集** (日本語・英語・中国語)
+- ✅ **RSS依存排除** - Claude知識ベース活用
+- ✅ **カスタムプロンプト機能**
+- ✅ **ネットワークタイムアウト対策** (360秒)
+- ✅ **参考リンク自動生成・クリック可能化**
 
-### v1.0.4
-- Claude Sonnet 4 対応とドキュメント更新
-- 村上春樹→夏目漱石への著作権対応
+### v1.2.14
+- 参考情報源のHTMLタグ表示に戻す
+
+### v1.2.13  
+- HTMLタグをMarkdown形式に変更
+
+### v1.2.12
+- タイトル長さ25-30文字に調整
+- 参考情報源のURL処理簡素化
+
+### v1.2.11
+- 機械的タイトル短縮を削除
+- LLMによる適切なタイトル生成に変更
+
+### v1.2.10
+- タイトルとHTML問題修正
+
+### v1.2.9
+- 主要なUI/UX改善
 
 ### 今後の予定
 - [ ] 外部ニュースAPI統合（複雑性を避け現在見送り中）

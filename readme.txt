@@ -4,7 +4,7 @@ Tags: ai, automation, news, claude, seo, auto-post, artificial intelligence
 Requires at least: 5.0
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.0.5
+Stable tag: 1.2.15
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,33 @@ Claude Sonnet 4の高度な言語能力により、人間レベルの自然な�
 
 == Changelog ==
 
+= 1.2.15 =
+* タイトル解析機能向上 - 参考情報源のタイトル適切処理
+* 参考情報源表示改善 - HTMLタグ形式での表示
+* LLMベースタイトル生成 - 機械的短縮から適切なタイトル生成へ
+* Google Search Grounding対応 - 実URLでの記事統合
+* UI/UX大幅改善 - 管理画面の使いやすさ向上
+
+= 1.2.14 =
+* 参考情報源のHTMLタグ表示に戻す
+
+= 1.2.13 =
+* HTMLタグをMarkdown形式に変更
+
+= 1.2.12 =
+* タイトル長さ25-30文字に調整
+* 参考情報源のURL処理簡素化
+
+= 1.2.11 =
+* 機械的タイトル短縮を削除
+* LLMによる適切なタイトル生成に変更
+
+= 1.2.10 =
+* タイトルとHTML問題修正
+
+= 1.2.9 =
+* 主要なUI/UX改善
+
 = 1.0.0 =
 * 初期リリース
 * Claude AI統合
@@ -140,6 +167,9 @@ Claude Sonnet 4の高度な言語能力により、人間レベルの自然な�
 * REST API
 
 == Upgrade Notice ==
+
+= 1.2.15 =
+タイトル解析機能とUI/UX改善。既存のユーザーは設定の再確認を推奨。
 
 = 1.0.0 =
 初期リリース。Claude APIキーの設定が必要です。
