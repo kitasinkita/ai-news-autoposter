@@ -1119,6 +1119,20 @@ class AINewsAutoPoster {
             }
         }
         
+        $this->log('info', 'カテゴリ処理完了。wp_insert_postの準備を開始します。');
+        
+        // メモリ不足やPHPエラーを防ぐための事前処理
+        ini_set('memory_limit', '512M');
+        set_time_limit(300); // 5分のタイムアウト
+        
+        // 最終コンテンツサイズチェックと緊急短縮
+        $final_content_length = mb_strlen($post_data['post_content']);
+        if ($final_content_length > 3000) {
+            $this->log('warning', '最終コンテンツが長すぎます(' . $final_content_length . '文字)。3000文字に緊急短縮します。');
+            $post_data['post_content'] = mb_substr($post_data['post_content'], 0, 2800) . "\n\n※ 記事が長いため緊急短縮しています。";
+            $this->log('info', '緊急短縮後のコンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字');
+        }
+        
         // wp_insert_post実行直前の最終ログ
         $memory_usage = memory_get_usage(true) / 1024 / 1024; // MB
         $memory_peak = memory_get_peak_usage(true) / 1024 / 1024; // MB
