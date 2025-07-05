@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.0
+ * Version: 1.2.1
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.0');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.1');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -612,9 +612,13 @@ class AINewsAutoPoster {
      * API接続テスト（Ajax）
      */
     public function test_api_connection() {
-        if (!wp_verify_nonce($_POST['nonce'], 'ai_news_autoposter_nonce')) {
-            wp_die('Security check failed');
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'ai_news_autoposter_nonce')) {
+            $this->log('error', 'API接続テスト: Nonce検証失敗');
+            wp_send_json_error('セキュリティチェックに失敗しました。');
+            return;
         }
+        
+        $this->log('info', 'API接続テストを開始します');
         
         $settings = get_option('ai_news_autoposter_settings', array());
         $model = $settings['claude_model'] ?? 'claude-3-5-haiku-20241022';
@@ -646,9 +650,13 @@ class AINewsAutoPoster {
      * テスト記事生成（Ajax）
      */
     public function generate_test_article() {
-        if (!wp_verify_nonce($_POST['nonce'], 'ai_news_autoposter_nonce')) {
-            wp_die('Security check failed');
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'ai_news_autoposter_nonce')) {
+            $this->log('error', 'テスト記事生成: Nonce検証失敗');
+            wp_send_json_error('セキュリティチェックに失敗しました。');
+            return;
         }
+        
+        $this->log('info', 'テスト記事生成を開始します');
         
         $result = $this->generate_and_publish_article(true);
         
@@ -716,8 +724,10 @@ class AINewsAutoPoster {
      * 今すぐ投稿（Ajax）
      */
     public function manual_post_now() {
-        if (!wp_verify_nonce($_POST['nonce'], 'ai_news_autoposter_nonce')) {
-            wp_die('Security check failed');
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'ai_news_autoposter_nonce')) {
+            $this->log('error', '手動投稿: Nonce検証失敗');
+            wp_send_json_error('セキュリティチェックに失敗しました。');
+            return;
         }
         
         // タイムアウトを延長
@@ -832,7 +842,7 @@ class AINewsAutoPoster {
         if ($is_gemini) {
             $this->log('info', 'Gemini APIを呼び出します...');
             // Gemini用にWeb検索特化プロンプトを使用
-            $gemini_prompt = $this->build_gemini_search_prompt($settings);
+            $gemini_prompt = $this->build_gemini_search_prompt($settings, $model);
             $ai_response = $this->call_gemini_api($gemini_prompt, $settings['gemini_api_key'] ?? '', $model);
         } else {
             $this->log('info', 'Claude APIを呼び出します...');
@@ -1077,7 +1087,7 @@ class AINewsAutoPoster {
     /**
      * Gemini用Web検索特化プロンプト構築
      */
-    private function build_gemini_search_prompt($settings) {
+    private function build_gemini_search_prompt($settings, $model = '') {
         $search_keywords = $settings['search_keywords'] ?? 'AI ニュース, 人工知能, 機械学習, ChatGPT, OpenAI';
         $selected_languages = $settings['news_languages'] ?? array('japanese', 'english');
         $word_count = $settings['article_word_count'] ?? 500;
@@ -1523,7 +1533,7 @@ class AINewsAutoPoster {
             $this->log('info', 'Gemini 2.5でGoogle Search Grounding有効化');
         }
         
-        $this->log('info', 'Google Search Grounding設定: ' . json_encode($body['tools']));
+        $this->log('info', 'Google Search Grounding設定: ' . json_encode($body['tools'] ?? null));
         
         $response = wp_remote_post($url, array(
             'headers' => array(
