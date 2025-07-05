@@ -593,6 +593,8 @@ class AINewsAutoPoster {
             <div class="ai-news-status-card">
                 <div style="margin-bottom: 15px;">
                     <button type="button" class="ai-news-button-secondary" id="clear-logs">ログをクリア</button>
+                    <button type="button" class="ai-news-button-primary" id="copy-logs" style="margin-left: 10px;">全ログをコピー</button>
+                    <button type="button" class="ai-news-button-primary" id="copy-latest-logs" style="margin-left: 10px;">最新投稿ログをコピー</button>
                 </div>
                 
                 <table class="wp-list-table widefat fixed striped">
@@ -623,6 +625,34 @@ class AINewsAutoPoster {
                         <?php endif; ?>
                     </tbody>
                 </table>
+                
+                <!-- ログデータをJavaScript用に準備 -->
+                <textarea id="log-data-all" style="display: none;"><?php
+                    foreach ($logs as $log) {
+                        echo esc_html($log['timestamp']) . "\t" . esc_html(strtoupper($log['level'])) . "\t" . esc_html($log['message']) . "\n";
+                    }
+                ?></textarea>
+                
+                <textarea id="log-data-latest" style="display: none;"><?php
+                    // 最新の投稿ログ（手動投稿開始から成功/失敗まで）を抽出
+                    $latest_logs = array();
+                    $collecting = false;
+                    foreach (array_reverse($logs) as $log) {
+                        if (strpos($log['message'], '手動投稿を開始します') !== false) {
+                            $collecting = true;
+                            $latest_logs = array($log);
+                        } elseif ($collecting) {
+                            array_unshift($latest_logs, $log);
+                            if (strpos($log['message'], '手動投稿成功') !== false || 
+                                strpos($log['message'], '手動投稿失敗') !== false) {
+                                break;
+                            }
+                        }
+                    }
+                    foreach ($latest_logs as $log) {
+                        echo esc_html($log['timestamp']) . "\t" . esc_html(strtoupper($log['level'])) . "\t" . esc_html($log['message']) . "\n";
+                    }
+                ?></textarea>
             </div>
         </div>
         <?php

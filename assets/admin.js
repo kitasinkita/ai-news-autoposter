@@ -41,6 +41,10 @@
             // ログクリアボタン
             $(document).on('click', '#clear-logs', this.clearLogs);
             
+            // ログコピーボタン
+            $(document).on('click', '#copy-logs', this.copyAllLogs);
+            $(document).on('click', '#copy-latest-logs', this.copyLatestLogs);
+            
             // 手動記事生成（管理バー）
             $(document).on('click', '#wp-admin-bar-ai-news-generate a', this.generateFromAdminBar);
             
@@ -336,10 +340,77 @@
                 success: function(response) {
                     if (response.success) {
                         $('#log-entries').empty().append('<tr><td colspan="3">ログがありません。</td></tr>');
+                        $('#log-data-all, #log-data-latest').val(''); // コピー用データもクリア
                         AINewsAutoPoster.showNotification('success', 'ログを削除しました。');
                     }
                 }
             });
+        },
+        
+        copyAllLogs: function(e) {
+            e.preventDefault();
+            
+            const logData = $('#log-data-all').val();
+            
+            if (!logData.trim()) {
+                AINewsAutoPoster.showNotification('warning', 'コピーするログがありません。');
+                return;
+            }
+            
+            AINewsAutoPoster.copyToClipboard(logData, '全ログ');
+        },
+        
+        copyLatestLogs: function(e) {
+            e.preventDefault();
+            
+            const logData = $('#log-data-latest').val();
+            
+            if (!logData.trim()) {
+                AINewsAutoPoster.showNotification('warning', '最新投稿のログがありません。');
+                return;
+            }
+            
+            AINewsAutoPoster.copyToClipboard(logData, '最新投稿ログ');
+        },
+        
+        copyToClipboard: function(text, description) {
+            // モダンブラウザ対応
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(function() {
+                    AINewsAutoPoster.showNotification('success', description + 'をクリップボードにコピーしました。');
+                }).catch(function(err) {
+                    AINewsAutoPoster.fallbackCopy(text, description);
+                });
+            } else {
+                // フォールバック方式
+                AINewsAutoPoster.fallbackCopy(text, description);
+            }
+        },
+        
+        fallbackCopy: function(text, description) {
+            // 一時的なテキストエリアを作成
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            textArea.style.top = '-999999px';
+            document.body.appendChild(textArea);
+            
+            try {
+                textArea.focus();
+                textArea.select();
+                const successful = document.execCommand('copy');
+                
+                if (successful) {
+                    AINewsAutoPoster.showNotification('success', description + 'をクリップボードにコピーしました。');
+                } else {
+                    AINewsAutoPoster.showNotification('error', 'コピーに失敗しました。手動で選択してコピーしてください。');
+                }
+            } catch (err) {
+                AINewsAutoPoster.showNotification('error', 'コピー機能がサポートされていません。');
+            } finally {
+                document.body.removeChild(textArea);
+            }
         },
         
         autoSave: function() {
