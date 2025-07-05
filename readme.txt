@@ -12,14 +12,15 @@ Claude Sonnet 4を使用してAIニュースを自動生成・投稿するプラ
 
 == Description ==
 
-AI News AutoPosterは、Claude Sonnet 4を使用して最新のAIニュースを自動生成・投稿するWordPressプラグインです。夏目漱石風の文学的な文体で、高品質なAI記事を1時間間隔で自動生成します。
+AI News AutoPosterは、Claude Sonnet 4とGemini 2.5 Flashを使用して最新のAIニュースを自動生成・投稿するWordPressプラグインです。Geminiの Google Search Grounding により2024年末までの最新ニュースを取り込み、夏目漱石風の文学的な文体で高品質なAI記事を1時間間隔で自動生成します。
 
 = 主な機能 =
 
 **🤖 AI記事自動生成**
-* Claude Sonnet 4による高品質記事生成
+* Claude Sonnet 4とGemini 2.5 Flashによる高品質記事生成
+* Google Search Grounding - 最新ニュース取り込み
 * 夏目漱石風の文学的文体対応
-* RSS不要 - Claude知識ベース活用
+* 2024年末までの最新情報対応
 * 自動タグ・カテゴリ設定
 
 **⏰ 完全自動スケジューリング**
@@ -50,16 +51,17 @@ AI News AutoPosterは、Claude Sonnet 4を使用して最新のAIニュースを
 
 * WordPress 5.8以上
 * PHP 7.4以上
-* Claude API キー（Anthropicアカウント必須）
+* Claude API キー（Anthropicアカウント）または Gemini API キー（Googleアカウント）
 * 最低256MB メモリ推奨
 
 = 使用方法 =
 
 1. プラグインをインストール・有効化
-2. AnthropicでClaude APIキーを取得
+2. AnthropicでClaude APIキー、またはGoogle AI StudioでGemini APIキーを取得
 3. 設定画面でAPIキーを入力
-4. 投稿時刻・カテゴリ等を設定
-5. 自動投稿を有効化
+4. 使用するAIモデルを選択（Gemini 2.5 Flash推奨）
+5. 投稿時刻・カテゴリ等を設定
+6. 自動投稿を有効化
 
 = ショートコード =
 
@@ -97,11 +99,11 @@ AI News AutoPosterは、Claude Sonnet 4を使用して最新のAIニュースを
 
 = 無料で使用できますか？ =
 
-プラグイン自体は無料ですが、Claude APIの利用料金が発生します。月$5-50程度（使用量による）
+プラグイン自体は無料ですが、AIモデルの利用料金が発生します。Claude: 月$30-150程度、Gemini: 月$6-30程度（使用量による）
 
 = 他のAIサービスに対応していますか？ =
 
-現在はClaude専用ですが、将来的にOpenAI GPTにも対応予定です。
+現在はClaudeとGeminiに対応済みです。Gemini 2.5 Flashが最新ニュース取り込みにより推奨されています。
 
 = マルチサイトで使用できますか？ =
 
@@ -113,7 +115,7 @@ Yoast SEO、RankMath、All in One SEOに対応済みです。
 
 = 記事の品質はどうですか？ =
 
-Claude Sonnet 4の高度な言語能力により、人間レベルの自然な記事を生成できます。
+Claude Sonnet 4とGemini 2.5 Flashの高度な言語能力により、人間レベルの自然な記事を生成できます。特にGeminiは最新ニュース情報を取り込むため、より正確で現在性のある記事を作成できます。
 
 = サーバー要件はありますか？ =
 

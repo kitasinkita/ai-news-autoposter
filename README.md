@@ -10,14 +10,15 @@
 
 ## 📖 概要
 
-AI News AutoPosterは、最新の**Claude Sonnet 4**を活用してAI関連ニュースを自動生成・投稿するWordPressプラグインです。RSS依存を排除し、Claudeの知識ベースを活用して高品質な記事を1時間間隔で自動投稿します。多言語対応、カスタムプロンプト、SEO最適化機能を備えた完全自動システムです。
+AI News AutoPosterは、**Claude Sonnet 4**と**Gemini 2.5 Flash**を活用してAI関連ニュースを自動生成・投稿するWordPressプラグインです。Geminiの**Google Search Grounding**により2024年末までの最新ニュースを取り込み、高品質な記事を1時間間隔で自動投稿します。多言語対応、カスタムプロンプト、SEO最適化機能を備えた完全自動システムです。
 
 ## ✨ 主な機能
 
 ### 🤖 AI記事自動生成
-- **Claudeモデル選択** - Haiku (高速・低コスト) / Sonnet 3.5 (バランス) / Sonnet 4 (最高品質)
+- **AIモデル選択** - Claude (Haiku/Sonnet 3.5/Sonnet 4) / Gemini (1.5 Flash/2.0 Flash/2.5 Flash)
+- **Google Search Grounding** - Gemini 2.5による最新ニュース取り込み
 - **多言語対応** (日本語・英語・中国語)
-- **RSS不要** - Claudeの内蔵知識ベース活用
+- **最新情報対応** - 2024年末までの最新知識活用
 - **カスタムプロンプト** 対応
 - **自動参考リンク** 生成とクリック可能化
 
@@ -62,11 +63,18 @@ git clone https://github.com/kitasinkita/ai-news-autoposter.git
 
 WordPress管理画面の「プラグイン」でAI News AutoPosterを有効化
 
-### 3. Claude API設定
+### 3. AIモデル設定
 
+**Claude使用の場合:**
 1. [Anthropic Console](https://console.anthropic.com/)でAPIキー取得
 2. WordPress管理画面「AI News AutoPoster」→「設定」
-3. APIキーを入力・保存
+3. Claude APIキーを入力・保存
+
+**Gemini使用の場合（推奨）:**
+1. [Google AI Studio](https://aistudio.google.com/)でGemini APIキー取得
+2. WordPress管理画面「AI News AutoPoster」→「設定」
+3. Gemini APIキーを入力・保存
+4. モデルでGemini 2.5 Flashを選択（最新ニュース対応）
 
 ### 4. 基本設定
 
@@ -88,7 +96,7 @@ WordPress管理画面の「プラグイン」でAI News AutoPosterを有効化
 
 - **WordPress**: 5.0以上 (WordPress 6.4まで対応確認済み)
 - **PHP**: 7.4以上  
-- **Claude API**: Anthropicアカウント必須 (Sonnet 4対応)
+- **AIモデル**: Claude API (Anthropic) または Gemini API (Google) 必須
 - **メモリ**: 最低256MB推奨
 - **ネットワーク**: 安定したインターネット接続
 
@@ -97,14 +105,26 @@ WordPress管理画面の「プラグイン」でAI News AutoPosterを有効化
 ### プラグイン
 - **無料** (GPL v2ライセンス)
 
-### Claude Sonnet 4 API利用料
+### AIモデル利用料
+
+**Claude Sonnet 4 API:**
 - **入力**: $3/百万トークン
 - **出力**: $15/百万トークン
 
+**Gemini 2.5 Flash API（推奨）:**
+- **1,000クエリ**: $35
+- **Google Search Grounding**: 最新ニュース取り込み対応
+
 ### 月間コスト例（1時間間隔投稿）
+**Claude使用時:**
 - **1日24記事**: ~$120-150
 - **12時間運用**: ~$60-75
 - **6時間運用**: ~$30-40
+
+**Gemini使用時:**
+- **1日24記事**: ~$25-30
+- **12時間運用**: ~$12-15
+- **6時間運用**: ~$6-8
 
 ## 🎯 使用方法
 
@@ -251,14 +271,15 @@ ai-news-autoposter/
 ## 🔄 バージョン履歴
 
 ### v1.2.15 (現在) ✅
+- ✅ **Gemini 2.5 Flash対応** - Google Search Grounding機能付き
+- ✅ **最新ニュース取り込み** - 2024年末までの最新情報対応
 - ✅ **タイトル解析機能向上** - 参考情報源のタイトル適切処理
 - ✅ **参考情報源表示改善** - HTMLタグ形式での表示
 - ✅ **LLMベースタイトル生成** - 機械的短縮から適切なタイトル生成へ
 - ✅ **Google Search Grounding対応** - 実URLでの記事統合
 - ✅ **UI/UX大幅改善** - 管理画面の使いやすさ向上
-- ✅ **Claudeモデル選択機能** - Haiku/Sonnet 3.5/Sonnet 4から選択可能
+- ✅ **AIモデル選択機能** - Claude (Haiku/Sonnet 3.5/Sonnet 4) / Gemini (1.5/2.0/2.5 Flash)
 - ✅ **多言語ニュース収集** (日本語・英語・中国語)
-- ✅ **RSS依存排除** - Claude知識ベース活用
 - ✅ **カスタムプロンプト機能**
 - ✅ **ネットワークタイムアウト対策** (360秒)
 - ✅ **参考リンク自動生成・クリック可能化**
@@ -299,6 +320,7 @@ GPL v2 or later - 詳細は[LICENSE](LICENSE)ファイルを参照
 ## 🙏 謝辞
 
 - [Anthropic](https://anthropic.com) - Claude Sonnet 4 AI提供
+- [Google](https://ai.google.dev) - Gemini 2.5 Flash AI提供
 - [WordPress](https://wordpress.org) - 素晴らしいCMSプラットフォーム
 - 夏目漱石 - デフォルト文体インスピレーション
 
