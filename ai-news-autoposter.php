@@ -958,6 +958,15 @@ class AINewsAutoPoster {
         global $wpdb;
         $this->log('info', 'データベース接続状態: ' . ($wpdb->check_connection() ? '正常' : '異常'));
         
+        // データベース設定を確認
+        $max_allowed_packet = $wpdb->get_var("SELECT @@max_allowed_packet");
+        $this->log('info', 'max_allowed_packet: ' . number_format($max_allowed_packet) . ' bytes');
+        
+        // 文字セットを確認
+        $charset = $wpdb->get_var("SELECT @@character_set_database");
+        $collation = $wpdb->get_var("SELECT @@collation_database");
+        $this->log('info', 'DB文字セット: ' . $charset . ', 照合順序: ' . $collation);
+        
         // 投稿前にデータベースエラーをクリア
         $wpdb->flush();
         $wpdb->last_error = '';
@@ -966,6 +975,41 @@ class AINewsAutoPoster {
         $post_data['post_title'] = sanitize_text_field($post_data['post_title']);
         $post_data['post_content'] = wp_kses_post($post_data['post_content']);
         $post_data['post_excerpt'] = isset($post_data['post_excerpt']) ? sanitize_text_field($post_data['post_excerpt']) : '';
+        
+        // 特殊文字の問題を確認
+        $title_clean = mb_convert_encoding($post_data['post_title'], 'UTF-8', 'UTF-8');
+        $content_clean = mb_convert_encoding($post_data['post_content'], 'UTF-8', 'UTF-8');
+        
+        if ($title_clean !== $post_data['post_title']) {
+            $this->log('warning', 'タイトルに不正な文字が含まれています');
+            $post_data['post_title'] = $title_clean;
+        }
+        
+        if ($content_clean !== $post_data['post_content']) {
+            $this->log('warning', 'コンテンツに不正な文字が含まれています');
+            $post_data['post_content'] = $content_clean;
+        }
+        
+        // 最小限のテストデータで投稿を試行
+        $test_post_data = array(
+            'post_title' => 'テスト投稿',
+            'post_content' => '<p>これはテスト投稿です。</p>',
+            'post_status' => 'draft',
+            'post_type' => 'post',
+            'post_category' => array(1)
+        );
+        
+        $this->log('info', '最小限のテストデータで投稿を試行');
+        $test_id = wp_insert_post($test_post_data, true);
+        
+        if (is_wp_error($test_id)) {
+            $this->log('error', '最小限のテストデータでも投稿失敗: ' . $test_id->get_error_message());
+        } else if ($test_id === 0) {
+            $this->log('error', '最小限のテストデータでもwp_insert_postが0を返しました');
+        } else {
+            $this->log('info', 'テスト投稿成功。ID: ' . $test_id . ' - 削除します');
+            wp_delete_post($test_id, true);
+        }
         
         // カテゴリの検証
         if (isset($post_data['post_category']) && is_array($post_data['post_category'])) {
