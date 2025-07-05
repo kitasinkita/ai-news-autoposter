@@ -311,7 +311,26 @@ class AINewsAutoPoster {
         }
         
         $settings = get_option('ai_news_autoposter_settings', array());
-        $categories = get_categories();
+        
+        // カテゴリ取得とデバッグ
+        $categories = get_categories(array('hide_empty' => false)); // 空のカテゴリも表示
+        
+        // フォールバック: カテゴリが取得できない場合はデフォルトカテゴリを追加
+        if (empty($categories)) {
+            $default_category = get_category(1); // 未分類カテゴリ
+            if ($default_category) {
+                $categories = array($default_category);
+            } else {
+                // 総てのカテゴリを直接取得
+                global $wpdb;
+                $categories = $wpdb->get_results("SELECT term_id, name FROM {$wpdb->terms} t INNER JOIN {$wpdb->term_taxonomy} tt ON t.term_id = tt.term_id WHERE tt.taxonomy = 'category'");
+                
+                // それでも空の場合は緊急フォールバック
+                if (empty($categories)) {
+                    $categories = array((object) array('term_id' => 1, 'name' => '未分類'));
+                }
+            }
+        }
         ?>
         
         <div class="wrap">
