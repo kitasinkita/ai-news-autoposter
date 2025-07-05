@@ -905,11 +905,20 @@ class AINewsAutoPoster {
         
         // 投稿データを準備
         $this->log('info', 'WordPress投稿データを準備中...');
+        
+        // カテゴリ設定を確認
+        $category = $settings['post_category'] ?? get_option('default_category');
+        if (empty($category) || !category_exists($category)) {
+            $category = 1; // デフォルトカテゴリ「未分類」
+            $this->log('warning', 'カテゴリが無効のため、デフォルトカテゴリ(1)を使用します');
+        }
+        
         $post_data = array(
             'post_title' => $article_data['title'],
             'post_content' => $article_data['content'],
             'post_status' => $is_test ? 'draft' : ($settings['post_status'] ?? 'publish'),
-            'post_category' => array($settings['post_category'] ?? get_option('default_category')),
+            'post_category' => array($category),
+            'post_type' => 'post', // 明示的に指定
             'meta_input' => array(
                 '_ai_generated' => true,
                 '_ai_post_type' => $is_test ? 'test' : $post_type, // 投稿タイプを記録
@@ -918,13 +927,42 @@ class AINewsAutoPoster {
             )
         );
         
+        // 投稿データをデバッグログに記録
+        $this->log('info', '投稿データ詳細: タイトル=' . mb_strlen($post_data['post_title']) . '文字、コンテンツ=' . mb_strlen($post_data['post_content']) . '文字、ステータス=' . $post_data['post_status'] . '、カテゴリ=' . json_encode($post_data['post_category']));
+        
         // 投稿作成
         $this->log('info', 'WordPressに投稿を作成中...');
-        $post_id = wp_insert_post($post_data);
+        
+        // WordPressエラーログを有効化
+        $original_error_reporting = error_reporting();
+        error_reporting(E_ALL);
+        
+        $post_id = wp_insert_post($post_data, true); // true: より詳細なエラー情報
+        
+        error_reporting($original_error_reporting);
         
         if (is_wp_error($post_id)) {
-            $this->log('error', '投稿作成に失敗: ' . $post_id->get_error_message());
+            $error_messages = array();
+            foreach ($post_id->get_error_codes() as $code) {
+                $error_messages[] = $code . ': ' . implode(', ', $post_id->get_error_messages($code));
+            }
+            $this->log('error', '投稿作成に失敗: ' . implode(' | ', $error_messages));
             return $post_id;
+        }
+        
+        // 投稿ID: 0も失敗として扱う
+        if ($post_id === 0 || empty($post_id)) {
+            $this->log('error', '投稿作成に失敗: wp_insert_post returned 0');
+            $this->log('error', '投稿データデバッグ: タイトル="' . mb_substr($post_data['post_title'], 0, 100) . '"');
+            $this->log('error', 'コンテンツ先頭100文字: "' . mb_substr(strip_tags($post_data['post_content']), 0, 100) . '"');
+            
+            // 最後の WordPress エラーを取得
+            global $wpdb;
+            if ($wpdb->last_error) {
+                $this->log('error', 'WordPress DB エラー: ' . $wpdb->last_error);
+            }
+            
+            return new WP_Error('post_creation_failed', 'WordPressへの投稿作成に失敗しました。');
         }
         
         $this->log('info', '投稿作成成功。投稿ID: ' . $post_id);
