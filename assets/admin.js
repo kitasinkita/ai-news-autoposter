@@ -226,16 +226,26 @@
         },
         
         validateSettings: function(e) {
-            const apiKey = $('#claude_api_key').val().trim();
+            const selectedModel = $('select[name="claude_model"]').val();
+            const claudeApiKey = $('#claude_api_key').val().trim();
+            const geminiApiKey = $('#gemini_api_key').val().trim();
             const maxPosts = parseInt($('#max_posts_per_day').val());
             
             let errors = [];
             
-            // API キー検証
-            if (!apiKey) {
-                errors.push('Claude API キーは必須です。');
-            } else if (!apiKey.startsWith('sk-ant-')) {
-                errors.push('Claude API キーの形式が正しくありません。');
+            // API キー検証（選択モデルに応じて）
+            if (selectedModel && selectedModel.startsWith('claude-')) {
+                // Claudeモデル選択時はClaude APIキーが必要
+                if (!claudeApiKey) {
+                    errors.push('Claude API キーは必須です。');
+                } else if (!claudeApiKey.startsWith('sk-ant-')) {
+                    errors.push('Claude API キーの形式が正しくありません。');
+                }
+            } else if (selectedModel && selectedModel.startsWith('gemini-')) {
+                // Geminiモデル選択時はGemini APIキーが必要
+                if (!geminiApiKey) {
+                    errors.push('Gemini API キーは必須です。');
+                }
             }
             
             // 投稿数検証

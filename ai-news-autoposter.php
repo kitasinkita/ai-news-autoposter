@@ -339,15 +339,9 @@ class AINewsAutoPoster {
             <form method="post" action="" id="ai-news-settings-form">
                 <?php wp_nonce_field('ai_news_autoposter_settings', 'ai_news_autoposter_nonce'); ?>
                 
+                <!-- ===== AI・モデル設定 ===== -->
+                <h2 class="ai-news-section-title">🤖 AI・モデル設定</h2>
                 <table class="ai-news-form-table">
-                    <tr>
-                        <th scope="row">Claude API キー</th>
-                        <td>
-                            <input type="password" id="claude_api_key" name="claude_api_key" value="<?php echo esc_attr($settings['claude_api_key'] ?? ''); ?>" class="regular-text" />
-                            <p class="ai-news-form-description">AnthropicのClaude APIキーを入力してください。</p>
-                        </td>
-                    </tr>
-                    
                     <tr>
                         <th scope="row">AIモデル</th>
                         <td>
@@ -364,6 +358,14 @@ class AINewsAutoPoster {
                     </tr>
                     
                     <tr>
+                        <th scope="row">Claude API キー</th>
+                        <td>
+                            <input type="password" id="claude_api_key" name="claude_api_key" value="<?php echo esc_attr($settings['claude_api_key'] ?? ''); ?>" class="regular-text" />
+                            <p class="ai-news-form-description">AnthropicのClaude APIキーを入力してください。Claudeモデル使用時に必要です。</p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
                         <th scope="row">Gemini API キー</th>
                         <td>
                             <input type="password" id="gemini_api_key" name="gemini_api_key" value="<?php echo esc_attr($settings['gemini_api_key'] ?? ''); ?>" class="regular-text" />
@@ -371,6 +373,153 @@ class AINewsAutoPoster {
                         </td>
                     </tr>
                     
+                    <tr>
+                        <th scope="row">画像生成方式</th>
+                        <td>
+                            <select name="image_generation_type">
+                                <option value="none" <?php selected($settings['image_generation_type'] ?? 'placeholder', 'none'); ?>>なし（アイキャッチ画像を生成しない）</option>
+                                <option value="placeholder" <?php selected($settings['image_generation_type'] ?? 'placeholder', 'placeholder'); ?>>プレースホルダー画像</option>
+                                <option value="dalle" <?php selected($settings['image_generation_type'] ?? 'placeholder', 'dalle'); ?>>DALL-E 3（OpenAI）</option>
+                                <option value="unsplash" <?php selected($settings['image_generation_type'] ?? 'placeholder', 'unsplash'); ?>>Unsplash画像検索</option>
+                            </select>
+                            <p class="ai-news-form-description">アイキャッチ画像の生成方式を選択してください。</p>
+                        </td>
+                    </tr>
+                    
+                    <tr id="dalle-api-key-row" style="display: <?php echo ($settings['image_generation_type'] ?? '') === 'dalle' ? 'table-row' : 'none'; ?>;">
+                        <th scope="row">DALL-E API キー</th>
+                        <td>
+                            <input type="password" name="dalle_api_key" value="<?php echo esc_attr($settings['dalle_api_key'] ?? ''); ?>" class="regular-text" />
+                            <p class="ai-news-form-description">OpenAIのAPIキーを入力してください。</p>
+                        </td>
+                    </tr>
+                    
+                    <tr id="unsplash-access-key-row" style="display: <?php echo ($settings['image_generation_type'] ?? '') === 'unsplash' ? 'table-row' : 'none'; ?>;">
+                        <th scope="row">Unsplash Access Key</th>
+                        <td>
+                            <input type="password" name="unsplash_access_key" value="<?php echo esc_attr($settings['unsplash_access_key'] ?? ''); ?>" class="regular-text" />
+                            <p class="ai-news-form-description">UnsplashのAccess Keyを入力してください。</p>
+                        </td>
+                    </tr>
+                </table>
+                
+                <!-- ===== キーワード・SEO設定 ===== -->
+                <h2 class="ai-news-section-title">🎯 キーワード・SEO設定</h2>
+                <table class="ai-news-form-table">
+                    <tr>
+                        <th scope="row">検索キーワード</th>
+                        <td>
+                            <input type="text" name="search_keywords" value="<?php echo esc_attr($settings['search_keywords'] ?? 'AI ニュース, 人工知能, 機械学習, ChatGPT, OpenAI'); ?>" class="large-text ai-news-autosave" />
+                            <p class="ai-news-form-description">記事生成時に検索するキーワードをカンマ区切りで入力してください。</p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">SEO フォーカスキーワード</th>
+                        <td>
+                            <input type="text" name="seo_focus_keyword" value="<?php echo esc_attr($settings['seo_focus_keyword'] ?? 'AI ニュース'); ?>" class="regular-text ai-news-autosave" />
+                            <p class="ai-news-form-description">記事のSEO対策で重要視するキーワードを設定してください。</p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">メタディスクリプションテンプレート</th>
+                        <td>
+                            <textarea name="meta_description_template" rows="3" class="large-text ai-news-autosave"><?php echo esc_textarea($settings['meta_description_template'] ?? ''); ?></textarea>
+                            <p class="ai-news-form-description">{title} はタイトルに置換されます。</p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">タグ自動生成</th>
+                        <td>
+                            <label>
+                                <input type="checkbox" name="enable_tags" <?php checked($settings['enable_tags'] ?? true); ?> />
+                                AIが関連タグを自動生成する
+                            </label>
+                        </td>
+                    </tr>
+                </table>
+                
+                <!-- ===== 記事生成設定 ===== -->
+                <h2 class="ai-news-section-title">📝 記事生成設定</h2>
+                <table class="ai-news-form-table">
+                    <tr>
+                        <th scope="row">文体スタイル</th>
+                        <td>
+                            <input type="text" name="writing_style" value="<?php echo esc_attr($settings['writing_style'] ?? '夏目漱石'); ?>" class="regular-text ai-news-autosave" />
+                            <p class="ai-news-form-description">記事の文体スタイルを指定してください（例：夏目漱石、森鴎外、新聞記事風など）。</p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">記事文字数</th>
+                        <td>
+                            <input type="number" name="article_word_count" value="<?php echo esc_attr($settings['article_word_count'] ?? 500); ?>" min="100" max="3000" step="50" class="small-text" />
+                            <span>文字程度</span>
+                            <p class="ai-news-form-description">生成する記事の目安文字数を設定してください（100〜3000文字）。</p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">ニュース収集言語</th>
+                        <td>
+                            <label><input type="checkbox" name="news_languages[]" value="japanese" <?php checked(in_array('japanese', $settings['news_languages'] ?? array())); ?> /> 日本語</label><br>
+                            <label><input type="checkbox" name="news_languages[]" value="english" <?php checked(in_array('english', $settings['news_languages'] ?? array())); ?> /> 英語</label><br>
+                            <label><input type="checkbox" name="news_languages[]" value="chinese" <?php checked(in_array('chinese', $settings['news_languages'] ?? array())); ?> /> 中国語</label>
+                            <p class="ai-news-form-description">収集するニュースの言語を選択してください。複数選択可能です。</p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">記事出力言語</th>
+                        <td>
+                            <select name="output_language">
+                                <option value="japanese" <?php selected($settings['output_language'] ?? 'japanese', 'japanese'); ?>>日本語</option>
+                                <option value="english" <?php selected($settings['output_language'] ?? 'japanese', 'english'); ?>>英語</option>
+                                <option value="chinese" <?php selected($settings['output_language'] ?? 'japanese', 'chinese'); ?>>中国語</option>
+                            </select>
+                            <p class="ai-news-form-description">生成される記事の言語を選択してください。</p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">免責事項</th>
+                        <td>
+                            <label>
+                                <input type="checkbox" name="enable_disclaimer" <?php checked($settings['enable_disclaimer'] ?? true); ?> />
+                                記事末尾に免責事項を表示する
+                            </label>
+                            <div style="margin-top: 10px;">
+                                <textarea name="disclaimer_text" rows="3" class="large-text"><?php echo esc_textarea($settings['disclaimer_text'] ?? '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。'); ?></textarea>
+                                <p class="ai-news-form-description">記事末尾に表示する免責事項の文言を設定してください。</p>
+                            </div>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">カスタムプロンプト</th>
+                        <td>
+                            <textarea name="custom_prompt" rows="8" class="large-text" placeholder="空白の場合はデフォルトプロンプトを使用します"><?php echo esc_textarea($settings['custom_prompt'] ?? ''); ?></textarea>
+                            <p class="ai-news-form-description">
+                                Claude AIに送信するカスタムプロンプトを設定できます。以下のプレースホルダーが使用可能です：<br>
+                                <code>{言語}</code> - ニュース収集言語<br>
+                                <code>{キーワード}</code> - 検索キーワード<br>
+                                <code>{文字数}</code> - 記事文字数<br>
+                                <code>{文体}</code> - 文体スタイル<br><br>
+                                <strong>デフォルトプロンプト例：</strong><br>
+                                【{言語}】のニュースから、【{キーワード}】に関する最新のニュースを送ってください。5本ぐらいが理想です。<br>
+                                ニュースの背景や文脈を簡単にまとめ、かつ、上記の最新ニュースのリンク先を参考情報元として記事のタイトルとリンクを記載し、なぜ今、これが起こっているのか、という背景情報を踏まえて、今後どのような影響をあたえるのか、推察もしてください。<br>
+                                全部で【{文字数}文字】程度にまとめてください。充実した内容で。<br>
+                                文体は{文体}風でお願いします。
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+                
+                <!-- ===== スケジュール・投稿設定 ===== -->
+                <h2 class="ai-news-section-title">⏰ スケジュール・投稿設定</h2>
+                <table class="ai-news-form-table">
                     <tr>
                         <th scope="row">自動投稿</th>
                         <td>
@@ -414,18 +563,13 @@ class AINewsAutoPoster {
                     </tr>
                     
                     <tr>
-                        <th scope="row">SEO フォーカスキーワード</th>
+                        <th scope="row">投稿ステータス</th>
                         <td>
-                            <input type="text" name="seo_focus_keyword" value="<?php echo esc_attr($settings['seo_focus_keyword'] ?? 'AI ニュース'); ?>" class="regular-text ai-news-autosave" />
-                            <p class="ai-news-form-description">記事のSEO対策で重要視するキーワードを設定してください。</p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">メタディスクリプションテンプレート</th>
-                        <td>
-                            <textarea name="meta_description_template" rows="3" class="large-text ai-news-autosave"><?php echo esc_textarea($settings['meta_description_template'] ?? ''); ?></textarea>
-                            <p class="ai-news-form-description">{title} はタイトルに置換されます。</p>
+                            <select name="post_status">
+                                <option value="publish" <?php selected($settings['post_status'] ?? 'publish', 'publish'); ?>>公開</option>
+                                <option value="draft" <?php selected($settings['post_status'] ?? 'publish', 'draft'); ?>>下書き</option>
+                                <option value="pending" <?php selected($settings['post_status'] ?? 'publish', 'pending'); ?>>承認待ち</option>
+                            </select>
                         </td>
                     </tr>
                     
@@ -438,136 +582,11 @@ class AINewsAutoPoster {
                             </label>
                         </td>
                     </tr>
-                    
-                    <tr>
-                        <th scope="row">投稿ステータス</th>
-                        <td>
-                            <select name="post_status">
-                                <option value="publish" <?php selected($settings['post_status'] ?? 'publish', 'publish'); ?>>公開</option>
-                                <option value="draft" <?php selected($settings['post_status'] ?? 'publish', 'draft'); ?>>下書き</option>
-                                <option value="pending" <?php selected($settings['post_status'] ?? 'publish', 'pending'); ?>>承認待ち</option>
-                            </select>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">タグ自動生成</th>
-                        <td>
-                            <label>
-                                <input type="checkbox" name="enable_tags" <?php checked($settings['enable_tags'] ?? true); ?> />
-                                AIが関連タグを自動生成する
-                            </label>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">検索キーワード</th>
-                        <td>
-                            <input type="text" name="search_keywords" value="<?php echo esc_attr($settings['search_keywords'] ?? 'AI ニュース, 人工知能, 機械学習, ChatGPT, OpenAI'); ?>" class="large-text ai-news-autosave" />
-                            <p class="ai-news-form-description">記事生成時に検索するキーワードをカンマ区切りで入力してください。</p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">文体スタイル</th>
-                        <td>
-                            <input type="text" name="writing_style" value="<?php echo esc_attr($settings['writing_style'] ?? '夏目漱石'); ?>" class="regular-text ai-news-autosave" />
-                            <p class="ai-news-form-description">記事の文体スタイルを指定してください（例：夏目漱石、森鴎外、新聞記事風など）。</p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">ニュース収集言語</th>
-                        <td>
-                            <label><input type="checkbox" name="news_languages[]" value="japanese" <?php checked(in_array('japanese', $settings['news_languages'] ?? array())); ?> /> 日本語</label><br>
-                            <label><input type="checkbox" name="news_languages[]" value="english" <?php checked(in_array('english', $settings['news_languages'] ?? array())); ?> /> 英語</label><br>
-                            <label><input type="checkbox" name="news_languages[]" value="chinese" <?php checked(in_array('chinese', $settings['news_languages'] ?? array())); ?> /> 中国語</label>
-                            <p class="ai-news-form-description">収集するニュースの言語を選択してください。複数選択可能です。</p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">記事出力言語</th>
-                        <td>
-                            <select name="output_language">
-                                <option value="japanese" <?php selected($settings['output_language'] ?? 'japanese', 'japanese'); ?>>日本語</option>
-                                <option value="english" <?php selected($settings['output_language'] ?? 'japanese', 'english'); ?>>英語</option>
-                                <option value="chinese" <?php selected($settings['output_language'] ?? 'japanese', 'chinese'); ?>>中国語</option>
-                            </select>
-                            <p class="ai-news-form-description">生成される記事の言語を選択してください。</p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">記事文字数</th>
-                        <td>
-                            <input type="number" name="article_word_count" value="<?php echo esc_attr($settings['article_word_count'] ?? 500); ?>" min="100" max="3000" step="50" class="small-text" />
-                            <span>文字程度</span>
-                            <p class="ai-news-form-description">生成する記事の目安文字数を設定してください（100〜3000文字）。</p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">免責事項</th>
-                        <td>
-                            <label>
-                                <input type="checkbox" name="enable_disclaimer" <?php checked($settings['enable_disclaimer'] ?? true); ?> />
-                                記事末尾に免責事項を表示する
-                            </label>
-                            <div style="margin-top: 10px;">
-                                <textarea name="disclaimer_text" rows="3" class="large-text"><?php echo esc_textarea($settings['disclaimer_text'] ?? '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。'); ?></textarea>
-                                <p class="ai-news-form-description">記事末尾に表示する免責事項の文言を設定してください。</p>
-                            </div>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">カスタムプロンプト</th>
-                        <td>
-                            <textarea name="custom_prompt" rows="8" class="large-text" placeholder="空白の場合はデフォルトプロンプトを使用します"><?php echo esc_textarea($settings['custom_prompt'] ?? ''); ?></textarea>
-                            <p class="ai-news-form-description">
-                                Claude AIに送信するカスタムプロンプトを設定できます。以下のプレースホルダーが使用可能です：<br>
-                                <code>{言語}</code> - ニュース収集言語<br>
-                                <code>{キーワード}</code> - 検索キーワード<br>
-                                <code>{文字数}</code> - 記事文字数<br>
-                                <code>{文体}</code> - 文体スタイル<br><br>
-                                <strong>デフォルトプロンプト例：</strong><br>
-                                【{言語}】のニュースから、【{キーワード}】に関する最新のニュースを送ってください。5本ぐらいが理想です。<br>
-                                ニュースの背景や文脈を簡単にまとめ、かつ、上記の最新ニュースのリンク先を参考情報元として記事のタイトルとリンクを記載し、なぜ今、これが起こっているのか、という背景情報を踏まえて、今後どのような影響をあたえるのか、推察もしてください。<br>
-                                全部で【{文字数}文字】程度にまとめてください。充実した内容で。<br>
-                                文体は{文体}風でお願いします。
-                            </p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">画像生成方式</th>
-                        <td>
-                            <select name="image_generation_type">
-                                <option value="placeholder" <?php selected($settings['image_generation_type'] ?? 'placeholder', 'placeholder'); ?>>プレースホルダー画像</option>
-                                <option value="dalle" <?php selected($settings['image_generation_type'] ?? 'placeholder', 'dalle'); ?>>DALL-E 3（OpenAI）</option>
-                                <option value="unsplash" <?php selected($settings['image_generation_type'] ?? 'placeholder', 'unsplash'); ?>>Unsplash画像検索</option>
-                            </select>
-                            <p class="ai-news-form-description">アイキャッチ画像の生成方式を選択してください。</p>
-                        </td>
-                    </tr>
-                    
-                    <tr id="dalle-api-key-row" style="display: <?php echo ($settings['image_generation_type'] ?? '') === 'dalle' ? 'table-row' : 'none'; ?>;">
-                        <th scope="row">DALL-E API キー</th>
-                        <td>
-                            <input type="password" name="dalle_api_key" value="<?php echo esc_attr($settings['dalle_api_key'] ?? ''); ?>" class="regular-text" />
-                            <p class="ai-news-form-description">OpenAIのAPIキーを入力してください。</p>
-                        </td>
-                    </tr>
-                    
-                    <tr id="unsplash-access-key-row" style="display: <?php echo ($settings['image_generation_type'] ?? '') === 'unsplash' ? 'table-row' : 'none'; ?>;">
-                        <th scope="row">Unsplash Access Key</th>
-                        <td>
-                            <input type="password" name="unsplash_access_key" value="<?php echo esc_attr($settings['unsplash_access_key'] ?? ''); ?>" class="regular-text" />
-                            <p class="ai-news-form-description">UnsplashのAccess Keyを入力してください。</p>
-                        </td>
-                    </tr>
-                    
+                </table>
+                
+                <!-- ===== その他設定 ===== -->
+                <h2 class="ai-news-section-title">⚙️ その他設定</h2>
+                <table class="ai-news-form-table">
                     <tr>
                         <th scope="row">ニュースソース（RSS）</th>
                         <td>
@@ -587,7 +606,12 @@ class AINewsAutoPoster {
                                     <textarea name="news_sources_chinese" rows="3" class="large-text"><?php echo esc_textarea(implode("\n", $settings['news_sources']['chinese'] ?? array())); ?></textarea>
                                 </div>
                             </div>
-                            <p class="ai-news-form-description">各言語のRSSフィードURLを1行につき1つ入力してください。</p>
+                            <p class="ai-news-form-description">
+                                <strong>実ニュース取得用のRSSフィードURLを設定します。</strong><br>
+                                各言語のRSSフィードURLを1行につき1つ入力してください。<br>
+                                これらのRSSフィードからニュースを取得し、AIが関連記事を生成します。<br>
+                                <small>例：ITメディア、ZDNet、AI関連ニュースサイトなど。デフォルトでAI関連のRSSフィードが設定されています。</small>
+                            </p>
                         </td>
                     </tr>
                 </table>
@@ -947,21 +971,56 @@ class AINewsAutoPoster {
         if ($is_gemini) {
             $this->log('info', 'Gemini APIを呼び出します...');
             
-            // Gemini 2.5でGoogle Search Groundingを優先試行
+            // Gemini 2.5でGoogle Search Groundingを優先試行（2段階プロセス）
             if ($model === 'gemini-2.5-flash') {
-                $this->log('info', 'Google Search Grounding優先でGemini 2.5を試行...');
-                $gemini_prompt = $this->build_gemini_news_search_prompt($settings);
-                $ai_response = $this->call_gemini_api($gemini_prompt, $settings['gemini_api_key'] ?? '', $model);
+                $this->log('info', 'Gemini 2.5 - 2段階プロセス開始: 第1段階（ニュース検索）');
                 
-                // Google Search Groundingエラー時のフォールバック
-                if (is_wp_error($ai_response) && strpos($ai_response->get_error_message(), 'Search Grounding') !== false) {
-                    $this->log('warning', 'Google Search Grounding制限検出、RSSベースニュースにフォールバック');
+                // 第1段階: ニュース検索でURL・タイトル一覧を取得
+                $search_prompt = $this->build_gemini_search_only_prompt($settings);
+                $search_response = $this->call_gemini_api($search_prompt, $settings['gemini_api_key'] ?? '', $model);
+                
+                if (is_wp_error($search_response)) {
+                    $this->log('warning', 'Gemini 2.5 第1段階失敗、RSSベースにフォールバック: ' . $search_response->get_error_message());
                     if (!empty($news_data)) {
                         $gemini_prompt = $this->build_news_based_prompt($settings, $news_data, 'gemini');
                         $ai_response = $this->call_gemini_api($gemini_prompt, $settings['gemini_api_key'] ?? '', $model);
                     } else {
                         $this->log('error', 'RSSニュースデータも空のため、記事生成不可');
                         return new WP_Error('no_news_data', 'Google Search Grounding制限中で、RSSニュースも取得できませんでした。');
+                    }
+                } else {
+                    // 第1段階成功 - Grounding情報を抽出
+                    $grounding_sources = array();
+                    if (is_array($search_response) && isset($search_response['grounding_sources'])) {
+                        $grounding_sources = $search_response['grounding_sources'];
+                        $this->log('info', 'Gemini 2.5 第1段階成功: ' . count($grounding_sources) . '件のニュースソースを取得');
+                    }
+                    
+                    if (!empty($grounding_sources)) {
+                        // 第2段階: 取得したURL群を元に記事生成
+                        $this->log('info', 'Gemini 2.5 - 第2段階開始: 記事生成');
+                        $article_prompt = $this->build_gemini_article_from_sources_prompt($settings, $grounding_sources);
+                        $ai_response = $this->call_gemini_api($article_prompt, $settings['gemini_api_key'] ?? '', $model);
+                        
+                        // 第2段階のレスポンスにGrounding情報を統合
+                        if (!is_wp_error($ai_response)) {
+                            if (is_array($ai_response)) {
+                                $ai_response['grounding_sources'] = $grounding_sources;
+                            } else {
+                                // 文字列レスポンスの場合は配列に変換
+                                $ai_response = array(
+                                    'text' => $ai_response,
+                                    'grounding_sources' => $grounding_sources
+                                );
+                            }
+                            $this->log('info', 'Gemini 2.5 第2段階成功: 記事生成完了');
+                        } else {
+                            $this->log('error', 'Gemini 2.5 第2段階失敗: ' . $ai_response->get_error_message());
+                        }
+                    } else {
+                        $this->log('warning', 'Gemini 2.5 第1段階でソース取得できず、従来方式にフォールバック');
+                        $gemini_prompt = $this->build_gemini_news_search_prompt($settings);
+                        $ai_response = $this->call_gemini_api($gemini_prompt, $settings['gemini_api_key'] ?? '', $model);
                     }
                 }
             } else {
@@ -2212,10 +2271,10 @@ class AINewsAutoPoster {
             }
         }
         
-        // 有効なソースがある場合のみ追加
+        // 有効なソースがある場合のみ追加（記事の冒頭に配置）
         if ($valid_sources > 0) {
-            $content .= $sources_section;
-            $this->log('info', "{$valid_sources}件の有効なソースで参考情報源セクションを生成");
+            $content = $sources_section . "\n" . $content;
+            $this->log('info', "{$valid_sources}件の有効なソースで参考情報源セクションを記事の冒頭に生成");
         } else {
             $this->log('warning', '有効なソースが見つからず、参考情報源セクションを生成できませんでした');
         }
@@ -3372,6 +3431,85 @@ class AINewsAutoPoster {
         $prompt .= "\n記事を最後まで完成させてください。";
         
         $this->log('info', 'Geminiニュース検索プロンプト生成完了');
+        return $prompt;
+    }
+    
+    /**
+     * Gemini 2.5 第1段階: ニュース検索のみ（URL・タイトル一覧取得用）
+     */
+    private function build_gemini_search_only_prompt($settings) {
+        $search_keywords = $settings['search_keywords'] ?? 'AI ニュース, 人工知能, 機械学習';
+        $output_language = $settings['output_language'] ?? 'japanese';
+        
+        $this->log('info', 'Gemini第1段階ニュース検索プロンプト生成開始');
+        
+        $prompt = "あなたは優秀なニュースリサーチャーです。以下のキーワードについて最新のニュースを検索し、関連するニュース記事のタイトルとURLの一覧を取得してください。\n\n";
+        $prompt .= "検索キーワード: {$search_keywords}\n";
+        $prompt .= "出力言語: {$output_language}\n\n";
+        $prompt .= "以下の形式で、関連性の高いニュース記事を5〜10件リストアップしてください：\n\n";
+        $prompt .= "## 最新ニュース一覧\n\n";
+        $prompt .= "1. [記事タイトル1](URL1)\n";
+        $prompt .= "2. [記事タイトル2](URL2)\n";
+        $prompt .= "3. [記事タイトル3](URL3)\n";
+        $prompt .= "...\n\n";
+        $prompt .= "重要:\n";
+        $prompt .= "- 記事は過去1週間以内の最新のものを優先してください\n";
+        $prompt .= "- タイトルは正確に取得してください\n";
+        $prompt .= "- URLは実際にアクセス可能なものを提供してください\n";
+        $prompt .= "- 重複する記事は避けてください\n";
+        
+        $this->log('info', 'Gemini第1段階ニュース検索プロンプト生成完了');
+        return $prompt;
+    }
+    
+    /**
+     * Gemini 2.5 第2段階: 取得したURL群から記事生成
+     */
+    private function build_gemini_article_from_sources_prompt($settings, $grounding_sources) {
+        $search_keywords = $settings['search_keywords'] ?? 'AI ニュース, 人工知能, 機械学習';
+        $writing_style = $settings['writing_style'] ?? '夏目漱石';
+        $article_word_count = $settings['article_word_count'] ?? 800;
+        $output_language = $settings['output_language'] ?? 'japanese';
+        
+        $this->log('info', 'Gemini第2段階記事生成プロンプト生成開始: ' . count($grounding_sources) . '件のソース');
+        
+        $prompt = "あなたは{$writing_style}風の文体で記事を書く優秀なジャーナリストです。\n\n";
+        $prompt .= "以下のニュースソースを参考に、「{$search_keywords}」に関する包括的な記事を作成してください。\n\n";
+        
+        // 参考ニュースソースの一覧を冒頭に表示
+        $prompt .= "## 参考ニュースソース\n\n";
+        foreach ($grounding_sources as $index => $source) {
+            $title = $source['title'] ?? "ニュース記事" . ($index + 1);
+            $url = $source['url'] ?? "#";
+            $prompt .= ($index + 1) . ". [{$title}]({$url})\n";
+        }
+        $prompt .= "\n";
+        
+        $prompt .= "上記のニュースソースの内容を参考に、以下の要件で記事を作成してください：\n\n";
+        $prompt .= "**記事要件:**\n";
+        $prompt .= "- 文字数: 約{$article_word_count}文字\n";
+        $prompt .= "- 文体: {$writing_style}風\n";
+        $prompt .= "- 言語: {$output_language}\n";
+        $prompt .= "- 構成: タイトル、導入、本文（複数段落）、結論\n\n";
+        
+        $prompt .= "**記事構成:**\n";
+        $prompt .= "```\n";
+        $prompt .= "タイトル: [記事タイトル]\n\n";
+        $prompt .= "[導入段落]\n\n";
+        $prompt .= "[本文段落1]\n\n";
+        $prompt .= "[本文段落2]\n\n";
+        $prompt .= "[本文段落3以降...]\n\n";
+        $prompt .= "[結論段落]\n";
+        $prompt .= "```\n\n";
+        
+        $prompt .= "**重要な指示:**\n";
+        $prompt .= "- 上記のニュースソースから具体的な情報を引用・参照してください\n";
+        $prompt .= "- 複数のニュースソースを統合した包括的な内容にしてください\n";
+        $prompt .= "- 現在の状況、背景、今後の展望を含めてください\n";
+        $prompt .= "- 記事は最後まで完成させてください（途中で切れないように）\n";
+        $prompt .= "- 参考情報源のセクションは含めないでください（自動で追加されます）\n";
+        
+        $this->log('info', 'Gemini第2段階記事生成プロンプト生成完了');
         return $prompt;
     }
     
