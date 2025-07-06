@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.23
+ * Version: 1.2.24
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.23');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.24');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1070,31 +1070,8 @@ class AINewsAutoPoster {
         $wpdb->last_error = '';
         $this->log('info', 'データベースエラークリア完了');
         
-        // 文字化けを防ぐため、最小限のサニタイズのみ実行
-        $this->log('info', 'タイトルのサニタイズ中...');
-        // タイトルのHTMLタグを削除
-        $post_data['post_title'] = strip_tags($post_data['post_title']);
-        $this->log('info', 'タイトルサニタイズ完了');
-        
-        // コンテンツのサニタイズは行わず、そのまま使用
-        // （WordPressが自動的に適切に処理する）
-        
-        $this->log('info', '投稿概要の処理中...');
-        $post_data['post_excerpt'] = isset($post_data['post_excerpt']) ? strip_tags($post_data['post_excerpt']) : '';
-        $this->log('info', '投稿概要処理完了');
-        
-        // UTF-8エンコーディングの確認と修正
-        $this->log('info', 'UTF-8エンコーディングをチェック中...');
-        $this->log('info', 'タイトルのUTF-8エンコーディングをチェック中...');
-        if (!mb_check_encoding($post_data['post_title'], 'UTF-8')) {
-            $this->log('warning', 'タイトルのUTF-8エンコーディングが不正です - 修正します');
-            // 不正な文字を削除して再エンコード
-            $post_data['post_title'] = mb_convert_encoding($post_data['post_title'], 'UTF-8', 'UTF-8//IGNORE');
-            if (empty($post_data['post_title'])) {
-                $post_data['post_title'] = 'AI生成記事';
-            }
-        }
-        $this->log('info', 'タイトルのUTF-8エンコーディングチェック完了');
+        // 文字化け防止のため、WordPressデータに一切手を加えない
+        $this->log('info', 'データ前処理完了（サニタイゼーション無し）');
         
         // 最小限の処理のみ実行（文字化け回避のため余計な処理を削除）
         $this->log('info', 'コンテンツクリーニング開始（最小限処理）');
