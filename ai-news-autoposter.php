@@ -3,8 +3,8 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。Claude/Gemini API対応、RSSベース実ニュース検索、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.28
- * Author: kitasinkita
+ * Version: 1.2.29
+ * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.28');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.29');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -793,6 +793,11 @@ class AINewsAutoPoster {
      * 今すぐ投稿（Ajax）
      */
     public function manual_post_now() {
+        // 出力バッファリングをクリア（JSONレスポンスを汚染しないため）
+        while (ob_get_level()) {
+            ob_end_clean();
+        }
+        
         if (!wp_verify_nonce($_POST['nonce'] ?? '', 'ai_news_autoposter_nonce')) {
             $this->log('error', '手動投稿: Nonce検証失敗');
             wp_send_json_error('セキュリティチェックに失敗しました。');
@@ -805,18 +810,31 @@ class AINewsAutoPoster {
         
         $this->log('info', '手動投稿を開始します');
         
-        $result = $this->generate_and_publish_article(false, 'manual');
+        // 出力バッファリングを開始してログ出力をキャプチャ
+        ob_start();
         
-        if (is_wp_error($result)) {
-            $this->log('error', '手動投稿失敗: ' . $result->get_error_message());
-            wp_send_json_error($result->get_error_message());
-        } else {
-            $this->log('success', '手動投稿成功: 投稿ID ' . $result);
-            wp_send_json_success(array(
-                'post_id' => $result,
-                'edit_url' => admin_url('post.php?post=' . $result . '&action=edit'),
-                'view_url' => get_permalink($result)
-            ));
+        try {
+            $result = $this->generate_and_publish_article(false, 'manual');
+            
+            // バッファをクリア（ログ出力を破棄）
+            ob_end_clean();
+            
+            if (is_wp_error($result)) {
+                $this->log('error', '手動投稿失敗: ' . $result->get_error_message());
+                wp_send_json_error($result->get_error_message());
+            } else {
+                $this->log('success', '手動投稿成功: 投稿ID ' . $result);
+                wp_send_json_success(array(
+                    'post_id' => $result,
+                    'edit_url' => admin_url('post.php?post=' . $result . '&action=edit'),
+                    'view_url' => get_permalink($result)
+                ));
+            }
+        } catch (Exception $e) {
+            // バッファをクリア
+            ob_end_clean();
+            $this->log('error', '手動投稿例外: ' . $e->getMessage());
+            wp_send_json_error('処理中にエラーが発生しました: ' . $e->getMessage());
         }
     }
     

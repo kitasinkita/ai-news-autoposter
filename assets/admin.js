@@ -140,7 +140,8 @@
                     // ボタン状態復元
                     $button.prop('disabled', false)
                            .text(originalText)
-                           .removeClass('ai-news-loading');
+                           .removeClass('ai-news-loading')
+                           .data('processing', false); // 処理中フラグをクリア
                 }
             });
         },
@@ -213,7 +214,8 @@
                     // ボタン状態復元
                     $button.prop('disabled', false)
                            .text(originalText)
-                           .removeClass('ai-news-loading');
+                           .removeClass('ai-news-loading')
+                           .data('processing', false); // 処理中フラグをクリア
                     
                     // プログレスバー非表示
                     setTimeout(function() {
@@ -592,7 +594,7 @@
                     action: 'manual_post_now',
                     nonce: ai_news_autoposter_ajax.nonce
                 },
-                timeout: 360000, // 6分
+                timeout: 600000, // 10分（PHPの実行時間に合わせる）
                 success: function(response) {
                     clearInterval(progressInterval);
                     AINewsAutoPoster.updateProgress(100, '投稿完了！');
@@ -616,9 +618,32 @@
                 error: function(xhr, status, error) {
                     clearInterval(progressInterval);
                     
+                    console.log('AJAX Error - Status:', status, 'Error:', error);
+                    console.log('XHR Response:', xhr.responseText);
+                    
                     let errorMessage = 'ネットワークエラーが発生しました。';
+                    
+                    // JSONレスポンスの解析を試行
+                    try {
+                        if (xhr.responseText) {
+                            let response = JSON.parse(xhr.responseText);
+                            if (response && response.success === true) {
+                                // 実際は成功だが、タイムアウト等で error になった場合
+                                console.log('Success response in error callback:', response);
+                                AINewsAutoPoster.showNotification('success', 
+                                    '記事を正常に投稿しました！ <a href="' + response.data.edit_url + '" target="_blank">編集画面で確認</a> | <a href="' + response.data.view_url + '" target="_blank">表示</a>');
+                                AINewsAutoPoster.updateStats();
+                                return;
+                            } else if (response && response.data) {
+                                errorMessage = '記事投稿に失敗しました: ' + response.data;
+                            }
+                        }
+                    } catch (e) {
+                        console.log('JSON parse failed:', e);
+                    }
+                    
                     if (status === 'timeout') {
-                        errorMessage = '処理がタイムアウトしました。APIの応答が遅い可能性があります。';
+                        errorMessage = '処理がタイムアウトしました。記事が作成されている可能性があります。管理画面で確認してください。';
                     }
                     
                     AINewsAutoPoster.showNotification('error', errorMessage);
@@ -627,7 +652,8 @@
                     // ボタン状態復元
                     $button.prop('disabled', false)
                            .text(originalText)
-                           .removeClass('ai-news-loading');
+                           .removeClass('ai-news-loading')
+                           .data('processing', false); // 処理中フラグをクリア
                     
                     // プログレスバー非表示
                     setTimeout(function() {
@@ -685,7 +711,8 @@
                     // ボタン状態復元
                     $button.prop('disabled', false)
                            .text(originalText)
-                           .removeClass('ai-news-loading');
+                           .removeClass('ai-news-loading')
+                           .data('processing', false); // 処理中フラグをクリア
                 }
             });
         },
