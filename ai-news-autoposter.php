@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.20
+ * Version: 1.2.21
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.20');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.21');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1097,7 +1097,7 @@ class AINewsAutoPoster {
         $this->log('info', 'タイトルのUTF-8エンコーディングチェック完了');
         
         // UTF-8エンコーディングチェックを一時的に無効化（緊急回避）
-        $this->log('info', '【緊急回避モード v1.2.20】UTF-8エンコーディングチェックをスキップします');
+        $this->log('info', '【緊急回避モード v1.2.21】UTF-8エンコーディングチェックをスキップします');
         
         // 初期コンテンツ長をログ
         $this->log('info', '処理開始時のコンテンツ長: ' . strlen($post_data['post_content']) . ' bytes');
@@ -1141,27 +1141,34 @@ class AINewsAutoPoster {
                 $post_data['post_content'] = substr($post_data['post_content'], 0, 8000) . "\n\n※ 記事が長いため事前短縮しています。";
             }
             
-            // より安全な文字エンコーディング処理
+            // より安全な文字エンコーディング処理（さらに保守的なアプローチ）
             $this->log('info', 'mb_convert_encoding実行中...');
-            if (function_exists('mb_convert_encoding')) {
-                // タイムアウト回避のため小さなチャンクで処理
-                $content_length = strlen($post_data['post_content']);
-                if ($content_length > 5000) {
-                    $this->log('info', '大きなコンテンツのためチャンク処理を実行');
-                    $chunks = str_split($post_data['post_content'], 2000);
-                    $converted_content = '';
-                    foreach ($chunks as $i => $chunk) {
-                        $converted_content .= mb_convert_encoding($chunk, 'UTF-8', 'UTF-8//IGNORE');
-                        $this->log('info', 'チャンク ' . ($i + 1) . '/' . count($chunks) . ' 変換完了');
+            
+            // コンテンツが問題を起こしやすいサイズかチェック
+            if ($content_length > 3000) {
+                $this->log('warning', 'コンテンツが大きいため、mb_convert_encodingをスキップして簡易クリーニングのみ実行');
+                // より安全な方法: iconv関数を使用するか、簡易クリーニングのみ
+                if (function_exists('iconv')) {
+                    $this->log('info', 'iconv関数を使用してエンコーディング変換を試行');
+                    $converted = iconv('UTF-8', 'UTF-8//IGNORE', $post_data['post_content']);
+                    if ($converted !== false) {
+                        $post_data['post_content'] = $converted;
+                        $this->log('info', 'iconv変換成功');
+                    } else {
+                        $this->log('warning', 'iconv変換失敗 - 簡易クリーニングのみ実行');
+                        $post_data['post_content'] = preg_replace('/[^\x09\x0A\x0D\x20-\x7E\p{L}\p{N}\p{P}\p{Z}]/u', '', $post_data['post_content']);
                     }
-                    $post_data['post_content'] = $converted_content;
                 } else {
-                    $post_data['post_content'] = mb_convert_encoding($post_data['post_content'], 'UTF-8', 'UTF-8//IGNORE');
+                    $this->log('info', '簡易文字クリーニングのみ実行');
+                    $post_data['post_content'] = preg_replace('/[^\x09\x0A\x0D\x20-\x7E\p{L}\p{N}\p{P}\p{Z}]/u', '', $post_data['post_content']);
                 }
+            } else if (function_exists('mb_convert_encoding')) {
+                $this->log('info', '小さなコンテンツのためmb_convert_encoding実行');
+                $post_data['post_content'] = mb_convert_encoding($post_data['post_content'], 'UTF-8', 'UTF-8//IGNORE');
             } else {
                 $this->log('warning', 'mb_convert_encoding関数が利用できません - 簡易クリーニングのみ実行');
                 // フォールバック: 基本的な非ASCII文字の処理のみ
-                $post_data['post_content'] = preg_replace('/[^\x20-\x7E\p{L}\p{N}\p{P}\p{Z}]/u', '', $post_data['post_content']);
+                $post_data['post_content'] = preg_replace('/[^\x09\x0A\x0D\x20-\x7E\p{L}\p{N}\p{P}\p{Z}]/u', '', $post_data['post_content']);
             }
         } catch (Exception $e) {
             $this->log('error', 'UTF-8エンコーディング変換でエラー: ' . $e->getMessage() . ' - 簡易処理にフォールバック');
