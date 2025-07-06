@@ -1,26 +1,27 @@
 === AI News AutoPoster ===
 Contributors: kitasinkita
-Tags: ai, automation, news, claude, seo, auto-post, artificial intelligence
+Tags: ai, automation, news, claude, gemini, seo, auto-post, artificial intelligence, outdoor, business, sports, lifestyle
 Requires at least: 5.0
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.2.15
+Stable tag: 1.2.26
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Claude Sonnet 4を使用してAIニュースを自動生成・投稿するプラグイン。1時間間隔自動投稿、多言語対応、SEO最適化機能付き。
+Claude Sonnet 4とGemini 2.5を使用して任意のキーワードニュースを自動生成・投稿するプラグイン。RSSベース実ニュース検索、多言語対応、SEO最適化機能付き。
 
 == Description ==
 
-AI News AutoPosterは、Claude Sonnet 4とGemini 2.5 Flashを使用して最新のAIニュースを自動生成・投稿するWordPressプラグインです。Geminiの Google Search Grounding により2024年末までの最新ニュースを取り込み、夏目漱石風の文学的な文体で高品質なAI記事を1時間間隔で自動生成します。
+AI News AutoPosterは、Claude Sonnet 4とGemini 2.5 Flashを使用して**任意のキーワード**に関するニュースを自動生成・投稿するWordPressプラグインです。RSSベースの実ニュース検索により最新情報を取り込み、アウトドア、テクノロジー、ビジネス、スポーツなど任意のジャンルで高品質な記事を1時間間隔で自動生成します。
 
 = 主な機能 =
 
 **🤖 AI記事自動生成**
 * Claude Sonnet 4とGemini 2.5 Flashによる高品質記事生成
-* Google Search Grounding - 最新ニュース取り込み
+* 任意キーワード対応 - アウトドア、ビジネス、スポーツなど自由設定
+* RSSベース実ニュース検索 - Google News、朝日新聞、NHK、Yahoo!ニュース
 * 夏目漱石風の文学的文体対応
-* 2024年末までの最新情報対応
+* リアルタイム最新情報対応
 * 自動タグ・カテゴリ設定
 
 **⏰ 完全自動スケジューリング**
@@ -130,6 +131,19 @@ Claude Sonnet 4とGemini 2.5 Flashの高度な言語能力により、人間レ�
 5. 生成された記事例 - 夏目漱石風文体
 
 == Changelog ==
+
+= 1.2.26 =
+* 任意キーワード完全対応 - ハードコーディングされたAIキーワード削除
+* RSSベース実ニュース検索 - Google News、朝日新聞、NHK、Yahoo!ニュース統合
+* キーワード非依存フィルタリング - AI偏重から汎用的な関連性判定へ
+* アウトドア・ライフスタイル対応 - テクノロジー以外のジャンル完全サポート
+* エラー処理改善 - 正規表現・配列アクセス問題修正
+* 記事品質向上 - 完結記事生成、途中切れ防止
+* 実証済み動作確認 - アウトドアキーワードでの記事生成成功
+
+= 1.2.25 =
+* 文字エンコーディング修正 - 二重UTF-8変換による文字化け解決
+* 引用元表示改善 - Markdownリンク形式統一
 
 = 1.2.15 =
 * タイトル解析機能向上 - 参考情報源のタイトル適切処理

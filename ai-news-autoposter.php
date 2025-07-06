@@ -2,8 +2,8 @@
 /**
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
- * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.25
+ * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。Claude/Gemini API対応、RSSベース実ニュース検索、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
+ * Version: 1.2.26
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.25');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.26');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -901,22 +901,41 @@ class AINewsAutoPoster {
             return new WP_Error('no_api_key', 'Claude API キーが設定されていません。');
         }
         
+        // まず最新ニュースを検索
+        $this->log('info', '最新ニュース検索を開始します...');
+        $search_keywords = $settings['search_keywords'] ?? 'AI ニュース';
+        $news_data = $this->search_latest_news($search_keywords, 5);
+        
         // AI APIを呼び出し
         $model = $settings['claude_model'] ?? 'claude-3-5-haiku-20241022';
         $is_gemini = strpos($model, 'gemini') === 0;
         $api_name = $is_gemini ? 'Gemini' : 'Claude';
         
-        $this->log('info', $api_name . ' AIに最新ニュース検索と記事生成を依頼します');
+        if (!empty($news_data)) {
+            $this->log('info', count($news_data) . '件のニュースを取得しました。' . $api_name . ' AIで記事を生成します');
+        } else {
+            $this->log('warning', 'ニュース検索結果が空です。' . $api_name . ' AIの直接検索にフォールバックします');
+        }
         
         if ($is_gemini) {
             $this->log('info', 'Gemini APIを呼び出します...');
-            // Gemini用にWeb検索特化プロンプトを使用
-            $gemini_prompt = $this->build_gemini_search_prompt($settings, $model);
+            if (!empty($news_data)) {
+                // RSSから取得したニュースデータを基にプロンプトを構築
+                $gemini_prompt = $this->build_news_based_prompt($settings, $news_data, 'gemini');
+            } else {
+                // フォールバック: 直接ニュース検索プロンプト
+                $gemini_prompt = $this->build_gemini_news_search_prompt($settings);
+            }
             $ai_response = $this->call_gemini_api($gemini_prompt, $settings['gemini_api_key'] ?? '', $model);
         } else {
             $this->log('info', 'Claude APIを呼び出します...');
-            // Claude AI に直接ニュース検索と記事生成を依頼
-            $prompt = $this->build_direct_article_prompt($settings);
+            if (!empty($news_data)) {
+                // ニュースデータを基にプロンプトを構築
+                $prompt = $this->build_news_based_prompt($settings, $news_data);
+            } else {
+                // 直接ニュース検索と記事生成を依頼
+                $prompt = $this->build_direct_article_prompt($settings);
+            }
             $ai_response = $this->call_claude_api($prompt, $api_key, $settings);
         }
         
@@ -981,18 +1000,22 @@ class AINewsAutoPoster {
         // メタディスクリプションを安全に生成
         $this->log('info', 'メタディスクリプションを生成中...');
         
+        // 基本的な投稿データを作成（メタデータは後で追加）
         $post_data = array(
             'post_title' => $article_data['title'],
             'post_content' => $article_data['content'],
             'post_status' => $is_test ? 'draft' : ($settings['post_status'] ?? 'publish'),
             'post_category' => array($category),
-            'post_type' => 'post', // 明示的に指定
-            'meta_input' => array(
-                '_ai_generated' => true,
-                '_ai_post_type' => $is_test ? 'test' : $post_type, // 投稿タイプを記録
-                '_seo_focus_keyword' => $settings['seo_focus_keyword'] ?? '',
-                '_meta_description' => $this->safe_generate_meta_description($article_data['title'], $settings)
-            )
+            'post_type' => 'post',
+            'post_author' => get_current_user_id() ?: 1
+        );
+
+        // メタデータは別途用意（問題がある場合は無効化できるように）
+        $meta_data = array(
+            '_ai_generated' => true,
+            '_ai_post_type' => $is_test ? 'test' : $post_type,
+            '_seo_focus_keyword' => $settings['seo_focus_keyword'] ?? '',
+            '_meta_description' => $this->safe_generate_meta_description($article_data['title'], $settings)
         );
         
         $this->log('info', '投稿データ配列作成完了。コンテンツサイズチェックを開始します。');
@@ -1232,6 +1255,14 @@ class AINewsAutoPoster {
         
         $this->log('info', '投稿作成成功。投稿ID: ' . $post_id);
         
+        // メタデータを個別に追加（投稿作成後に安全に処理）
+        foreach ($meta_data as $meta_key => $meta_value) {
+            if (!empty($meta_value)) {
+                $meta_result = update_post_meta($post_id, $meta_key, $meta_value);
+                $this->log('info', 'メタデータ追加: ' . $meta_key . ' = ' . ($meta_result ? '成功' : '失敗'));
+            }
+        }
+        
         // 文字化けデバッグ：データベースから実際に保存された内容を確認
         $saved_post = get_post($post_id);
         if ($saved_post) {
@@ -1454,16 +1485,19 @@ class AINewsAutoPoster {
         
         // モデルに応じてプロンプトを最適化
         if ($model === 'gemini-2.5-flash') {
-            // Gemini 2.5 Google Search 特化プロンプト
-            $prompt = "I need you to search Google for current news about {$search_keywords}. ";
-            $prompt .= "Please find recent news articles from {$current_year} and write a comprehensive article in Japanese.\n\n";
-            $prompt .= "Search for: \"{$search_keywords} ニュース {$current_year}\"\n\n";
-            $prompt .= "Requirements:\n";
-            $prompt .= "- Search Google for real news articles\n";
-            $prompt .= "- Include actual URLs from news websites\n";
-            $prompt .= "- Write entire article in Japanese\n";
-            $prompt .= "- Use approximately {$word_count} characters\n";
-            $prompt .= "- Include proper headings and structure\n\n";
+            // Gemini 2.5 Google Search 特化プロンプト（日本語で明示的に検索指示）
+            $prompt = "現在のAI関連ニュースを日本語で検索してください。{$current_date}時点での最新情報を探してください。\n\n";
+            $prompt .= "検索キーワード: {$search_keywords} {$current_year}年 最新\n\n";
+            $prompt .= "Google検索を使用して以下を実行してください：\n";
+            $prompt .= "1. 「{$search_keywords} ニュース {$current_year}年」で検索\n";
+            $prompt .= "2. 「AI 人工知能 最新 {$current_year}」で追加検索\n";
+            $prompt .= "3. 実際のニュースサイトのURLを取得\n";
+            $prompt .= "4. 検索結果を基に日本語記事を作成\n\n";
+            $prompt .= "記事要件:\n";
+            $prompt .= "- 全て日本語で執筆\n";
+            $prompt .= "- {$word_count}文字程度\n";
+            $prompt .= "- 見出し構造を含む\n";
+            $prompt .= "- 実際のニュースソースを参照\n\n";
         } else {
             // その他のGeminiモデル用プロンプト
             $prompt = "{$current_year}年の【{$search_keywords}】に関する最新動向記事を作成してください。\n\n";
@@ -2249,26 +2283,26 @@ class AINewsAutoPoster {
         
         // Gemini 2.5でGoogle Search Groundingを使用する場合はトークンを調整
         if ($model === 'gemini-2.5-flash') {
-            // Google Search Groundingのトークン消費を考慮し、余裕を持たせて設定
-            $max_tokens = 2000; // MAX_TOKENSエラー回避のため減らす
-            $this->log('info', 'Gemini 2.5 + Grounding用にmaxOutputTokensを2000に設定（MAX_TOKENSエラー回避）');
+            // 記事の完結性を保つため十分なトークン数を設定
+            $max_tokens = 4000; // 記事の途中切れを防ぐため増量
+            $this->log('info', 'Gemini 2.5 + Grounding用にmaxOutputTokensを4000に設定（完結記事生成）');
         } else {
             // 文字数をトークン数に変換（1トークン ≈ 0.7文字として計算）
-            $expected_tokens = intval($expected_chars / 0.7);
+            $expected_tokens = intval($expected_chars / 0.5); // より余裕を持った計算
             
             // プロンプト長に応じた調整
             $max_tokens = $expected_tokens;
             
             if ($prompt_length > 2000) {
-                $max_tokens = min($expected_tokens, 2000); // 制限を緩和
+                $max_tokens = min($expected_tokens, 4000); // 制限を大幅緩和
             } elseif ($prompt_length > 1500) {
-                $max_tokens = min($expected_tokens, 2500);
+                $max_tokens = min($expected_tokens, 4500);
             } else {
-                $max_tokens = min($expected_tokens, 3000); // 最大値制限を緩和
+                $max_tokens = min($expected_tokens, 5000); // 完結した記事のため最大値増加
             }
             
             // 最低限の長さを保証
-            $max_tokens = max($max_tokens, 1500); // 最低値を上げる
+            $max_tokens = max($max_tokens, 2500); // 最低値を大幅に上げる
         }
         
         $this->log('info', '設定文字数: ' . $expected_chars . '、プロンプト長: ' . $prompt_length . '文字、maxOutputTokens: ' . $max_tokens);
@@ -2287,15 +2321,8 @@ class AINewsAutoPoster {
             )
         );
         
-        // Google Search Grounding - Gemini 2.5のみ対応
-        if ($model === 'gemini-2.5-flash') {
-            $body['tools'] = array(
-                array(
-                    'google_search' => new stdClass()
-                )
-            );
-            $this->log('info', 'Gemini 2.5でGoogle Search Grounding有効化');
-        }
+        // Google Search Grounding - 現在利用不可のためRSSベースニュース検索を使用
+        $this->log('info', 'Google Search Groundingは現在利用不可のため、RSSベースニュース検索を使用します');
         
         $this->log('info', 'Google Search Grounding設定: ' . json_encode($body['tools'] ?? null));
         
@@ -2992,6 +3019,103 @@ class AINewsAutoPoster {
     }
     
     /**
+     * Gemini用ニュース検索プロンプト生成
+     */
+    private function build_gemini_news_search_prompt($settings) {
+        $keywords = $settings['search_keywords'] ?? 'AI ニュース, 人工知能, 機械学習';
+        $writing_style = $settings['writing_style'] ?? '夏目漱石';
+        $word_count = $settings['article_word_count'] ?? 800; // 文字数を増やす
+        $output_language = $settings['output_language'] ?? 'japanese';
+        
+        $prompt = "あなたは{$writing_style}の文体で記事を書く優秀なジャーナリストです。\n\n";
+        $prompt .= "以下のキーワードに関する最新ニュースを検索し、それに基づいて{$word_count}文字程度の記事を{$output_language}で作成してください：\n";
+        $prompt .= "キーワード: {$keywords}\n\n";
+        $prompt .= "記事の要件：\n";
+        $prompt .= "1. 最新のニュース情報を必ず検索して参考にする\n";
+        $prompt .= "2. タイトル、導入、本文（複数段落）、まとめの構成にする\n";
+        $prompt .= "3. 読者にとって価値のある内容にする\n";
+        $prompt .= "4. 記事の最後に「## 参考情報源」セクションを設け、参考にしたニュースソースのリンクを含める\n";
+        $prompt .= "5. リンクは必ず [タイトル](URL) の形式で記載する\n";
+        $prompt .= "6. 記事は完結した内容にし、途中で終わらないようにする\n\n";
+        $prompt .= "出力形式：\n";
+        $prompt .= "タイトル: [記事タイトル]\n\n";
+        $prompt .= "[記事本文（複数段落で構成）]\n\n";
+        $prompt .= "## 参考情報源\n";
+        $prompt .= "- [ニュースタイトル1](URL1)\n";
+        $prompt .= "- [ニュースタイトル2](URL2)\n";
+        $prompt .= "\n記事を最後まで完成させてください。";
+        
+        $this->log('info', 'Geminiニュース検索プロンプト生成完了');
+        return $prompt;
+    }
+    
+    /**
+     * ニュースベースのプロンプト生成
+     */
+    private function build_news_based_prompt($settings, $news_data, $api_type = 'claude') {
+        $keywords = $settings['search_keywords'] ?? 'AI ニュース';
+        $writing_style = $settings['writing_style'] ?? '記者';
+        $word_count = $settings['article_word_count'] ?? 800; // 文字数を増やす
+        $output_language = $settings['output_language'] ?? 'japanese';
+        
+        // ニュースデータを整理
+        $news_summary = '';
+        $citation_sources = array();
+        
+        foreach ($news_data as $index => $news) {
+            $news_number = intval($index) + 1;
+            $title = isset($news['title']) ? $news['title'] : '不明なタイトル';
+            $description = isset($news['description']) ? $news['description'] : '概要なし';
+            $url = isset($news['url']) ? $news['url'] : '#';
+            $pubDate = isset($news['pubDate']) ? $news['pubDate'] : '日付不明';
+            
+            $news_summary .= $news_number . ". {$title}\n";
+            $news_summary .= "   概要: {$description}\n";
+            $news_summary .= "   URL: {$url}\n";
+            $news_summary .= "   公開日: {$pubDate}\n\n";
+            
+            $citation_sources[] = "[{$title}]({$url})";
+        }
+        
+        if ($api_type === 'gemini') {
+            $prompt = "以下の最新ニュース情報を参考に、{$word_count}文字程度の完結した記事を{$output_language}で作成してください。\n\n";
+            $prompt .= "参考ニュース:\n{$news_summary}\n";
+            $prompt .= "記事の要件:\n";
+            $prompt .= "- タイトル、本文、まとめを含む完結した構成\n";
+            $prompt .= "- {$writing_style}のような文体\n";
+            $prompt .= "- SEOを意識したキーワード「{$keywords}」を自然に含める\n";
+            $prompt .= "- 情報の正確性を重視\n";
+            $prompt .= "- 記事の最後に参考情報源を含める\n";
+            $prompt .= "- 記事は必ず最後まで完成させる\n\n";
+            $prompt .= "フォーマット:\n";
+            $prompt .= "タイトル: [記事タイトル]\n\n";
+            $prompt .= "[記事本文（必ず最後まで完成）]\n\n";
+            $prompt .= "## 参考情報源\n";
+            $prompt .= implode("\n", $citation_sources);
+        } else {
+            // Claude用プロンプト
+            $prompt = "あなたは{$writing_style}として、以下の最新ニュース情報を参考に、読みやすく情報価値の高い記事を作成してください。\n\n";
+            $prompt .= "## 参考ニュース情報\n{$news_summary}\n";
+            $prompt .= "## 記事作成の指示\n";
+            $prompt .= "- 文字数: 約{$word_count}文字\n";
+            $prompt .= "- 言語: {$output_language}\n";
+            $prompt .= "- キーワード: {$keywords}\n";
+            $prompt .= "- 構成: タイトル、導入、本文（複数段落）、まとめ\n";
+            $prompt .= "- 読者に価値を提供する内容にする\n";
+            $prompt .= "- 記事の最後に「## 参考情報源」セクションを追加し、リンクを含める\n";
+            $prompt .= "- 記事は必ず最後まで完成させる\n\n";
+            $prompt .= "出力形式:\n";
+            $prompt .= "タイトル: [記事タイトル]\n\n";
+            $prompt .= "[記事本文（必ず最後まで完成）]\n\n";
+            $prompt .= "## 参考情報源\n";
+            $prompt .= implode("\n", $citation_sources);
+        }
+        
+        $this->log('info', 'ニュースベースプロンプト生成完了 (ニュース件数: ' . count($news_data) . ')');
+        return $prompt;
+    }
+    
+    /**
      * ログ記録
      */
     private function log($level, $message) {
@@ -3007,6 +3131,252 @@ class AINewsAutoPoster {
         $logs = array_slice($logs, -300);
         
         update_option('ai_news_autoposter_logs', $logs);
+    }
+    
+    /**
+     * 最新ニュース検索・取得機能
+     */
+    private function search_latest_news($keywords, $limit = 5) {
+        $this->log('info', "ニュース検索開始: キーワード「{$keywords}」");
+        
+        $news_sources = array();
+        
+        // Google News RSS
+        $google_news = $this->fetch_google_news($keywords, $limit);
+        if (!empty($google_news)) {
+            $news_sources = array_merge($news_sources, $google_news);
+        }
+        
+        // 日本語AIニュースサイトのRSS
+        $japanese_tech_news = $this->fetch_japanese_tech_news($keywords, $limit);
+        if (!empty($japanese_tech_news)) {
+            $news_sources = array_merge($news_sources, $japanese_tech_news);
+        }
+        
+        // 重複除去とソート
+        $news_sources = $this->deduplicate_news($news_sources);
+        $news_sources = array_slice($news_sources, 0, $limit);
+        
+        $this->log('info', '検索結果: ' . count($news_sources) . '件の記事を取得');
+        
+        return $news_sources;
+    }
+    
+    /**
+     * Google News RSSから検索
+     */
+    private function fetch_google_news($keywords, $limit = 3) {
+        $encoded_keywords = urlencode($keywords);
+        $rss_url = "https://news.google.com/rss/search?q={$encoded_keywords}&hl=ja&gl=JP&ceid=JP:ja";
+        
+        $response = wp_remote_get($rss_url, array(
+            'timeout' => 30,
+            'user-agent' => 'Mozilla/5.0 (compatible; WordPress NewsBot)'
+        ));
+        
+        if (is_wp_error($response)) {
+            $this->log('error', 'Google News RSS取得エラー: ' . $response->get_error_message());
+            return array();
+        }
+        
+        $body = wp_remote_retrieve_body($response);
+        $news_items = array();
+        
+        // SimpleXMLでRSSをパース
+        libxml_use_internal_errors(true);
+        $xml = simplexml_load_string($body);
+        
+        if ($xml === false) {
+            $this->log('error', 'Google News RSSパースエラー');
+            return array();
+        }
+        
+        if (isset($xml->channel->item)) {
+            $count = 0;
+            foreach ($xml->channel->item as $item) {
+                if ($count >= $limit) break;
+                
+                $news_items[] = array(
+                    'title' => (string)$item->title,
+                    'url' => (string)$item->link,
+                    'description' => (string)$item->description,
+                    'pub_date' => (string)$item->pubDate,
+                    'source' => 'Google News'
+                );
+                $count++;
+            }
+        }
+        
+        $this->log('info', 'Google News: ' . count($news_items) . '件取得');
+        return $news_items;
+    }
+    
+    /**
+     * 日本語技術ニュースサイトから検索
+     */
+    private function fetch_japanese_tech_news($keywords, $limit = 3) {
+        $tech_rss_feeds = array(
+            'ITmedia' => 'https://rss.itmedia.co.jp/rss/2.0/ait.xml',
+            'TechCrunch Japan' => 'https://jp.techcrunch.com/feed/',
+            'Engadget日本版' => 'https://feeds.feedburner.com/engadget/japanese',
+            'CNET Japan' => 'https://feeds.japan.cnet.com/rss/cnet/all.rdf',
+            '朝日新聞デジタル' => 'https://www.asahi.com/rss/index.rdf',
+            'NHKニュース' => 'https://www.nhk.or.jp/rss/news/cat0.xml',
+            'Yahoo!ニュース' => 'https://news.yahoo.co.jp/rss/topics/top-picks.xml'
+        );
+        
+        $all_news = array();
+        
+        foreach ($tech_rss_feeds as $source_name => $rss_url) {
+            $news_items = $this->fetch_rss_feed($rss_url, $source_name, $keywords);
+            if (!empty($news_items)) {
+                $all_news = array_merge($all_news, array_slice($news_items, 0, 2));
+            }
+        }
+        
+        return array_slice($all_news, 0, $limit);
+    }
+    
+    /**
+     * RSS/Atomフィードを取得・パース
+     */
+    private function fetch_rss_feed($rss_url, $source_name, $keywords) {
+        $response = wp_remote_get($rss_url, array(
+            'timeout' => 20,
+            'user-agent' => 'Mozilla/5.0 (compatible; WordPress NewsBot)'
+        ));
+        
+        if (is_wp_error($response)) {
+            $this->log('warning', "{$source_name} RSS取得エラー: " . $response->get_error_message());
+            return array();
+        }
+        
+        $body = wp_remote_retrieve_body($response);
+        $news_items = array();
+        
+        libxml_use_internal_errors(true);
+        $xml = simplexml_load_string($body);
+        
+        if ($xml === false) {
+            $this->log('warning', "{$source_name} RSSパースエラー");
+            return array();
+        }
+        
+        // RSS 2.0 形式
+        if (isset($xml->channel->item)) {
+            foreach ($xml->channel->item as $item) {
+                $title = (string)$item->title;
+                $description = (string)($item->description ?? $item->summary ?? '');
+                
+                // キーワードに関連する記事のみフィルタ
+                if ($this->is_relevant_news($title . ' ' . $description, $keywords)) {
+                    $news_items[] = array(
+                        'title' => $title,
+                        'url' => (string)$item->link,
+                        'description' => $description,
+                        'pub_date' => (string)$item->pubDate,
+                        'source' => $source_name
+                    );
+                }
+            }
+        }
+        // Atom形式
+        elseif (isset($xml->entry)) {
+            foreach ($xml->entry as $entry) {
+                $title = (string)$entry->title;
+                $description = (string)($entry->summary ?? $entry->content ?? '');
+                
+                if ($this->is_relevant_news($title . ' ' . $description, $keywords)) {
+                    $news_items[] = array(
+                        'title' => $title,
+                        'url' => (string)$entry->link['href'],
+                        'description' => $description,
+                        'pub_date' => (string)$entry->published,
+                        'source' => $source_name
+                    );
+                }
+            }
+        }
+        
+        $this->log('info', "{$source_name}: " . count($news_items) . "件の関連記事を取得");
+        return $news_items;
+    }
+    
+    /**
+     * ニュースの関連性チェック
+     */
+    private function is_relevant_news($text, $keywords) {
+        $text = strtolower($text);
+        $keyword_array = explode(',', strtolower($keywords));
+        
+        // ユーザー設定キーワードとの関連性をチェック
+        foreach ($keyword_array as $keyword) {
+            if (strpos($text, trim($keyword)) !== false) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * ニュース記事の重複除去
+     */
+    private function deduplicate_news($news_sources) {
+        $unique_news = array();
+        $seen_titles = array();
+        
+        foreach ($news_sources as $news) {
+            $title_key = strtolower(preg_replace('/[^a-zA-Z0-9ひらがなカタカナ漢字]/', '', $news['title']));
+            
+            if (!isset($seen_titles[$title_key])) {
+                $seen_titles[$title_key] = true;
+                $unique_news[] = $news;
+            }
+        }
+        
+        // 日付順にソート（新しい順）
+        usort($unique_news, function($a, $b) {
+            return strtotime($b['pub_date']) - strtotime($a['pub_date']);
+        });
+        
+        return $unique_news;
+    }
+    
+    /**
+     * ニュース記事の内容を取得
+     */
+    private function fetch_article_content($url) {
+        $response = wp_remote_get($url, array(
+            'timeout' => 30,
+            'user-agent' => 'Mozilla/5.0 (compatible; WordPress NewsBot)'
+        ));
+        
+        if (is_wp_error($response)) {
+            $this->log('warning', "記事内容取得エラー: {$url}");
+            return '';
+        }
+        
+        $html = wp_remote_retrieve_body($response);
+        
+        // HTMLから本文を抽出（簡易版）
+        $content = $this->extract_article_text($html);
+        
+        return $content;
+    }
+    
+    /**
+     * HTMLから記事本文を抽出
+     */
+    private function extract_article_text($html) {
+        // HTMLタグを除去
+        $text = wp_strip_all_tags($html);
+        
+        // 余分な空白を削除
+        $text = preg_replace('/\s+/', ' ', $text);
+        
+        // 最初の1000文字程度を取得
+        return mb_substr(trim($text), 0, 1000);
     }
 }
 

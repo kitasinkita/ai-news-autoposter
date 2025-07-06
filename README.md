@@ -1,24 +1,25 @@
 # AI News AutoPoster
 
-🤖 **Claude Sonnet 4を使用してAIニュースを自動生成・投稿するWordPressプラグイン**
+🤖 **Claude Sonnet 4とGemini 2.5を使用して任意キーワードニュースを自動生成・投稿するWordPressプラグイン**
 
 [![WordPress](https://img.shields.io/badge/WordPress-5.0+-blue.svg)](https://wordpress.org)
 [![PHP](https://img.shields.io/badge/PHP-7.4+-purple.svg)](https://php.net)
 [![License](https://img.shields.io/badge/License-GPL%20v2-green.svg)](LICENSE)
 [![Claude AI](https://img.shields.io/badge/AI-Claude%20Sonnet%204-orange.svg)](https://anthropic.com)
-[![Version](https://img.shields.io/badge/Version-1.2.15-green.svg)](https://github.com/kitasinkita/ai-news-autoposter/releases)
+[![Version](https://img.shields.io/badge/Version-1.2.26-green.svg)](https://github.com/kitasinkita/ai-news-autoposter/releases)
 
 ## 📖 概要
 
-AI News AutoPosterは、**Claude Sonnet 4**と**Gemini 2.5 Flash**を活用してAI関連ニュースを自動生成・投稿するWordPressプラグインです。Geminiの**Google Search Grounding**により2024年末までの最新ニュースを取り込み、高品質な記事を1時間間隔で自動投稿します。多言語対応、カスタムプロンプト、SEO最適化機能を備えた完全自動システムです。
+AI News AutoPosterは、**Claude Sonnet 4**と**Gemini 2.5 Flash**を活用して**任意のキーワード**に関するニュースを自動生成・投稿するWordPressプラグインです。RSSベースの実ニュース検索により最新情報を取り込み、アウトドア、テクノロジー、ビジネス、スポーツなど任意のジャンルで高品質な記事を1時間間隔で自動投稿します。多言語対応、カスタムプロンプト、SEO最適化機能を備えた完全自動システムです。
 
 ## ✨ 主な機能
 
 ### 🤖 AI記事自動生成
 - **AIモデル選択** - Claude (Haiku/Sonnet 3.5/Sonnet 4) / Gemini (1.5 Flash/2.0 Flash/2.5 Flash)
-- **Google Search Grounding** - Gemini 2.5による最新ニュース取り込み
+- **任意キーワード対応** - アウトドア、テクノロジー、ビジネス、スポーツなど自由設定
+- **RSSベース実ニュース検索** - Google News、朝日新聞、NHK、Yahoo!ニュースなど複数ソース
 - **多言語対応** (日本語・英語・中国語)
-- **最新情報対応** - 2024年末までの最新知識活用
+- **最新情報対応** - リアルタイムニュース取り込み
 - **カスタムプロンプト** 対応
 - **自動参考リンク** 生成とクリック可能化
 
@@ -270,14 +271,22 @@ ai-news-autoposter/
 
 ## 🔄 バージョン履歴
 
-### v1.2.15 (現在) ✅
+### v1.2.26 (現在) ✅
+- ✅ **任意キーワード完全対応** - ハードコーディングされたAIキーワード削除
+- ✅ **RSSベース実ニュース検索** - Google News、朝日新聞、NHK、Yahoo!ニュース統合
+- ✅ **キーワード非依存フィルタリング** - AI偏重から汎用的な関連性判定へ
+- ✅ **アウトドア・ライフスタイル対応** - テクノロジー以外のジャンル完全サポート
+- ✅ **エラー処理改善** - 正規表現・配列アクセス問題修正
+- ✅ **記事品質向上** - 完結記事生成、途中切れ防止
+- ✅ **実証済み動作確認** - アウトドアキーワードでの記事生成成功
+
+### v1.2.25
+- ✅ **文字エンコーディング修正** - 二重UTF-8変換による文字化け解決
+- ✅ **引用元表示改善** - Markdownリンク形式統一
+
+### v1.2.15
 - ✅ **Gemini 2.5 Flash対応** - Google Search Grounding機能付き
 - ✅ **最新ニュース取り込み** - 2024年末までの最新情報対応
-- ✅ **タイトル解析機能向上** - 参考情報源のタイトル適切処理
-- ✅ **参考情報源表示改善** - HTMLタグ形式での表示
-- ✅ **LLMベースタイトル生成** - 機械的短縮から適切なタイトル生成へ
-- ✅ **Google Search Grounding対応** - 実URLでの記事統合
-- ✅ **UI/UX大幅改善** - 管理画面の使いやすさ向上
 - ✅ **AIモデル選択機能** - Claude (Haiku/Sonnet 3.5/Sonnet 4) / Gemini (1.5/2.0/2.5 Flash)
 - ✅ **多言語ニュース収集** (日本語・英語・中国語)
 - ✅ **カスタムプロンプト機能**
