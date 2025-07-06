@@ -1983,16 +1983,12 @@ class AINewsAutoPoster {
         // 記事内容に参考情報源セクションを追加または置換
         $content = $article_data['content'];
         
-        // 複数の形式の参考情報源セクションを段階的に削除
+        // 参考情報源セクションを削除（文字化けを防ぐシンプルなパターン）
         $reference_patterns = array(
-            // Markdownスタイル（# ## ###）
-            '/#+\s*参考.*?(?=\n#+|\n\n|\Z)/is',
-            // HTMLスタイル（<h2> <h3>など）
-            '/<h[2-6][^>]*>\s*参考.*?<\/h[2-6]>.*?(?=<h[2-6]|\Z)/is',
-            // 太字スタイル（**参考情報源**）
-            '/\*\*\s*参考.*?\*\*.*?(?=\n\n|\*\*|\Z)/is',
-            // リスト形式で参考情報が続く場合
-            '/参考情報.*?(?:\n-.*?(?:https?:\/\/[^\s\)]+|vertexaisearch\.cloud\.google\.com[^\s\)]+).*?)*(?=\n\n|\Z)/is'
+            // Markdownスタイル見出し
+            '/\n#+\s*参考[^\n]*(?:\n[^#]*)*(?=\n#|\Z)/u',
+            // HTMLスタイル見出し
+            '/<h[2-6][^>]*>参考[^<]*<\/h[2-6]>[^<]*(?=<h[2-6]|\Z)/u'
         );
         
         $removed_sections = 0;
@@ -2005,10 +2001,9 @@ class AINewsAutoPoster {
             }
         }
         
-        // Google リダイレクトURLを含む行を削除
+        // Google リダイレクトURLを含む行を削除（シンプルな処理）
         $redirect_patterns = array(
-            '/.*vertexaisearch\.cloud\.google\.com.*\n?/i',
-            '/.*https?:\/\/[^\s]*redirect[^\s]*.*\n?/i'
+            '/.*vertexaisearch\.cloud\.google\.com[^\n]*\n?/u'
         );
         
         foreach ($redirect_patterns as $pattern) {
@@ -2036,65 +2031,30 @@ class AINewsAutoPoster {
         $content = preg_replace('/\n{3,}/', "\n\n", $content);
         $content = trim($content);
         
-        // 新しい統合された参考情報源セクションを生成
-        $sources_section = "\n\n## 参考情報源\n";
+        // 参考情報源セクションを生成（文字化けを防ぐシンプルな処理）
+        $sources_section = "\n\n## 参考情報源\n\n";
         foreach ($grounding_sources as $index => $source) {
-            // デバッグ: ソースの完全な内容をログ出力
-            $this->log('info', "ソース[" . ($index + 1) . "]の内容: " . json_encode($source, JSON_UNESCAPED_UNICODE));
+            $title = $source['title'] ?? 'AI関連記事';
+            $url = $source['url'] ?? '';
             
-            $original_title = $source['title'] ?? 'AI関連記事';
-            $original_url = $source['url'] ?? '';
-            
-            // タイトルとURLを基本的にそのまま使用（過度な処理を避ける）
-            $display_title = $original_title;
-            
-            // タイトルが明らかにドメイン名のみの場合のみ、より具体的なタイトルを生成
-            if (preg_match('/^[a-zA-Z0-9\-\.]+\.(com|co\.jp|jp|net|org)$/i', $original_title)) {
-                $domain_to_name = array(
-                    'itmedia.co.jp' => 'ITmedia：AI技術の最新動向',
-                    'techcrunch.com' => 'TechCrunch：AIスタートアップニュース',
-                    'wired.com' => 'Wired：AI技術の未来展望',
-                    'note.com' => 'Note：AI開発者による解説記事',
-                    'microsoft.com' => 'Microsoft：AI製品・サービス発表',
-                    'ibm.com' => 'IBM：企業向けAIソリューション',
-                    'qiita.com' => 'Qiita：AI開発技術情報',
-                    'brainpad.co.jp' => 'ブレインパッド：AIデータ分析事例',
-                    'gartner.co.jp' => 'ガートナー：AI市場分析レポート',
-                    'hp.com' => 'HP：AI活用ビジネス事例',
-                    'sotatek.com' => 'SotaTek：AI開発サービス紹介',
-                    'agentec.jp' => 'エージェンテック：AIエージェント技術',
-                    'atarayo.co.jp' => 'あたらよ：AI業界ニュース',
-                    'shift-ai.co.jp' => 'SHIFT AI：AI品質保証技術',
-                    'kimini.online' => 'Kimini：AI教育サービス',
-                    'ai-kenkyujo.com' => 'AI研究所：AI技術解説',
-                    'lion.co.jp' => 'ライオン：AI活用製品開発'
-                );
+            // 文字化けを防ぐため最小限の処理のみ
+            if (!empty($title) && !empty($url)) {
+                // vertexaisearch URLの場合はGoogle検索に置換
+                if (strpos($url, 'vertexaisearch.cloud.google.com') !== false) {
+                    $url = 'https://www.google.com/search?q=' . urlencode($title);
+                }
                 
-                $display_title = $domain_to_name[$original_title] ?? ($original_title . '：AI関連記事');
+                // タイトルが長すぎる場合のみ短縮
+                if (mb_strlen($title) > 60) {
+                    $title = mb_substr($title, 0, 57) . '...';
+                }
+                
+                $sources_section .= sprintf(
+                    "- [%s](%s)\n",
+                    esc_html($title),
+                    esc_url($url)
+                );
             }
-            
-            // タイトルが長すぎる場合は短縮
-            if (mb_strlen($display_title) > 50) {
-                $display_title = mb_substr($display_title, 0, 47) . '...';
-            }
-            
-            $title = esc_html($display_title);
-            
-            // 長いグラウンディングURLを簡潔に置換（データベース負荷軽減）
-            if (strpos($original_url, 'vertexaisearch.cloud.google.com') !== false) {
-                // グラウンディングURLは検索リンクに置換
-                $url = esc_url('https://google.com/search?q=' . urlencode($original_title));
-            } else {
-                $url = esc_url($original_url);
-            }
-            
-            // URLが空の場合のみ、検索URLを生成
-            if (empty($url) || $url === 'https://') {
-                $url = esc_url('https://google.com/search?q=' . urlencode($display_title));
-            }
-            
-            $sources_section .= "- <a href=\"{$url}\" target=\"_blank\">{$title}</a>\n";
-            $this->log('info', "統合URL[" . ($index + 1) . "]: {$title} - {$url}");
         }
         
         // 最終的な統合セクションを追加
@@ -2362,10 +2322,10 @@ class AINewsAutoPoster {
             return new WP_Error('gemini_api_error', 'Gemini API エラー: ' . $response_body);
         }
         
-        // UTF-8エンコーディングを確保してからJSON解析
+        // UTF-8エンコーディングチェック（変換処理は削除して文字化けを防止）
         if (!mb_check_encoding($response_body, 'UTF-8')) {
-            $this->log('warning', 'Gemini APIレスポンスのエンコーディングを修正');
-            $response_body = mb_convert_encoding($response_body, 'UTF-8', 'UTF-8//IGNORE');
+            $this->log('error', 'Gemini APIレスポンスがUTF-8ではありません');
+            return new WP_Error('encoding_error', 'レスポンスのエンコーディングエラー');
         }
         
         $response_data = json_decode($response_body, true);
