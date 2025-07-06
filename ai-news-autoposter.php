@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。Claude/Gemini API対応、RSSベース実ニュース検索、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.27
+ * Version: 1.2.28
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.27');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.28');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -895,10 +895,21 @@ class AINewsAutoPoster {
      */
     private function generate_and_publish_article($is_test = false, $post_type = 'auto') {
         $settings = get_option('ai_news_autoposter_settings', array());
-        $api_key = $settings['claude_api_key'] ?? '';
         
-        if (empty($api_key)) {
-            return new WP_Error('no_api_key', 'Claude API キーが設定されていません。');
+        // モデルに応じてAPIキーをチェック
+        $model = $settings['claude_model'] ?? 'claude-3-5-haiku-20241022';
+        $is_gemini = strpos($model, 'gemini') === 0;
+        
+        if ($is_gemini) {
+            $api_key = $settings['gemini_api_key'] ?? '';
+            if (empty($api_key)) {
+                return new WP_Error('no_api_key', 'Gemini API キーが設定されていません。');
+            }
+        } else {
+            $api_key = $settings['claude_api_key'] ?? '';
+            if (empty($api_key)) {
+                return new WP_Error('no_api_key', 'Claude API キーが設定されていません。');
+            }
         }
         
         // まず最新ニュースを検索
@@ -907,8 +918,6 @@ class AINewsAutoPoster {
         $news_data = $this->search_latest_news($search_keywords, 5);
         
         // AI APIを呼び出し
-        $model = $settings['claude_model'] ?? 'claude-3-5-haiku-20241022';
-        $is_gemini = strpos($model, 'gemini') === 0;
         $api_name = $is_gemini ? 'Gemini' : 'Claude';
         
         if (!empty($news_data)) {

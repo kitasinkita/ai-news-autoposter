@@ -517,16 +517,18 @@
                 const currentValue = parseInt($stat.text()) || 0;
                 
                 if (targetValue !== currentValue) {
-                    $({ value: currentValue }).animate({ value: targetValue }, {
-                        duration: 1000,
-                        easing: 'swing',
-                        step: function() {
-                            $stat.text(Math.round(this.value));
-                        },
-                        complete: function() {
+                    // CSP対応: animate()の代わりにsetIntervalを使用
+                    let current = currentValue;
+                    const increment = (targetValue - currentValue) / 20;
+                    const updateStat = setInterval(function() {
+                        current += increment;
+                        if ((increment > 0 && current >= targetValue) || (increment < 0 && current <= targetValue)) {
                             $stat.text(targetValue);
+                            clearInterval(updateStat);
+                        } else {
+                            $stat.text(Math.round(current));
                         }
-                    });
+                    }, 50);
                 }
             });
         },
@@ -537,10 +539,19 @@
             const $button = $(this);
             const originalText = $button.text();
             
+            // 既に処理中の場合は無視
+            if ($button.data('processing')) {
+                console.log('Already processing, ignoring click');
+                return;
+            }
+            
             // 確認ダイアログ
             if (!confirm('記事を今すぐ投稿しますか？この処理には時間がかかる場合があります。')) {
                 return;
             }
+            
+            // 処理中フラグを設定
+            $button.data('processing', true);
             
             // プログレスバー表示
             const initialMessage = 'AIで記事を生成・投稿中...';
@@ -586,6 +597,10 @@
                     clearInterval(progressInterval);
                     AINewsAutoPoster.updateProgress(100, '投稿完了！');
                     
+                    console.log('AJAX Response:', response);
+                    console.log('Response type:', typeof response);
+                    console.log('Response.success:', response.success);
+                    
                     if (response.success) {
                         AINewsAutoPoster.showNotification('success', 
                             '記事を正常に投稿しました！ <a href="' + response.data.edit_url + '" target="_blank">編集画面で確認</a> | <a href="' + response.data.view_url + '" target="_blank">表示</a>');
@@ -594,6 +609,7 @@
                         AINewsAutoPoster.updateStats();
                         
                     } else {
+                        console.log('Response data:', response.data);
                         AINewsAutoPoster.showNotification('error', '記事投稿に失敗しました: ' + response.data);
                     }
                 },
