@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。Claude/Gemini API対応、RSSベース実ニュース検索、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.26
+ * Version: 1.2.27
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.26');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.27');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -919,14 +919,33 @@ class AINewsAutoPoster {
         
         if ($is_gemini) {
             $this->log('info', 'Gemini APIを呼び出します...');
-            if (!empty($news_data)) {
-                // RSSから取得したニュースデータを基にプロンプトを構築
-                $gemini_prompt = $this->build_news_based_prompt($settings, $news_data, 'gemini');
-            } else {
-                // フォールバック: 直接ニュース検索プロンプト
+            
+            // Gemini 2.5でGoogle Search Groundingを優先試行
+            if ($model === 'gemini-2.5-flash') {
+                $this->log('info', 'Google Search Grounding優先でGemini 2.5を試行...');
                 $gemini_prompt = $this->build_gemini_news_search_prompt($settings);
+                $ai_response = $this->call_gemini_api($gemini_prompt, $settings['gemini_api_key'] ?? '', $model);
+                
+                // Google Search Groundingエラー時のフォールバック
+                if (is_wp_error($ai_response) && strpos($ai_response->get_error_message(), 'Search Grounding') !== false) {
+                    $this->log('warning', 'Google Search Grounding制限検出、RSSベースニュースにフォールバック');
+                    if (!empty($news_data)) {
+                        $gemini_prompt = $this->build_news_based_prompt($settings, $news_data, 'gemini');
+                        $ai_response = $this->call_gemini_api($gemini_prompt, $settings['gemini_api_key'] ?? '', $model);
+                    } else {
+                        $this->log('error', 'RSSニュースデータも空のため、記事生成不可');
+                        return new WP_Error('no_news_data', 'Google Search Grounding制限中で、RSSニュースも取得できませんでした。');
+                    }
+                }
+            } else {
+                // 他のGeminiモデルはRSSベース
+                if (!empty($news_data)) {
+                    $gemini_prompt = $this->build_news_based_prompt($settings, $news_data, 'gemini');
+                } else {
+                    $gemini_prompt = $this->build_gemini_news_search_prompt($settings);
+                }
+                $ai_response = $this->call_gemini_api($gemini_prompt, $settings['gemini_api_key'] ?? '', $model);
             }
-            $ai_response = $this->call_gemini_api($gemini_prompt, $settings['gemini_api_key'] ?? '', $model);
         } else {
             $this->log('info', 'Claude APIを呼び出します...');
             if (!empty($news_data)) {
@@ -941,7 +960,30 @@ class AINewsAutoPoster {
         
         if (is_wp_error($ai_response)) {
             $this->log('error', $api_name . ' API呼び出しに失敗: ' . $ai_response->get_error_message());
-            return $ai_response;
+            
+            // Gemini API失敗時のClaude APIフォールバック
+            if ($is_gemini && !empty($settings['claude_api_key'])) {
+                $this->log('warning', 'Gemini API失敗、Claude APIにフォールバック中...');
+                
+                if (!empty($news_data)) {
+                    $claude_prompt = $this->build_news_based_prompt($settings, $news_data);
+                } else {
+                    $claude_prompt = $this->build_direct_article_prompt($settings);
+                }
+                
+                $ai_response = $this->call_claude_api($claude_prompt, $settings['claude_api_key'], $settings);
+                
+                if (is_wp_error($ai_response)) {
+                    $this->log('error', 'Claude APIフォールバックも失敗: ' . $ai_response->get_error_message());
+                    return $ai_response;
+                } else {
+                    $this->log('info', 'Claude APIフォールバック成功');
+                    $api_name = 'Claude (フォールバック)';
+                    $is_gemini = false; // Claude処理に切り替え
+                }
+            } else {
+                return $ai_response;
+            }
         }
         
         $this->log('info', $api_name . ' APIから正常にレスポンスを受信しました');
@@ -969,7 +1011,7 @@ class AINewsAutoPoster {
         
         // 最終的なコンテンツ処理（免責事項追加）
         $this->log('info', '最終コンテンツ処理を実行中...');
-        $article_data['content'] = $this->post_process_content($article_data['content']);
+        $article_data['content'] = $this->post_process_content($article_data['content'], $settings);
         
         // 投稿データを準備
         $this->log('info', 'WordPress投稿データを準備中...');
@@ -1000,23 +1042,55 @@ class AINewsAutoPoster {
         // メタディスクリプションを安全に生成
         $this->log('info', 'メタディスクリプションを生成中...');
         
+        // タイトルクリーニング（「タイトル: 」プレフィックスを除去）
+        $clean_title = $article_data['title'];
+        if (strpos($clean_title, 'タイトル: ') === 0) {
+            $clean_title = mb_substr($clean_title, 5); // 「タイトル: 」をマルチバイト対応で除去
+            $this->log('info', 'タイトルから「タイトル: 」プレフィックスを除去: ' . mb_substr($clean_title, 0, 50));
+        }
+        
+        // タイトルの基本的なクリーニングのみ実行（文字エンコーディング変換は削除）
+        $clean_title = trim($clean_title);
+        
+        // 空のタイトルの場合はデフォルトタイトルを設定
+        if (empty($clean_title)) {
+            $clean_title = 'AI生成記事 - ' . date('Y年m月d日');
+            $this->log('warning', 'タイトルが空のためデフォルトタイトルを設定: ' . $clean_title);
+        }
+        
+        // コンテンツの最小限検証のみ実行（Gemini APIからは正しいUTF-8で受信）
+        $clean_content = $article_data['content'];
+        
+        // 明らかな文字化けパターンのみ検出してログ出力（修正はしない）
+        if (preg_match('/[^\x00-\x7F\x80-\xFF]{3,}/', $clean_content)) {
+            $this->log('warning', '特殊文字パターンを検出しましたが、そのまま使用します');
+        }
+        
         // 基本的な投稿データを作成（メタデータは後で追加）
         $post_data = array(
-            'post_title' => $article_data['title'],
-            'post_content' => $article_data['content'],
+            'post_title' => $clean_title,
+            'post_content' => $clean_content,
             'post_status' => $is_test ? 'draft' : ($settings['post_status'] ?? 'publish'),
             'post_category' => array($category),
             'post_type' => 'post',
-            'post_author' => get_current_user_id() ?: 1
+            'post_author' => get_current_user_id() ?: 1,
+            'post_excerpt' => '', // 明示的に空の抜粋を設定
+            'comment_status' => 'open', // コメントステータスを明示的に設定
+            'ping_status' => 'open', // ピングステータスを明示的に設定
+            'post_date' => current_time('mysql'), // 現在時刻を明示的に設定
+            'post_date_gmt' => current_time('mysql', 1) // GMT時刻を明示的に設定
         );
 
         // メタデータは別途用意（問題がある場合は無効化できるように）
         $meta_data = array(
             '_ai_generated' => true,
-            '_ai_post_type' => $is_test ? 'test' : $post_type,
-            '_seo_focus_keyword' => $settings['seo_focus_keyword'] ?? '',
-            '_meta_description' => $this->safe_generate_meta_description($article_data['title'], $settings)
+            '_ai_post_type' => $is_test ? 'test' : $post_type
         );
+        
+        // SEO関連のメタデータは後で安全に追加
+        if (!empty($settings['seo_focus_keyword'])) {
+            $meta_data['_seo_focus_keyword'] = $settings['seo_focus_keyword'];
+        }
         
         $this->log('info', '投稿データ配列作成完了。コンテンツサイズチェックを開始します。');
         
@@ -1034,9 +1108,9 @@ class AINewsAutoPoster {
         $this->log('info', '投稿データ詳細: タイトル=' . mb_strlen($post_data['post_title']) . '文字、コンテンツ=' . $content_length . '文字、ステータス=' . $post_data['post_status'] . '、カテゴリ=' . json_encode($post_data['post_category']));
         
         // コンテンツが長すぎる場合は短縮（データベースエラー回避）
-        if ($content_length > 4000) {
-            $this->log('warning', 'コンテンツが長すぎます(' . $content_length . '文字)。4,000文字に短縮します。');
-            $post_data['post_content'] = mb_substr($post_data['post_content'], 0, 3800) . "\n\n※ 記事が長いため一部を省略して表示しています。";
+        if ($content_length > 2500) {
+            $this->log('warning', 'コンテンツが長すぎます(' . $content_length . '文字)。2,500文字に短縮します。');
+            $post_data['post_content'] = mb_substr($post_data['post_content'], 0, 2400) . "\n\n※ 記事が長いため一部を省略して表示しています。";
             $this->log('info', '短縮後のコンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字');
         }
         
@@ -1107,9 +1181,11 @@ class AINewsAutoPoster {
         $this->log('info', '最終処理後のコンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字');
         
         // 実際のデータでテスト投稿を試行（メタデータなし）
+        // 安全なテストのため、コンテンツを大幅に短縮
+        $safe_content = mb_substr($post_data['post_content'], 0, 500) . "\n\n[テスト用短縮版]";
         $test_post_data_real = array(
             'post_title' => $post_data['post_title'],
-            'post_content' => $post_data['post_content'],
+            'post_content' => $safe_content,
             'post_status' => 'draft',
             'post_type' => 'post',
             'post_category' => array(1)
@@ -1195,17 +1271,47 @@ class AINewsAutoPoster {
         $this->log('info', 'wp_insert_post実行直前のタイトル: "' . mb_substr($post_data['post_title'], 0, 50) . '"');
         $this->log('info', 'wp_insert_post実行直前のコンテンツ先頭100文字: "' . mb_substr($post_data['post_content'], 0, 100) . '"');
         
+        // 最終的な文字クリーニング（データベースエラー防止）
+        $post_data['post_title'] = $this->clean_text_for_database($post_data['post_title']);
+        $post_data['post_content'] = $this->clean_text_for_database($post_data['post_content']);
+        
+        // コンテンツ長チェック（問題解決により制限を緩和）
+        if (mb_strlen($post_data['post_content']) > 10000) {
+            $post_data['post_content'] = mb_substr($post_data['post_content'], 0, 9500) . "\n\n[記事は制限により短縮されています]";
+            $this->log('warning', 'コンテンツが10000文字を超えたため短縮しました');
+        } else {
+            $this->log('info', 'コンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字（正常範囲）');
+        }
+        
         // PHPエラーをキャッチするためのoutput buffering開始
         ob_start();
         
+        // MySQLエラーを直接監視
+        global $wpdb;
+        $wpdb->flush();
+        $wpdb->last_error = '';
+        
         try {
+            $this->log('info', 'wp_insert_post直前のMySQL接続確認: ' . ($wpdb->check_connection() ? '正常' : '異常'));
             $post_id = wp_insert_post($post_data, true); // true: より詳細なエラー情報
+            
+            // MySQL エラーを即座にチェック
+            if ($wpdb->last_error) {
+                $this->log('error', 'MySQL直接エラー: ' . $wpdb->last_error);
+            }
+            
             $this->log('info', 'wp_insert_post実行完了。結果: ' . (is_wp_error($post_id) ? 'WP_Error' : (is_numeric($post_id) ? 'ID=' . $post_id : '0')));
         } catch (Exception $e) {
             $this->log('error', 'wp_insert_postでPHP例外が発生: ' . $e->getMessage());
+            if ($wpdb->last_error) {
+                $this->log('error', '例外時のMySQLエラー: ' . $wpdb->last_error);
+            }
             $post_id = new WP_Error('php_exception', $e->getMessage());
         } catch (Error $e) {
             $this->log('error', 'wp_insert_postでPHPエラーが発生: ' . $e->getMessage());
+            if ($wpdb->last_error) {
+                $this->log('error', 'PHPエラー時のMySQLエラー: ' . $wpdb->last_error);
+            }
             $post_id = new WP_Error('php_error', $e->getMessage());
         }
         
@@ -1872,8 +1978,15 @@ class AINewsAutoPoster {
      * コンテンツをクリーンアップ
      */
     private function clean_content($content) {
-        // 余分な空行を除去
-        $content = preg_replace('/\n\s*\n\s*\n/', "\n\n", $content);
+        // 文字化けチェック
+        if (!mb_check_encoding($content, 'UTF-8')) {
+            $this->log('warning', 'clean_content: 文字化けが検出されました');
+            // 基本的なクリーニングのみ
+            return str_replace(array("\r\n", "\r"), "\n", trim($content));
+        }
+        
+        // 余分な空行を除去（UTF-8フラグ追加）
+        $content = preg_replace('/\n\s*\n\s*\n/u', "\n\n", $content);
         
         // 不完全な文章で終わっている場合は適切に処理
         $content = trim($content);
@@ -1893,25 +2006,31 @@ class AINewsAutoPoster {
      * 不完全な文末を修正
      */
     private function fix_incomplete_ending($content) {
+        // 文字化けチェック
+        if (!mb_check_encoding($content, 'UTF-8')) {
+            $this->log('warning', 'fix_incomplete_ending: 文字化けが検出されたため処理をスキップ');
+            return $content;
+        }
+        
         // 最後の文字を確認
         $last_char = mb_substr($content, -1);
         
-        // 不完全な終わり方のパターンを検出
+        // 不完全な終わり方のパターンを検出（UTF-8フラグ追加）
         $incomplete_patterns = array(
             // 助詞で終わっている場合（「また、大規模」など）
-            '/[、が、は、を、に、で、の、と、も、から、まで、より、について、に関して、として]$/',
+            '/[、が、は、を、に、で、の、と、も、から、まで、より、について、に関して、として]$/u',
             // 「〜など、」「〜等、」のパターン
-            '/(?:など|等)[、,]$/',
+            '/(?:など|等)[、,]$/u',
             // 数字や英字で終わっている場合
-            '/[0-9a-zA-Z]$/',
+            '/[0-9a-zA-Z]$/u',
             // カンマで終わっている場合
-            '/[、,]$/',
+            '/[、,]$/u',
             // 接続詞で終わっている場合
-            '/(?:しかし|また|さらに|一方|このため|その結果|つまり|なお|ちなみに|ただし)$/',
+            '/(?:しかし|また|さらに|一方|このため|その結果|つまり|なお|ちなみに|ただし)$/u',
             // 動詞の連用形で終わっている場合
-            '/(?:開始|実施|展開|推進|発表|導入|提供|支援|対応|実現)(?:する|し|した)(?:など|等)[、,]?$/',
+            '/(?:開始|実施|展開|推進|発表|導入|提供|支援|対応|実現)(?:する|し|した)(?:など|等)[、,]?$/u',
             // 「〜するなど、」のような不完全な列挙
-            '/[ぁ-ん](?:する|した|している)(?:など|等)[、,]?$/',
+            '/[ぁ-ん](?:する|した|している)(?:など|等)[、,]?$/u',
         );
         
         $is_incomplete = false;
@@ -1929,8 +2048,8 @@ class AINewsAutoPoster {
         
         // 不完全な場合は適切に修正
         if ($is_incomplete) {
-            // 最後の完全な文を見つける
-            $sentences = preg_split('/[。！？]/', $content);
+            // 最後の完全な文を見つける（UTF-8フラグ追加）
+            $sentences = preg_split('/[。！？]/u', $content);
             
             if (count($sentences) > 1) {
                 // 最後の不完全な文を除去し、その前の完全な文で終わらせる
@@ -2014,86 +2133,65 @@ class AINewsAutoPoster {
         
         $this->log('info', 'グラウンディングソースを記事に統合開始');
         
-        // 記事内容に参考情報源セクションを追加または置換
+        // 記事内容の既存参考情報源セクションを完全削除
         $content = $article_data['content'];
         
-        // 参考情報源セクションを削除（文字化けを防ぐシンプルなパターン）
-        $reference_patterns = array(
-            // Markdownスタイル見出し
-            '/\n#+\s*参考[^\n]*(?:\n[^#]*)*(?=\n#|\Z)/u',
-            // HTMLスタイル見出し
-            '/<h[2-6][^>]*>参考[^<]*<\/h[2-6]>[^<]*(?=<h[2-6]|\Z)/u'
-        );
-        
-        $removed_sections = 0;
-        foreach ($reference_patterns as $pattern) {
-            $matches = preg_match_all($pattern, $content);
-            if ($matches > 0) {
-                $content = preg_replace($pattern, '', $content);
-                $removed_sections += $matches;
-                $this->log('info', "参考情報源パターンで{$matches}件のセクションを削除");
-            }
-        }
-        
-        // Google リダイレクトURLを含む行を削除（シンプルな処理）
-        $redirect_patterns = array(
-            '/.*vertexaisearch\.cloud\.google\.com[^\n]*\n?/u'
-        );
-        
-        foreach ($redirect_patterns as $pattern) {
-            $matches = preg_match_all($pattern, $content);
-            if ($matches > 0) {
-                $content = preg_replace($pattern, '', $content);
-                $this->log('info', "リダイレクトURLで{$matches}件の行を削除");
-            }
-        }
-        
-        // サンプルURLやダミーURLを削除
-        $dummy_patterns = array(
-            '/https?:\/\/[^\/]*sample[^\/\s)]*[^\s)]*/',
-            '/https?:\/\/[^\/]*example[^\/\s)]*[^\s)]*/',
-            '/https?:\/\/[^\/]*dummy[^\/\s)]*[^\s)]*/',
-            '/https?:\/\/[^\/]*test[^\/\s)]*[^\s)]*/',
-            '/https?:\/\/[^\/]*placeholder[^\/\s)]*[^\s)]*/'
-        );
-        
-        foreach ($dummy_patterns as $pattern) {
-            $content = preg_replace($pattern, '[参考URL]', $content);
-        }
-        
-        // 連続する空行を整理
-        $content = preg_replace('/\n{3,}/', "\n\n", $content);
+        // 既存の参考情報源セクションを全て削除
+        $content = preg_replace('/(?:##?\s*参考情報源|参考情報源).*$/uis', '', $content);
+        $content = preg_replace('/\[([^\]]+)\]\([^)]+\)/u', '', $content); // Markdownリンク削除
+        $content = preg_replace('/<a[^>]*>.*?<\/a>/uis', '', $content); // HTMLリンク削除
         $content = trim($content);
         
-        // 参考情報源セクションを生成（文字化けを防ぐシンプルな処理）
+        $this->log('info', "既存の参考情報源セクションを完全削除");
+        
+        // 単一の参考情報源セクションを生成
         $sources_section = "\n\n## 参考情報源\n\n";
+        $valid_sources = 0;
+        
         foreach ($grounding_sources as $index => $source) {
-            $title = $source['title'] ?? 'AI関連記事';
+            $raw_title = $source['title'] ?? '';
             $url = $source['url'] ?? '';
             
-            // 文字化けを防ぐため最小限の処理のみ
-            if (!empty($title) && !empty($url)) {
-                // vertexaisearch URLの場合はGoogle検索に置換
-                if (strpos($url, 'vertexaisearch.cloud.google.com') !== false) {
-                    $url = 'https://www.google.com/search?q=' . urlencode($title);
+            if (!empty($raw_title) && !empty($url)) {
+                // 実際のページタイトル取得を試行
+                $title = $this->improve_source_title($raw_title, $url);
+                
+                // 完全クリーンアップ
+                $title = strip_tags($title);
+                $title = html_entity_decode($title, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                $title = preg_replace('/[<>]/', '', $title); // < > 完全除去
+                $title = preg_replace('/\s+/', ' ', trim($title));
+                
+                // 実際のURLを取得（Grounding APIリダイレクトを解決）
+                $actual_url = $this->get_actual_url_from_grounding($url);
+                if (empty($actual_url)) {
+                    $actual_url = $url; // フォールバック
                 }
                 
-                // タイトルが長すぎる場合のみ短縮
+                // タイトル長制限
                 if (mb_strlen($title) > 60) {
                     $title = mb_substr($title, 0, 57) . '...';
                 }
                 
-                $sources_section .= sprintf(
-                    "- [%s](%s)\n",
-                    esc_html($title),
-                    esc_url($url)
-                );
+                // 有効なソースのみ追加
+                if (!empty($title) && !preg_match('/^[a-z0-9.-]+\.(com|net|jp|co\.jp|org)$/i', $title)) {
+                    $sources_section .= sprintf(
+                        "- [%s](%s)\n",
+                        $title,
+                        $actual_url
+                    );
+                    $valid_sources++;
+                }
             }
         }
         
-        // 最終的な統合セクションを追加
-        $content .= $sources_section;
-        $this->log('info', "{$removed_sections}件の既存参考情報源セクションを削除し、統合セクションを追加しました");
+        // 有効なソースがある場合のみ追加
+        if ($valid_sources > 0) {
+            $content .= $sources_section;
+            $this->log('info', "{$valid_sources}件の有効なソースで参考情報源セクションを生成");
+        } else {
+            $this->log('warning', '有効なソースが見つからず、参考情報源セクションを生成できませんでした');
+        }
         
         $article_data['content'] = $content;
         $this->log('info', 'グラウンディングソース統合完了');
@@ -2102,22 +2200,214 @@ class AINewsAutoPoster {
     }
     
     /**
+     * Grounding APIリダイレクトから実際のURLを取得
+     */
+    private function get_actual_url_from_grounding($grounding_url) {
+        if (strpos($grounding_url, 'vertexaisearch.cloud.google.com') === false) {
+            return $grounding_url;
+        }
+        
+        try {
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $grounding_url);
+            curl_setopt($ch, CURLOPT_HEADER, true);
+            curl_setopt($ch, CURLOPT_NOBODY, true);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+            curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (compatible; AI-News-Bot/1.0)');
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false); // リダイレクトを手動で処理
+            curl_setopt($ch, CURLOPT_MAXREDIRS, 0);
+            
+            $response = curl_exec($ch);
+            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            
+            if ($response && ($http_code == 302 || $http_code == 301)) {
+                // Locationヘッダーから実際のURLを抽出
+                if (preg_match('/Location:\s*(.+)/i', $response, $matches)) {
+                    $actual_url = trim($matches[1]);
+                    $this->log('info', "実際のURL取得成功: {$grounding_url} -> {$actual_url}");
+                    return $actual_url;
+                }
+            }
+            
+        } catch (Exception $e) {
+            $this->log('warning', 'URL解決エラー: ' . $e->getMessage());
+        }
+        
+        return $grounding_url; // 失敗時は元のURLを返す
+    }
+    
+    /**
+     * ソースタイトルを改善（実際のページタイトルを取得）
+     */
+    private function improve_source_title($raw_title, $url) {
+        // ドメイン名のみの場合は実際のページタイトルを取得
+        if (preg_match('/^[a-z0-9.-]+\.(com|net|jp|co\.jp|org)$/i', $raw_title)) {
+            $actual_title = $this->fetch_actual_page_title($url);
+            if (!empty($actual_title) && $actual_title !== $raw_title) {
+                $this->log('info', "実際のページタイトルを取得: {$raw_title} -> {$actual_title}");
+                return $actual_title;
+            }
+            
+            // 取得失敗時は主要ドメインマップを使用
+            $domain_map = array(
+                'bepal.net' => 'BE-PAL（アウトドア情報サイト）',
+                'coleman.co.jp' => 'コールマン公式サイト',
+                'snowpeak.co.jp' => 'スノーピーク公式サイト',
+                'logos.ne.jp' => 'ロゴス公式サイト',
+                'naturum.ne.jp' => 'ナチュラム（アウトドア用品店）',
+                'youtube.com' => 'YouTube動画',
+                'prtimes.jp' => 'PR TIMES（プレスリリース）',
+                'yagai.life' => 'YAGAI（アウトドアメディア）',
+                'goout.jp' => 'GO OUT（アウトドア雑誌）',
+                'note.com' => 'Note記事',
+                'campballoon.com' => 'キャンプバルーン',
+                'outdoorpark.jp' => 'アウトドアパーク',
+                'netsea.jp' => 'NETSEA（卸・仕入れサイト）',
+                'fjallraven.jp' => 'フェールラーベン公式サイト',
+                'lantern.camp' => 'ランタン（キャンプ情報サイト）'
+            );
+            
+            return $domain_map[$raw_title] ?? $raw_title . '（アウトドア関連サイト）';
+        }
+        
+        // タイトルが適切な場合はそのまま使用
+        return $raw_title;
+    }
+    
+    /**
+     * 実際のページタイトルを取得
+     */
+    private function fetch_actual_page_title($url) {
+        if (strpos($url, 'vertexaisearch.cloud.google.com') === false) {
+            return '';
+        }
+        
+        try {
+            // リダイレクト先URLを取得
+            $redirect_url = $this->get_redirect_url($url);
+            if (empty($redirect_url)) {
+                return '';
+            }
+            
+            // ページコンテンツを取得してタイトルを抽出
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $redirect_url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 8);
+            curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (compatible; AI-News-Bot/1.0)');
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_MAXREDIRS, 3);
+            
+            $content = curl_exec($ch);
+            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            
+            if ($content && $http_code == 200) {
+                // タイトルタグを抽出
+                if (preg_match('/<title[^>]*>([^<]+)<\/title>/i', $content, $matches)) {
+                    $title = trim(html_entity_decode($matches[1], ENT_QUOTES, 'UTF-8'));
+                    
+                    // タイトルをクリーンアップ
+                    $title = preg_replace('/\s+/', ' ', $title);
+                    $title = str_replace(array(' | ', ' - ', ' ｜ ', ' － '), ' - ', $title);
+                    
+                    // 長すぎる場合は短縮
+                    if (mb_strlen($title) > 80) {
+                        $title = mb_substr($title, 0, 77) . '...';
+                    }
+                    
+                    return $title;
+                }
+            }
+            
+        } catch (Exception $e) {
+            $this->log('warning', 'ページタイトル取得エラー: ' . $e->getMessage());
+        }
+        
+        return '';
+    }
+    
+    /**
+     * リダイレクト先URLを取得
+     */
+    private function get_redirect_url($url) {
+        try {
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_HEADER, true);
+            curl_setopt($ch, CURLOPT_NOBODY, true);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+            curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (compatible; AI-News-Bot/1.0)');
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            
+            $response = curl_exec($ch);
+            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            
+            if ($response && $http_code == 302) {
+                if (preg_match('/Location:\s*([^\r\n]+)/i', $response, $matches)) {
+                    return trim($matches[1]);
+                }
+            }
+            
+        } catch (Exception $e) {
+            $this->log('warning', 'リダイレクトURL取得エラー: ' . $e->getMessage());
+        }
+        
+        return '';
+    }
+    
+    /**
+     * ソースURLの安定性を向上
+     */
+    private function improve_source_url($url, $title) {
+        // Grounding APIリンクの400エラーが多いため、フォールバック方式を採用
+        if (strpos($url, 'vertexaisearch.cloud.google.com') !== false) {
+            // まずGrounding APIリンクを試し、失敗時はGoogle検索にフォールバック
+            // ユーザーのブラウザで直接アクセスは成功する可能性が高い
+            return $url;
+        }
+        
+        // 直接URLの場合はそのまま使用
+        return $url;
+    }
+    
+    /**
      * 記事内容の後処理（Markdown変換、免責事項追加など）
      */
-    private function post_process_content($content) {
-        // コンテンツの最終クリーンアップ（不完全な文末を修正）
-        $content = $this->fix_incomplete_ending($content);
-        
-        // MarkdownをHTMLに変換
-        $content = $this->convert_markdown_to_html($content);
+    private function post_process_content($content, $settings = null) {
+        // 文字化けチェック - 無効なUTF-8の場合は基本処理のみ
+        if (!mb_check_encoding($content, 'UTF-8')) {
+            $this->log('warning', '文字化けが検出されたため、基本処理のみ実行');
+            // 基本的なクリーニングのみ
+            $content = str_replace(array("\r\n", "\r"), "\n", $content);
+        } else {
+            // 通常の処理
+            // コンテンツの最終クリーンアップ（不完全な文末を修正）
+            $content = $this->fix_incomplete_ending($content);
+            
+            // MarkdownをHTMLに変換
+            $content = $this->convert_markdown_to_html($content);
+        }
         
         // 免責事項を追加
-        $settings = get_option('ai_news_autoposter_settings', array());
+        if ($settings === null) {
+            $settings = get_option('ai_news_autoposter_settings', array());
+        }
         $enable_disclaimer = $settings['enable_disclaimer'] ?? true;
         $disclaimer_text = $settings['disclaimer_text'] ?? '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。';
         
         if ($enable_disclaimer && !empty($disclaimer_text)) {
-            $content = trim($content) . "\n\n<div style=\"margin-top: 20px; padding: 10px; background-color: #f0f0f0; border-left: 4px solid #ccc; font-size: 14px; color: #666;\">" . esc_html($disclaimer_text) . "</div>";
+            $this->log('info', '免責事項を追加中: ' . $disclaimer_text);
+            $content = trim($content) . "\n\n<div style=\"margin-top: 20px; padding: 10px; background-color: #f0f0f0; border-left: 4px solid #ccc; font-size: 14px; color: #666;\">" . $disclaimer_text . "</div>";
+        } else {
+            $this->log('warning', '免責事項が追加されませんでした。有効: ' . ($enable_disclaimer ? 'true' : 'false') . ', テキスト長: ' . strlen($disclaimer_text));
         }
         
         return trim($content);
@@ -2133,21 +2423,21 @@ class AINewsAutoPoster {
             return $this->clean_html_content($content);
         }
         
-        // 見出し変換
-        $content = preg_replace('/^### (.+)$/m', '<h3>$1</h3>', $content);
-        $content = preg_replace('/^## (.+)$/m', '<h2>$1</h2>', $content);
-        $content = preg_replace('/^# (.+)$/m', '<h1>$1</h1>', $content);
+        // 見出し変換（UTF-8フラグ追加）
+        $content = preg_replace('/^### (.+)$/mu', '<h3>$1</h3>', $content);
+        $content = preg_replace('/^## (.+)$/mu', '<h2>$1</h2>', $content);
+        $content = preg_replace('/^# (.+)$/mu', '<h1>$1</h1>', $content);
         
-        // 太字変換（既存のHTMLタグと競合しないよう調整）
-        $content = preg_replace('/\*\*([^*<>]+?)\*\*/', '<strong>$1</strong>', $content);
-        $content = preg_replace('/__([^_<>]+?)__/', '<strong>$1</strong>', $content);
+        // 太字変換（既存のHTMLタグと競合しないよう調整、UTF-8フラグ追加）
+        $content = preg_replace('/\*\*([^*<>]+?)\*\*/u', '<strong>$1</strong>', $content);
+        $content = preg_replace('/__([^_<>]+?)__/u', '<strong>$1</strong>', $content);
         
-        // 斜体変換
-        $content = preg_replace('/\*([^*<>]+?)\*/', '<em>$1</em>', $content);
-        $content = preg_replace('/_([^_<>]+?)_/', '<em>$1</em>', $content);
+        // 斜体変換（UTF-8フラグ追加）
+        $content = preg_replace('/\*([^*<>]+?)\*/u', '<em>$1</em>', $content);
+        $content = preg_replace('/_([^_<>]+?)_/u', '<em>$1</em>', $content);
         
-        // リンク変換
-        $content = preg_replace('/\[([^\]]+?)\]\(([^)]+?)\)/', '<a href="$2" target="_blank">$1</a>', $content);
+        // リンク変換（UTF-8フラグ追加）
+        $content = preg_replace('/\[([^\]]+?)\]\(([^)]+?)\)/u', '<a href="$2" target="_blank">$1</a>', $content);
         
         // リスト変換を改善
         $content = $this->convert_lists($content);
@@ -2162,17 +2452,17 @@ class AINewsAutoPoster {
      * HTMLコンテンツをクリーニング
      */
     private function clean_html_content($content) {
-        // 不適切な改行を修正
-        $content = preg_replace('/\n+/', "\n", $content);
-        $content = preg_replace('/>\s*\n\s*</', '><', $content);
+        // 不適切な改行を修正（UTF-8フラグ追加）
+        $content = preg_replace('/\n+/u', "\n", $content);
+        $content = preg_replace('/>\s*\n\s*</u', '><', $content);
         
-        // 基本的な段落構造を確保
-        if (!preg_match('/<p>|<div>|<h[1-6]>/', $content)) {
+        // 基本的な段落構造を確保（UTF-8フラグ追加）
+        if (!preg_match('/<p>|<div>|<h[1-6]>/u', $content)) {
             $lines = explode("\n", $content);
             $processed_lines = array();
             foreach ($lines as $line) {
                 $line = trim($line);
-                if (!empty($line) && !preg_match('/^</', $line)) {
+                if (!empty($line) && !preg_match('/^</u', $line)) {
                     $line = '<p>' . $line . '</p>';
                 }
                 if (!empty($line)) {
@@ -2321,8 +2611,17 @@ class AINewsAutoPoster {
             )
         );
         
-        // Google Search Grounding - 現在利用不可のためRSSベースニュース検索を使用
-        $this->log('info', 'Google Search Groundingは現在利用不可のため、RSSベースニュース検索を使用します');
+        // Google Search Grounding - Gemini 2.5のみ対応（エラー時はRSSフォールバック）
+        if ($model === 'gemini-2.5-flash') {
+            $body['tools'] = array(
+                array(
+                    'google_search' => new stdClass()
+                )
+            );
+            $this->log('info', 'Gemini 2.5でGoogle Search Grounding有効化（エラー時はRSSフォールバック）');
+        } else {
+            $this->log('info', 'Google Search Grounding非対応モデル、RSSベースニュース検索を使用');
+        }
         
         $this->log('info', 'Google Search Grounding設定: ' . json_encode($body['tools'] ?? null));
         
@@ -3163,52 +3462,82 @@ class AINewsAutoPoster {
     }
     
     /**
-     * Google News RSSから検索
+     * Google News RSSから検索（キーワード特化）
      */
     private function fetch_google_news($keywords, $limit = 3) {
-        $encoded_keywords = urlencode($keywords);
-        $rss_url = "https://news.google.com/rss/search?q={$encoded_keywords}&hl=ja&gl=JP&ceid=JP:ja";
+        // キーワードを解析してGoogle News検索を最適化
+        $keyword_array = array_map('trim', explode(',', $keywords));
+        $main_keyword = $keyword_array[0] ?? $keywords;
         
-        $response = wp_remote_get($rss_url, array(
-            'timeout' => 30,
-            'user-agent' => 'Mozilla/5.0 (compatible; WordPress NewsBot)'
-        ));
+        // 日本語キーワードの場合、より特化した検索クエリを作成
+        $search_queries = array();
         
-        if (is_wp_error($response)) {
-            $this->log('error', 'Google News RSS取得エラー: ' . $response->get_error_message());
-            return array();
+        // メイン検索クエリ
+        $search_queries[] = $main_keyword . ' ニュース';
+        
+        // 関連キーワードがある場合は追加検索
+        if (count($keyword_array) > 1) {
+            $search_queries[] = implode(' OR ', array_slice($keyword_array, 0, 3));
         }
         
-        $body = wp_remote_retrieve_body($response);
-        $news_items = array();
+        $all_news = array();
         
-        // SimpleXMLでRSSをパース
-        libxml_use_internal_errors(true);
-        $xml = simplexml_load_string($body);
-        
-        if ($xml === false) {
-            $this->log('error', 'Google News RSSパースエラー');
-            return array();
-        }
-        
-        if (isset($xml->channel->item)) {
-            $count = 0;
-            foreach ($xml->channel->item as $item) {
-                if ($count >= $limit) break;
-                
-                $news_items[] = array(
-                    'title' => (string)$item->title,
-                    'url' => (string)$item->link,
-                    'description' => (string)$item->description,
-                    'pub_date' => (string)$item->pubDate,
-                    'source' => 'Google News'
-                );
-                $count++;
+        foreach ($search_queries as $query) {
+            $encoded_keywords = urlencode($query);
+            $rss_url = "https://news.google.com/rss/search?q={$encoded_keywords}&hl=ja&gl=JP&ceid=JP:ja";
+            
+            $this->log('info', "Google News検索: {$query}");
+            
+            $response = wp_remote_get($rss_url, array(
+                'timeout' => 30,
+                'user-agent' => 'Mozilla/5.0 (compatible; WordPress NewsBot)'
+            ));
+            
+            if (is_wp_error($response)) {
+                $this->log('warning', "Google News RSS取得エラー ({$query}): " . $response->get_error_message());
+                continue;
+            }
+            
+            $body = wp_remote_retrieve_body($response);
+            
+            // SimpleXMLでRSSをパース
+            libxml_use_internal_errors(true);
+            $xml = simplexml_load_string($body);
+            
+            if ($xml === false) {
+                $this->log('warning', "Google News RSSパースエラー ({$query})");
+                continue;
+            }
+            
+            if (isset($xml->channel->item)) {
+                $count = 0;
+                foreach ($xml->channel->item as $item) {
+                    if ($count >= 2) break; // クエリあたり2件まで
+                    
+                    $title = (string)$item->title;
+                    $description = (string)$item->description;
+                    
+                    // Google News検索結果は既にキーワードでフィルタ済みなので、緩い関連性チェック
+                    if ($this->is_loosely_relevant_news($title . ' ' . $description, $keywords)) {
+                        $all_news[] = array(
+                            'title' => $title,
+                            'url' => (string)$item->link,
+                            'description' => $description,
+                            'pub_date' => (string)$item->pubDate,
+                            'source' => 'Google News'
+                        );
+                        $count++;
+                    }
+                }
             }
         }
         
-        $this->log('info', 'Google News: ' . count($news_items) . '件取得');
-        return $news_items;
+        // 重複除去
+        $unique_news = $this->deduplicate_news($all_news);
+        $final_news = array_slice($unique_news, 0, $limit);
+        
+        $this->log('info', 'Google News: ' . count($final_news) . '件取得（検索クエリ: ' . count($search_queries) . '件）');
+        return $final_news;
     }
     
     /**
@@ -3320,6 +3649,47 @@ class AINewsAutoPoster {
     }
     
     /**
+     * 緩いニュース関連性チェック（Google News用）
+     */
+    private function is_loosely_relevant_news($text, $keywords) {
+        $text = strtolower($text);
+        $keyword_array = explode(',', strtolower($keywords));
+        
+        // より緩い条件：部分一致やカタカナ・ひらがな変換も考慮
+        foreach ($keyword_array as $keyword) {
+            $keyword = trim($keyword);
+            
+            // 直接一致
+            if (strpos($text, $keyword) !== false) {
+                return true;
+            }
+            
+            // カタカナ・ひらがなの違いを考慮
+            $keyword_variants = array($keyword);
+            if ($keyword === 'アウトドア') {
+                $keyword_variants[] = 'あうとどあ';
+                $keyword_variants[] = 'outdoor';
+            } elseif ($keyword === 'キャンプ') {
+                $keyword_variants[] = 'きゃんぷ';
+                $keyword_variants[] = 'camp';
+            } elseif ($keyword === 'テント') {
+                $keyword_variants[] = 'てんと';
+                $keyword_variants[] = 'tent';
+            }
+            
+            foreach ($keyword_variants as $variant) {
+                if (strpos($text, $variant) !== false) {
+                    return true;
+                }
+            }
+        }
+        
+        // Google News検索の場合、検索クエリに引っかかった時点で関連性が高いと判断
+        // あまりに厳格だと結果が0件になってしまうので、より緩い条件を設定
+        return strlen($text) > 10; // 最低限の内容があれば通す
+    }
+    
+    /**
      * ニュース記事の重複除去
      */
     private function deduplicate_news($news_sources) {
@@ -3377,6 +3747,49 @@ class AINewsAutoPoster {
         
         // 最初の1000文字程度を取得
         return mb_substr(trim($text), 0, 1000);
+    }
+    
+    /**
+     * データベース挿入前の最小限文字クリーニング
+     */
+    private function clean_text_for_database($text) {
+        // nullチェック
+        if (empty($text)) {
+            return $text;
+        }
+        
+        // バイト順マーク（BOM）のみ除去（文字化け防止のため最小限の処理）
+        $text = str_replace("\xEF\xBB\xBF", '', $text);
+        
+        // NULL文字のみ除去（データベースエラーの最大要因）
+        $text = str_replace("\x00", '', $text);
+        
+        return $text;
+    }
+    
+    /**
+     * URLからドメイン名を抽出
+     */
+    private function extract_domain_from_url($url) {
+        if (empty($url)) {
+            return '';
+        }
+        
+        // URLをパース
+        $parsed = parse_url($url);
+        if (!$parsed || !isset($parsed['host'])) {
+            return '';
+        }
+        
+        // ホスト名を取得
+        $host = $parsed['host'];
+        
+        // www. プレフィックスを除去
+        if (strpos($host, 'www.') === 0) {
+            $host = substr($host, 4);
+        }
+        
+        return $host;
     }
 }
 

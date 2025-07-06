@@ -6,7 +6,23 @@
       "Bash(git push:*)",
       "Bash(rg:*)",
       "WebFetch(domain:it-optimization.co.jp)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(grep:*)",
+      "WebFetch(domain:localhost)",
+      "WebFetch(url:http://localhost:*)",
+      "WebFetch(*localhost*)",
+      "Bash(php -l:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(cp:*)",
+      "Bash(php:*)",
+      "Bash(curl:*)",
+      "Bash(awk:*)",
+      "Bash(sed:*)",
+      "Bash(/usr/local/bin/php:*)",
+      "Bash(docker exec:*)",
+      "Bash(docker cp:*)"
     ],
     "deny": []
   }
