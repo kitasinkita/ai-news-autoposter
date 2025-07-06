@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.24
+ * Version: 1.2.25
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.24');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.25');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1168,6 +1168,10 @@ class AINewsAutoPoster {
         $this->log('info', 'データサイズ: ' . strlen(serialize($post_data)) . ' bytes');
         $this->log('info', 'コンテンツサイズ: ' . mb_strlen($post_data['post_content']) . '文字');
         
+        // wp_insert_post実行直前のデータ内容をログ出力（文字化けデバッグ用）
+        $this->log('info', 'wp_insert_post実行直前のタイトル: "' . mb_substr($post_data['post_title'], 0, 50) . '"');
+        $this->log('info', 'wp_insert_post実行直前のコンテンツ先頭100文字: "' . mb_substr($post_data['post_content'], 0, 100) . '"');
+        
         // PHPエラーをキャッチするためのoutput buffering開始
         ob_start();
         
@@ -1227,6 +1231,13 @@ class AINewsAutoPoster {
         }
         
         $this->log('info', '投稿作成成功。投稿ID: ' . $post_id);
+        
+        // 文字化けデバッグ：データベースから実際に保存された内容を確認
+        $saved_post = get_post($post_id);
+        if ($saved_post) {
+            $this->log('info', '保存後のタイトル: "' . mb_substr($saved_post->post_title, 0, 50) . '"');
+            $this->log('info', '保存後のコンテンツ先頭100文字: "' . mb_substr($saved_post->post_content, 0, 100) . '"');
+        }
         
         // タグを追加
         if ($settings['enable_tags'] && !empty($article_data['tags'])) {
