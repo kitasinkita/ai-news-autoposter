@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.21
+ * Version: 1.2.22
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.21');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.22');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -603,7 +603,7 @@ class AINewsAutoPoster {
      */
     public function logs_page() {
         $logs = get_option('ai_news_autoposter_logs', array());
-        $logs = array_reverse(array_slice($logs, -100)); // 最新100件
+        $logs = array_reverse(array_slice($logs, -300)); // 最新300件
         
         ?>
         <div class="wrap">
@@ -1097,7 +1097,7 @@ class AINewsAutoPoster {
         $this->log('info', 'タイトルのUTF-8エンコーディングチェック完了');
         
         // UTF-8エンコーディングチェックを一時的に無効化（緊急回避）
-        $this->log('info', '【緊急回避モード v1.2.21】UTF-8エンコーディングチェックをスキップします');
+        $this->log('info', '【緊急回避モード v1.2.22】UTF-8エンコーディングチェックをスキップします');
         
         // 初期コンテンツ長をログ
         $this->log('info', '処理開始時のコンテンツ長: ' . strlen($post_data['post_content']) . ' bytes');
@@ -3149,8 +3149,8 @@ class AINewsAutoPoster {
             'message' => $message
         );
         
-        // 最新100件のみ保持
-        $logs = array_slice($logs, -100);
+        // 最新300件のみ保持
+        $logs = array_slice($logs, -300);
         
         update_option('ai_news_autoposter_logs', $logs);
     }
