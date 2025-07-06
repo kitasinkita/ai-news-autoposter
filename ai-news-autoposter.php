@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 完全自動でAIニュースを生成・投稿するプラグイン。Claude API対応、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.22
+ * Version: 1.2.23
  * Author: kitasinkita
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.22');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.23');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1096,107 +1096,13 @@ class AINewsAutoPoster {
         }
         $this->log('info', 'タイトルのUTF-8エンコーディングチェック完了');
         
-        // UTF-8エンコーディングチェックを一時的に無効化（緊急回避）
-        $this->log('info', '【緊急回避モード v1.2.22】UTF-8エンコーディングチェックをスキップします');
+        // 最小限の処理のみ実行（文字化け回避のため余計な処理を削除）
+        $this->log('info', 'コンテンツクリーニング開始（最小限処理）');
         
-        // 初期コンテンツ長をログ
-        $this->log('info', '処理開始時のコンテンツ長: ' . strlen($post_data['post_content']) . ' bytes');
-        
-        $this->log('info', '制御文字の除去を開始します...');
-        $this->log('info', '制御文字除去前のコンテンツ長: ' . strlen($post_data['post_content']) . ' bytes');
-        // より保守的な制御文字除去（改行とタブは保持）
-        $post_data['post_content'] = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/', '', $post_data['post_content']);
-        $this->log('info', '制御文字除去後のコンテンツ長: ' . strlen($post_data['post_content']) . ' bytes');
-        $this->log('info', '制御文字除去完了');
-        
-        $this->log('info', '特殊文字の除去を開始します...');
-        $this->log('info', '特殊文字除去前のコンテンツ長: ' . strlen($post_data['post_content']) . ' bytes');
-        // より保守的な特殊文字除去（破壊的すぎる\p{C}を避ける）
-        $post_data['post_content'] = preg_replace('/[\x00\x01\x02\x03\x04\x05\x06\x07\x08\x0B\x0C\x0E\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F\x7F]/', '', $post_data['post_content']);
-        $this->log('info', '特殊文字除去後のコンテンツ長: ' . strlen($post_data['post_content']) . ' bytes');
-        $this->log('info', '特殊文字除去完了');
-        
-        $this->log('info', '問題のある文字の除去を開始します...');
-        $this->log('info', '問題文字除去前のコンテンツ長: ' . strlen($post_data['post_content']) . ' bytes');
-        // 問題のある文字を追加除去
-        $post_data['post_content'] = str_replace(array("\r", "\0", "\x00", "\xFF", "\xFE"), '', $post_data['post_content']);
-        $this->log('info', '問題文字除去後のコンテンツ長: ' . strlen($post_data['post_content']) . ' bytes');
-        $this->log('info', '問題のある文字除去完了');
-        
-        $this->log('info', '長いURLの短縮を開始します...');
-        $this->log('info', 'URL短縮前のコンテンツ長: ' . strlen($post_data['post_content']) . ' bytes');
-        // 長いURLを短縮
+        // 長いURLのみ短縮（これは必要）
         $post_data['post_content'] = preg_replace('/https:\/\/vertexaisearch\.cloud\.google\.com\/grounding-api-redirect\/[A-Za-z0-9_-]{50,}/', '[参考リンク]', $post_data['post_content']);
-        $this->log('info', 'URL短縮後のコンテンツ長: ' . strlen($post_data['post_content']) . ' bytes');
-        $this->log('info', '長いURL短縮完了');
         
-        $this->log('info', 'UTF-8エンコーディング強制変換を開始します...');
-        // より安全なUTF-8エンコーディング処理（段階的処理でハング回避）
-        try {
-            $this->log('info', 'UTF-8エンコーディング変換前のコンテンツ長: ' . strlen($post_data['post_content']) . ' bytes');
-            
-            // まず非常に長いコンテンツを事前に短縮（メモリ問題回避）
-            if (strlen($post_data['post_content']) > 10000) {
-                $this->log('warning', 'コンテンツが非常に長いため事前短縮します');
-                $post_data['post_content'] = substr($post_data['post_content'], 0, 8000) . "\n\n※ 記事が長いため事前短縮しています。";
-            }
-            
-            // より安全な文字エンコーディング処理（さらに保守的なアプローチ）
-            $this->log('info', 'mb_convert_encoding実行中...');
-            
-            // コンテンツが問題を起こしやすいサイズかチェック
-            if ($content_length > 3000) {
-                $this->log('warning', 'コンテンツが大きいため、mb_convert_encodingをスキップして簡易クリーニングのみ実行');
-                // より安全な方法: iconv関数を使用するか、簡易クリーニングのみ
-                if (function_exists('iconv')) {
-                    $this->log('info', 'iconv関数を使用してエンコーディング変換を試行');
-                    $converted = iconv('UTF-8', 'UTF-8//IGNORE', $post_data['post_content']);
-                    if ($converted !== false) {
-                        $post_data['post_content'] = $converted;
-                        $this->log('info', 'iconv変換成功');
-                    } else {
-                        $this->log('warning', 'iconv変換失敗 - 簡易クリーニングのみ実行');
-                        $post_data['post_content'] = preg_replace('/[^\x09\x0A\x0D\x20-\x7E\p{L}\p{N}\p{P}\p{Z}]/u', '', $post_data['post_content']);
-                    }
-                } else {
-                    $this->log('info', '簡易文字クリーニングのみ実行');
-                    $post_data['post_content'] = preg_replace('/[^\x09\x0A\x0D\x20-\x7E\p{L}\p{N}\p{P}\p{Z}]/u', '', $post_data['post_content']);
-                }
-            } else if (function_exists('mb_convert_encoding')) {
-                $this->log('info', '小さなコンテンツのためmb_convert_encoding実行');
-                $post_data['post_content'] = mb_convert_encoding($post_data['post_content'], 'UTF-8', 'UTF-8//IGNORE');
-            } else {
-                $this->log('warning', 'mb_convert_encoding関数が利用できません - 簡易クリーニングのみ実行');
-                // フォールバック: 基本的な非ASCII文字の処理のみ
-                $post_data['post_content'] = preg_replace('/[^\x09\x0A\x0D\x20-\x7E\p{L}\p{N}\p{P}\p{Z}]/u', '', $post_data['post_content']);
-            }
-        } catch (Exception $e) {
-            $this->log('error', 'UTF-8エンコーディング変換でエラー: ' . $e->getMessage() . ' - 簡易処理にフォールバック');
-            // エラー時のフォールバック処理
-            $post_data['post_content'] = preg_replace('/[^\x20-\x7E\p{L}\p{N}\p{P}\p{Z}]/u', '', $post_data['post_content']);
-        }
-        $this->log('info', 'UTF-8エンコーディング強制変換完了');
-        
-        $this->log('info', '空白文字の正規化を開始します...');
-        // 空白文字の正規化（より安全に実行）
-        try {
-            $post_data['post_content'] = preg_replace('/\s+/', ' ', $post_data['post_content']);
-            $this->log('info', '空白文字正規化完了');
-        } catch (Exception $e) {
-            $this->log('warning', '空白文字正規化でエラー - スキップします: ' . $e->getMessage());
-        }
-        
-        $this->log('info', '制御文字を除去し、長いURLを短縮しました。コンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字');
-        
-        // 追加のコンテンツ検証とクリーニング
-        if (mb_strlen($post_data['post_content']) > 8000) {
-            $post_data['post_content'] = mb_substr($post_data['post_content'], 0, 7500) . "\n\n※ 記事が長いため一部を省略して表示しています。";
-            $this->log('warning', 'コンテンツが長すぎるため8000文字に制限しました');
-        }
-        
-        // 特殊文字のエスケープ
-        $post_data['post_content'] = addslashes($post_data['post_content']);
-        $post_data['post_content'] = stripslashes($post_data['post_content']); // 二重エスケープを防ぐ
+        $this->log('info', 'コンテンツクリーニング完了');
         
         $this->log('info', '最終処理後のコンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字');
         
