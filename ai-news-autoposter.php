@@ -1122,9 +1122,37 @@ class AINewsAutoPoster {
                             $this->log('error', 'Gemini 2.5 第2段階失敗: ' . $ai_response->get_error_message());
                         }
                     } else {
-                        $this->log('warning', 'Gemini 2.5 第1段階でソース取得できず、従来方式にフォールバック');
-                        $gemini_prompt = $this->build_gemini_news_search_prompt($settings);
-                        $ai_response = $this->call_gemini_api($gemini_prompt, $settings['gemini_api_key'] ?? '', $model);
+                        $this->log('warning', 'Gemini 2.5 第1段階失敗、RSSベースにフォールバック: ' . $search_response->get_error_message());
+                        // RSSベースでニュース取得し、grounding_sources形式に変換
+                        if (!empty($news_data)) {
+                            $grounding_sources = array();
+                            foreach ($news_data as $news) {
+                                $grounding_sources[] = array(
+                                    'title' => $news['title'] ?? 'ニュース記事',
+                                    'url' => $news['url'] ?? '#'
+                                );
+                            }
+                            $this->log('info', 'RSSベースで' . count($grounding_sources) . '件のニュースソースを取得');
+                            
+                            // grounding_sourcesを使って記事生成
+                            $article_prompt = $this->build_gemini_article_from_sources_prompt($settings, $grounding_sources);
+                            $ai_response = $this->call_gemini_api($article_prompt, $settings['gemini_api_key'] ?? '', $model);
+                            
+                            // レスポンスにgrounding_sourcesを追加
+                            if (!is_wp_error($ai_response)) {
+                                if (is_array($ai_response)) {
+                                    $ai_response['grounding_sources'] = $grounding_sources;
+                                } else {
+                                    $ai_response = array(
+                                        'text' => $ai_response,
+                                        'grounding_sources' => $grounding_sources
+                                    );
+                                }
+                            }
+                        } else {
+                            $gemini_prompt = $this->build_gemini_news_search_prompt($settings);
+                            $ai_response = $this->call_gemini_api($gemini_prompt, $settings['gemini_api_key'] ?? '', $model);
+                        }
                     }
                 }
             } else {
@@ -1141,11 +1169,33 @@ class AINewsAutoPoster {
             if (!empty($news_data)) {
                 // ニュースデータを基にプロンプトを構築
                 $prompt = $this->build_news_based_prompt($settings, $news_data);
+                // Claude API用にもgrounding_sourcesを準備
+                $grounding_sources = array();
+                foreach ($news_data as $news) {
+                    $grounding_sources[] = array(
+                        'title' => $news['title'] ?? 'ニュース記事',
+                        'url' => $news['url'] ?? '#'
+                    );
+                }
+                $this->log('info', 'Claude API用に' . count($grounding_sources) . '件のニュースソースを準備');
             } else {
                 // 直接ニュース検索と記事生成を依頼
                 $prompt = $this->build_direct_article_prompt($settings);
+                $grounding_sources = array();
             }
             $ai_response = $this->call_claude_api($prompt, $api_key, $settings);
+            
+            // Claude APIレスポンスにもgrounding_sourcesを追加
+            if (!is_wp_error($ai_response) && !empty($grounding_sources)) {
+                if (is_array($ai_response)) {
+                    $ai_response['grounding_sources'] = $grounding_sources;
+                } else {
+                    $ai_response = array(
+                        'text' => $ai_response,
+                        'grounding_sources' => $grounding_sources
+                    );
+                }
+            }
         }
         
         if (is_wp_error($ai_response)) {
