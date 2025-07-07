@@ -116,7 +116,7 @@ WordPress管理画面の「プラグイン」でAI News AutoPosterを有効化
 
 ## 📋 システム要件
 
-- **WordPress**: 5.0以上 (WordPress 6.4まで対応確認済み)
+- **WordPress**: 5.8以上 (WordPress 6.8まで対応確認済み)
 - **PHP**: 7.4以上  
 - **AIモデル**: Claude API (Anthropic) または Gemini API (Google) 必須
 - **メモリ**: 最低256MB推奨

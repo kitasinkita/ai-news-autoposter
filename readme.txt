@@ -1,8 +1,8 @@
 === AI News AutoPoster ===
 Contributors: kitasinkita
 Tags: ai, automation, news, claude, gemini, seo, auto-post, artificial intelligence, outdoor, business, sports, lifestyle
-Requires at least: 5.0
-Tested up to: 6.4
+Requires at least: 5.8
+Tested up to: 6.8
 Requires PHP: 7.4
 Stable tag: 1.2.33
 License: GPLv2 or later
