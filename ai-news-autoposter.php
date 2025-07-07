@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。v2.0：プロンプト結果に任せる方式で高品質記事生成。Claude/Gemini API対応、文字数制限なし、自然なレイアウト。最新版は GitHub からダウンロードしてください。
- * Version: 2.0.2
+ * Version: 2.0.3
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.0.2');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.0.3');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -4261,12 +4261,13 @@ class AINewsAutoPoster {
         // 日付付きタイトル生成を含む明確な3記事指定プロンプト
         $today = date('Y年m月d日');
         $prompt = "まず、{$search_keywords}に関する今日（{$today}）のニュースを要約した20文字以内の簡潔なタイトルを1行目に書いてください。\n\n";
-        $prompt .= "その後、{$search_keywords}に関する{$news_collection_language}のニュースを正確に3本選んで紹介してください。各記事にはURLを含めてください。\n\n";
+        $prompt .= "その後、{$search_keywords}に関する{$news_collection_language}のニュースを正確に3本選んで紹介してください。\n\n";
+        $prompt .= "**重要**: すべてのURLは必ずクリッカブルなHTMLリンク形式で記載してください。例：<a href=\"https://example.com\" target=\"_blank\">記事タイトル</a>\n\n";
         $prompt .= "以下の形式で3つの記事すべてを完全に書いてください：\n\n";
-        $prompt .= "1本目の記事：\n- タイトル\n- URL\n- 概要と要約\n- 背景・文脈\n- 今後の影響（500文字程度の考察）\n\n";
-        $prompt .= "2本目の記事：\n- タイトル\n- URL\n- 概要と要約\n- 背景・文脈\n- 今後の影響（500文字程度の考察）\n\n";
-        $prompt .= "3本目の記事：\n- タイトル\n- URL\n- 概要と要約\n- 背景・文脈\n- 今後の影響（500文字程度の考察）\n\n";
-        $prompt .= "必ず最初にタイトル（20文字以内）を書き、その後3つの記事すべてを最後まで完全に書いてください。";
+        $prompt .= "1本目の記事：\n- タイトル\n- <a href=\"URL\" target=\"_blank\">リンクテキスト</a>の形式でクリッカブルリンク\n- 概要と要約\n- 背景・文脈\n- 今後の影響（500文字程度の考察）\n\n";
+        $prompt .= "2本目の記事：\n- タイトル\n- <a href=\"URL\" target=\"_blank\">リンクテキスト</a>の形式でクリッカブルリンク\n- 概要と要約\n- 背景・文脈\n- 今後の影響（500文字程度の考察）\n\n";
+        $prompt .= "3本目の記事：\n- タイトル\n- <a href=\"URL\" target=\"_blank\">リンクテキスト</a>の形式でクリッカブルリンク\n- 概要と要約\n- 背景・文脈\n- 今後の影響（500文字程度の考察）\n\n";
+        $prompt .= "必ず最初にタイトル（20文字以内）を書き、その後3つの記事すべてを最後まで完全に書いてください。すべてのURLはHTMLリンク形式で記載してください。";
         
         // プレースホルダーを実際の値に置換
         $prompt = str_replace('{文字数}', $per_paragraph_chars, $prompt);

@@ -6,7 +6,7 @@
 [![PHP](https://img.shields.io/badge/PHP-7.4+-purple.svg)](https://php.net)
 [![License](https://img.shields.io/badge/License-GPL%20v2-green.svg)](LICENSE)
 [![Claude AI](https://img.shields.io/badge/AI-Claude%20Sonnet%204-orange.svg)](https://anthropic.com)
-[![Version](https://img.shields.io/badge/Version-2.0.2-green.svg)](https://github.com/kitasinkita/ai-news-autoposter/releases)
+[![Version](https://img.shields.io/badge/Version-2.0.3-green.svg)](https://github.com/kitasinkita/ai-news-autoposter/releases)
 
 ## 📖 概要
 
@@ -336,7 +336,13 @@ ai-news-autoposter/
 
 ## 🔄 更新履歴
 
-### v2.0.2 (2025-07-07) 🆕
+### v2.0.3 (2025-07-07) 🆕
+- **クリッカブルURL自動生成** - プロンプトでHTMLリンク形式を指定、すべてのURLがクリック可能
+- **target="_blank"対応** - 新しいタブで開くリンク形式を自動生成
+- **リンク形式統一** - `<a href="URL" target="_blank">リンクテキスト</a>`形式で統一
+- **プロンプト改善** - URLの記載方法を明確に指示して確実なリンク生成
+
+### v2.0.2 (2025-07-07)
 - **プロンプト主導タイトル生成** - AIが記事内容から20文字以内の自然なタイトルを生成
 - **日付自動挿入** - プロンプトで今日の日付を指定、正確な日付情報を保証
 - **タイトル抽出改善** - 回答の最初の行を自動でタイトルとして抽出
