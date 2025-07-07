@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。Claude/Gemini API対応、RSSベース実ニュース検索、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.50
+ * Version: 1.2.51
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.50');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.51');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -4175,30 +4175,32 @@ class AINewsAutoPoster {
         $prompt .= "6. まとめ\n\n";
         
         $prompt .= "**出力形式:**\n";
+        $prompt .= "必ず以下の形式で全体を{文字数}文字程度で出力してください：\n\n";
         $prompt .= "```\n";
         $prompt .= "タイトル: [20文字程度のタイトル]\n\n";
         $prompt .= "参考情報源:\n";
         $prompt .= "- [ニュースタイトル1](URL1)\n";
         $prompt .= "- [ニュースタイトル2](URL2)\n";
         $prompt .= "- [ニュースタイトル3](URL3)\n\n";
-        $prompt .= "[なぜこのニュースが重要なのかを自然な導入文で説明]\n\n";
-        $prompt .= "[なぜ今これが起こっているのか、業界背景を自然な段落で説明]\n\n";
-        $prompt .= "[今後どのような影響があるか、専門的考察を自然な段落で説明]\n\n";
-        $prompt .= "[根拠のある今後の展開予測を自然な段落で説明]\n\n";
-        $prompt .= "[総論的なまとめを自然な段落で説明]\n";
+        $prompt .= "[{文字数}文字程度の導入段落：なぜこのニュースが重要なのかを詳しく説明]\n\n";
+        $prompt .= "[{文字数}文字程度の背景段落：なぜ今これが起こっているのか、業界背景を詳しく説明]\n\n";
+        $prompt .= "[{文字数}文字程度の考察段落：今後どのような影響があるか、専門的考察を詳しく説明]\n\n";
+        $prompt .= "[{文字数}文字程度の展望段落：根拠のある今後の展開予測を詳しく説明]\n\n";
+        $prompt .= "[{文字数}文字程度のまとめ段落：総論的なまとめを詳しく説明]\n";
         $prompt .= "```\n\n";
         
-        $prompt .= "**重要:**\n";
+        $prompt .= "**重要な指示:**\n";
         $prompt .= "- 【{検索キーワード}】関連のニュースのみ検索\n";
         $prompt .= "- 文体：{文体}風\n";
-        $prompt .= "- 全体で{文字数}文字程度に収める\n";
+        $prompt .= "- 全体で必ず{文字数}文字程度の本文を作成（参考情報源は文字数に含めない）\n";
+        $prompt .= "- 参考情報源は必ず3つのみ、[タイトル](URL)の形式で記載\n";
+        $prompt .= "- タイトルの後に必ず5つの段落（導入・背景・考察・展望・まとめ）を書く\n";
+        $prompt .= "- 各段落は{文字数}を5で割った文字数程度で詳しく書く\n";
         $prompt .= "- シンプルな文章のみで、Markdownや特殊記号は一切使用しない\n";
         $prompt .= "- 各段落は空行で区切る\n";
-        $prompt .= "- 各セクションは均等に配分し、簡潔にまとめる\n";
         $prompt .= "- 「簡潔なリード文:」「背景・文脈:」などの見出しラベルは記載しない\n";
         $prompt .= "- 自然な記事の流れになるように段落を構成する\n";
-        $prompt .= "- 必ず「参考情報源:」セクションを記事冒頭に含め、実際に参照したニュースサイトのタイトルとURLを記載する\n";
-        $prompt .= "- 参考情報源は [タイトル](URL) の形式で3〜5件程度リストアップする\n";
+        $prompt .= "- 参考情報源のリストだけで終わらず、必ず本文を完全に書く\n";
         
         $this->log('info', 'Geminiシンプルプロンプトテンプレート生成完了: ' . mb_strlen($prompt) . '文字');
         return $prompt;
@@ -4254,17 +4256,18 @@ class AINewsAutoPoster {
         $prompt .= "6. まとめ\n\n";
         
         $prompt .= "**出力形式:**\n";
+        $prompt .= "必ず以下の形式で全体を{文字数}文字程度で出力してください：\n\n";
         $prompt .= "```\n";
         $prompt .= "タイトル: [20文字程度のタイトル]\n\n";
         $prompt .= "参考情報源:\n";
         $prompt .= "- [ニュースタイトル1](URL1)\n";
         $prompt .= "- [ニュースタイトル2](URL2)\n";
         $prompt .= "- [ニュースタイトル3](URL3)\n\n";
-        $prompt .= "[なぜこのニュースが重要なのかを自然な導入文で説明]\n\n";
-        $prompt .= "[なぜ今これが起こっているのか、業界背景を自然な段落で説明]\n\n";
-        $prompt .= "[今後どのような影響があるか、専門的考察を自然な段落で説明]\n\n";
-        $prompt .= "[根拠のある今後の展開予測を自然な段落で説明]\n\n";
-        $prompt .= "[総論的なまとめを自然な段落で説明]\n";
+        $prompt .= "[{文字数}文字程度の導入段落：なぜこのニュースが重要なのかを詳しく説明]\n\n";
+        $prompt .= "[{文字数}文字程度の背景段落：なぜ今これが起こっているのか、業界背景を詳しく説明]\n\n";
+        $prompt .= "[{文字数}文字程度の考察段落：今後どのような影響があるか、専門的考察を詳しく説明]\n\n";
+        $prompt .= "[{文字数}文字程度の展望段落：根拠のある今後の展開予測を詳しく説明]\n\n";
+        $prompt .= "[{文字数}文字程度のまとめ段落：総論的なまとめを詳しく説明]\n";
         $prompt .= "```\n\n";
         
         $prompt .= "**重要:**\n";
@@ -4277,7 +4280,12 @@ class AINewsAutoPoster {
         $prompt .= "- 「簡潔なリード文:」「背景・文脈:」などの見出しラベルは記載しない\n";
         $prompt .= "- 自然な記事の流れになるように段落を構成する\n";
         
+        // プレースホルダーを実際の値に置換
+        $per_paragraph_chars = intval($article_word_count / 5); // 5段落で分割
+        $prompt = str_replace('{文字数}', $per_paragraph_chars, $prompt);
+        
         $this->log('info', 'Geminiシンプル1段階プロンプト生成完了: ' . mb_strlen($prompt) . '文字');
+        $this->log('info', '段落あたり文字数: ' . $per_paragraph_chars . '文字');
         return $prompt;
     }
     
