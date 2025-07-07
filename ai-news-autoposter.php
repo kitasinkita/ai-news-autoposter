@@ -87,6 +87,7 @@ class AINewsAutoPoster {
                 'enable_disclaimer' => true,
                 'disclaimer_text' => '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。',
                 'custom_prompt' => '',
+                'sources_section_title' => '{date}の{keyword}関連のニュース',
                 'image_generation_type' => 'placeholder', // placeholder, dalle, unsplash
                 'dalle_api_key' => '',
                 'unsplash_access_key' => '',
@@ -288,6 +289,7 @@ class AINewsAutoPoster {
                 'article_word_count' => intval($_POST['article_word_count']),
                 'enable_disclaimer' => isset($_POST['enable_disclaimer']),
                 'disclaimer_text' => sanitize_textarea_field($_POST['disclaimer_text']),
+                'sources_section_title' => sanitize_text_field($_POST['sources_section_title']),
                 'image_generation_type' => sanitize_text_field($_POST['image_generation_type']),
                 'dalle_api_key' => sanitize_text_field($_POST['dalle_api_key']),
                 'unsplash_access_key' => sanitize_text_field($_POST['unsplash_access_key']),
@@ -507,11 +509,34 @@ class AINewsAutoPoster {
                                 <code>{キーワード}</code> - 検索キーワード<br>
                                 <code>{文字数}</code> - 記事文字数<br>
                                 <code>{文体}</code> - 文体スタイル<br><br>
-                                <strong>デフォルトプロンプト例：</strong><br>
-                                【{言語}】のニュースから、【{キーワード}】に関する最新のニュースを送ってください。5本ぐらいが理想です。<br>
-                                ニュースの背景や文脈を簡単にまとめ、かつ、上記の最新ニュースのリンク先を参考情報元として記事のタイトルとリンクを記載し、なぜ今、これが起こっているのか、という背景情報を踏まえて、今後どのような影響をあたえるのか、推察もしてください。<br>
-                                全部で【{文字数}文字】程度にまとめてください。充実した内容で。<br>
-                                文体は{文体}風でお願いします。
+                                <strong>デフォルトプロンプト（Gemini 2.5の場合）：</strong><br>
+                                <strong>第1段階（ニュース検索）：</strong><br>
+                                「あなたは優秀なニュースリサーチャーです。【{キーワード}】について最新のニュースを検索し、関連するニュース記事のタイトルとURLの一覧を5〜10件取得してください。過去1週間以内の最新記事を優先し、タイトルは正確に、URLは実際にアクセス可能なものを提供してください。」<br><br>
+                                <strong>第2段階（詳細記事生成）：</strong><br>
+                                「あなたは{文体}風の文体で記事を書く優秀なジャーナリストです。取得したニュースソースの内容を詳細に調査・分析し、重要な数値・日付・人名・企業名・統計データを正確に引用してください。『〜によると』『〜が発表した』『〜のデータでは』という形で具体的事実を引用し、専門家のコメント、企業の具体的取り組み、過去の経緯から今後の展望まで時系列で整理し、約{文字数}文字の包括的な記事を{言語}で作成してください。」<br><br>
+                                <strong>その他のモデル：</strong><br>
+                                「あなたは{文体}として、【{キーワード}】に関する最新ニュース情報を参考に、約{文字数}文字の読みやすく情報価値の高い記事を{言語}で作成してください。構成はタイトル、導入、本文（複数段落）、まとめとし、読者に価値を提供する内容にしてください。」
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">参考情報源セクションタイトル</th>
+                        <td>
+                            <input type="text" name="sources_section_title" value="<?php echo esc_attr($settings['sources_section_title'] ?? '{date}の{keyword}関連のニュース'); ?>" class="regular-text ai-news-autosave" />
+                            <p class="ai-news-form-description">
+                                記事冒頭の参考情報源セクションのタイトルを設定してください。<br>
+                                <strong>利用可能なプレースホルダー:</strong><br>
+                                <code>{keyword}</code> - 検索キーワード<br>
+                                <code>{date}</code> - 2025年7月6日<br>
+                                <code>{date_short}</code> - 7月6日<br>
+                                <code>{date_en}</code> - July 6, 2025<br>
+                                <code>{date_iso}</code> - 2025-07-06<br>
+                                <code>{today}</code> - 今日<br>
+                                <code>{year}</code> - 2025<br>
+                                <code>{month}</code> - 7月<br>
+                                <code>{day}</code> - 6日<br>
+                                <small>例: 「{date}の{keyword}関連のニュース」→「2025年7月6日のアウトドア関連のニュース」</small>
                             </p>
                         </td>
                     </tr>
@@ -1086,7 +1111,7 @@ class AINewsAutoPoster {
             // 記事にグラウンディングソースを統合
             if (!empty($grounding_sources)) {
                 $this->log('info', count($grounding_sources) . '件のグラウンディングソースを記事に統合中...');
-                $article_data = $this->integrate_grounding_sources($article_data, $grounding_sources);
+                $article_data = $this->integrate_grounding_sources($article_data, $grounding_sources, $search_keywords);
             }
         } else {
             // Claude APIまたは古いGemini形式の場合
@@ -1194,10 +1219,29 @@ class AINewsAutoPoster {
         $this->log('info', '投稿データ詳細: タイトル=' . mb_strlen($post_data['post_title']) . '文字、コンテンツ=' . $content_length . '文字、ステータス=' . $post_data['post_status'] . '、カテゴリ=' . json_encode($post_data['post_category']));
         
         // コンテンツが長すぎる場合は短縮（データベースエラー回避）
-        if ($content_length > 2500) {
-            $this->log('warning', 'コンテンツが長すぎます(' . $content_length . '文字)。2,500文字に短縮します。');
-            $post_data['post_content'] = mb_substr($post_data['post_content'], 0, 2400) . "\n\n※ 記事が長いため一部を省略して表示しています。";
-            $this->log('info', '短縮後のコンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字');
+        // 免責事項を考慮した文字数制限
+        $disclaimer_length = 0;
+        if ($settings['enable_disclaimer'] ?? true) {
+            $disclaimer_text = $settings['disclaimer_text'] ?? '';
+            $disclaimer_length = mb_strlen($disclaimer_text) + 200; // HTML要素分も考慮
+        }
+        
+        $max_content_length = 2500 - $disclaimer_length; // 免責事項分を差し引く
+        
+        if ($content_length > $max_content_length) {
+            $this->log('warning', 'コンテンツが長すぎます(' . $content_length . '文字)。免責事項を考慮して' . $max_content_length . '文字に短縮します。');
+            
+            // 免責事項分を除いた文字数で切り詰め
+            $trimmed_content = mb_substr($post_data['post_content'], 0, $max_content_length - 100);
+            
+            // 最後の完全な段落で終わるように調整
+            $last_paragraph_pos = mb_strrpos($trimmed_content, "\n\n");
+            if ($last_paragraph_pos !== false && $last_paragraph_pos > $max_content_length * 0.8) {
+                $trimmed_content = mb_substr($trimmed_content, 0, $last_paragraph_pos);
+            }
+            
+            $post_data['post_content'] = $trimmed_content;
+            $this->log('info', '短縮後のコンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字（免責事項追加前）');
         }
         
         $this->log('info', 'コンテンツ長チェック完了。投稿作成処理を開始します。');
@@ -1338,12 +1382,24 @@ class AINewsAutoPoster {
         ini_set('memory_limit', '512M');
         set_time_limit(300); // 5分のタイムアウト
         
-        // 最終コンテンツサイズチェックと緊急短縮
+        // 最終コンテンツサイズチェックと緊急短縮（免責事項を考慮）
         $final_content_length = mb_strlen($post_data['post_content']);
-        if ($final_content_length > 3000) {
-            $this->log('warning', '最終コンテンツが長すぎます(' . $final_content_length . '文字)。3000文字に緊急短縮します。');
-            $post_data['post_content'] = mb_substr($post_data['post_content'], 0, 2800) . "\n\n※ 記事が長いため緊急短縮しています。";
-            $this->log('info', '緊急短縮後のコンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字');
+        
+        // 免責事項の長さを計算
+        $disclaimer_length = 0;
+        if ($settings['enable_disclaimer'] ?? true) {
+            $disclaimer_text = $settings['disclaimer_text'] ?? '';
+            $disclaimer_length = mb_strlen($disclaimer_text) + 200; // HTML要素分も考慮
+        }
+        
+        // 免責事項分を考慮した最大文字数
+        $max_emergency_length = 3000 - $disclaimer_length;
+        $emergency_trim_length = 2800 - $disclaimer_length;
+        
+        if ($final_content_length > $max_emergency_length) {
+            $this->log('warning', '最終コンテンツが長すぎます(' . $final_content_length . '文字)。免責事項を考慮して' . $emergency_trim_length . '文字に緊急短縮します。');
+            $post_data['post_content'] = mb_substr($post_data['post_content'], 0, $emergency_trim_length) . "\n\n※ 記事が長いため緊急短縮しています。";
+            $this->log('info', '緊急短縮後のコンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字（免責事項追加前）');
         }
         
         // wp_insert_post実行直前の最終ログ
@@ -2212,18 +2268,37 @@ class AINewsAutoPoster {
     /**
      * グラウンディングソースを記事に統合
      */
-    private function integrate_grounding_sources($article_data, $grounding_sources) {
+    private function integrate_grounding_sources($article_data, $grounding_sources, $keyword = '') {
         if (empty($grounding_sources)) {
             return $article_data;
         }
         
         $this->log('info', 'グラウンディングソースを記事に統合開始');
         
+        // 設定から参考情報源セクションタイトルを取得
+        $settings = get_option('ai_news_autoposter_settings', array());
+        $section_title = $settings['sources_section_title'] ?? '今日の{keyword}関連のニュース';
+        
+        // {keyword}プレースホルダーを実際のキーワードで置換
+        if (!empty($keyword)) {
+            $section_title = str_replace('{keyword}', $keyword, $section_title);
+        } else {
+            // キーワードが空の場合は{keyword}を削除
+            $section_title = str_replace('{keyword}', '', $section_title);
+            $section_title = preg_replace('/\s+/', ' ', trim($section_title));
+        }
+        
+        // 日付プレースホルダーも置換
+        $section_title = $this->replace_date_placeholders($section_title);
+        
         // 記事内容の既存参考情報源セクションを完全削除
         $content = $article_data['content'];
         
-        // 既存の参考情報源セクションを全て削除
+        // 既存の参考情報源セクションを全て削除（設定可能なタイトルにも対応）
         $content = preg_replace('/(?:##?\s*参考情報源|参考情報源).*$/uis', '', $content);
+        // 設定されたセクションタイトルも削除対象に含める
+        $section_title_pattern = preg_quote($section_title, '/');
+        $content = preg_replace('/##?\s*' . $section_title_pattern . '.*$/uis', '', $content);
         $content = preg_replace('/\[([^\]]+)\]\([^)]+\)/u', '', $content); // Markdownリンク削除
         $content = preg_replace('/<a[^>]*>.*?<\/a>/uis', '', $content); // HTMLリンク削除
         $content = trim($content);
@@ -2231,7 +2306,7 @@ class AINewsAutoPoster {
         $this->log('info', "既存の参考情報源セクションを完全削除");
         
         // 単一の参考情報源セクションを生成
-        $sources_section = "\n\n## 参考情報源\n\n";
+        $sources_section = "\n\n## " . $section_title . "\n\n";
         $valid_sources = 0;
         
         foreach ($grounding_sources as $index => $source) {
@@ -2274,7 +2349,7 @@ class AINewsAutoPoster {
         // 有効なソースがある場合のみ追加（記事の冒頭に配置）
         if ($valid_sources > 0) {
             $content = $sources_section . "\n" . $content;
-            $this->log('info', "{$valid_sources}件の有効なソースで参考情報源セクションを記事の冒頭に生成");
+            $this->log('info', "{$valid_sources}件の有効なソースで「{$section_title}」セクションを記事の冒頭に生成");
         } else {
             $this->log('warning', '有効なソースが見つからず、参考情報源セクションを生成できませんでした');
         }
@@ -3485,32 +3560,84 @@ class AINewsAutoPoster {
         }
         $prompt .= "\n";
         
-        $prompt .= "上記のニュースソースの内容を参考に、以下の要件で記事を作成してください：\n\n";
+        $prompt .= "上記の各ニュースソースの内容を詳細に調査・分析し、以下の要件で包括的な記事を作成してください：\n\n";
         $prompt .= "**記事要件:**\n";
-        $prompt .= "- 文字数: 約{$article_word_count}文字\n";
+        $prompt .= "- 文字数: **厳密に{$article_word_count}文字以内**（これは絶対に守ってください）\n";
         $prompt .= "- 文体: {$writing_style}風\n";
         $prompt .= "- 言語: {$output_language}\n";
         $prompt .= "- 構成: タイトル、導入、本文（複数段落）、結論\n\n";
         
-        $prompt .= "**記事構成:**\n";
+        $prompt .= "**記事構成（{$article_word_count}文字以内厳守）:**\n";
         $prompt .= "```\n";
         $prompt .= "タイトル: [記事タイトル]\n\n";
-        $prompt .= "[導入段落]\n\n";
-        $prompt .= "[本文段落1]\n\n";
-        $prompt .= "[本文段落2]\n\n";
-        $prompt .= "[本文段落3以降...]\n\n";
-        $prompt .= "[結論段落]\n";
+        $prompt .= "[導入段落 - 簡潔に]\n\n";
+        $prompt .= "[本文段落1: 最新動向の詳細 - 具体的事実中心]\n\n";
+        $prompt .= "[本文段落2: 関連企業・団体の取り組み - 要点整理]\n\n";
+        $prompt .= "[本文段落3: 業界への影響と専門家の見解 - 重要なポイントのみ]\n\n";
+        $prompt .= "[本文段落4: 今後の展望と予測 - 簡潔にまとめ]\n\n";
+        $prompt .= "[結論段落 - 短く締めくくり]\n";
         $prompt .= "```\n\n";
+        $prompt .= "**文字数管理**: 各段落の文字数を調整し、全体で{$article_word_count}文字以内に収めてください。\n\n";
         
-        $prompt .= "**重要な指示:**\n";
-        $prompt .= "- 上記のニュースソースから具体的な情報を引用・参照してください\n";
-        $prompt .= "- 複数のニュースソースを統合した包括的な内容にしてください\n";
-        $prompt .= "- 現在の状況、背景、今後の展望を含めてください\n";
-        $prompt .= "- 記事は最後まで完成させてください（途中で切れないように）\n";
+        $prompt .= "**重要な指示（詳細分析）:**\n";
+        $prompt .= "- **文字数制限を厳守**: {$article_word_count}文字を超えないよう、内容を適切に調整してください\n";
+        $prompt .= "- **記事完結性**: 記事は指定文字数内で完結した内容にし、途中で切れないようにしてください\n";
+        $prompt .= "- 各ニュースソースの具体的な内容を調査し、重要な数値、日付、人名、企業名、統計データを引用してください\n";
+        $prompt .= "- 複数のニュースソースで報じられている共通点と相違点を分析してください\n";
+        $prompt .= "- 各記事から得られる具体的事実を「〜によると」「〜が発表した」「〜のデータでは」という形で明確に引用してください\n";
+        $prompt .= "- ニュースソースで言及されている専門家のコメントや見解があれば具体的に引用してください\n";
+        $prompt .= "- 関連する企業・団体の具体的な取り組み内容、発表内容、計画などを記載してください\n";
+        $prompt .= "- 現在の状況、過去の経緯、今後の展望を文字数制限内で整理してください\n";
+        $prompt .= "- 業界や社会に与える具体的な影響を、ニュースソースの情報を基に分析してください\n";
+        $prompt .= "- **絶対条件**: 記事は{$article_word_count}文字以内で完全に完成させてください\n";
         $prompt .= "- 参考情報源のセクションは含めないでください（自動で追加されます）\n";
+        $prompt .= "- 推測や一般論ではなく、ニュースソースから得られる具体的事実に基づいて記述してください\n";
         
         $this->log('info', 'Gemini第2段階記事生成プロンプト生成完了');
         return $prompt;
+    }
+    
+    /**
+     * 日付プレースホルダーを現在の日付で置換
+     */
+    private function replace_date_placeholders($text) {
+        $current_time = current_time('timestamp');
+        
+        // 日本語ロケール設定
+        $year = date('Y', $current_time);
+        $month = date('n', $current_time);
+        $day = date('j', $current_time);
+        
+        // 月名の日本語変換
+        $japanese_months = array(
+            1 => '1月', 2 => '2月', 3 => '3月', 4 => '4月', 5 => '5月', 6 => '6月',
+            7 => '7月', 8 => '8月', 9 => '9月', 10 => '10月', 11 => '11月', 12 => '12月'
+        );
+        
+        // 英語月名
+        $english_months = array(
+            1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April', 
+            5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
+            9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December'
+        );
+        
+        // プレースホルダー置換配列
+        $replacements = array(
+            '{date}' => $year . '年' . $month . '月' . $day . '日',
+            '{date_short}' => $month . '月' . $day . '日',
+            '{date_en}' => $english_months[$month] . ' ' . $day . ', ' . $year,
+            '{date_iso}' => date('Y-m-d', $current_time),
+            '{today}' => '今日',
+            '{year}' => $year,
+            '{month}' => $japanese_months[$month],
+            '{day}' => $day . '日'
+        );
+        
+        // プレースホルダーを置換
+        $result = str_replace(array_keys($replacements), array_values($replacements), $text);
+        
+        $this->log('info', '日付プレースホルダー置換: ' . count($replacements) . '種類対応');
+        return $result;
     }
     
     /**
