@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。Claude/Gemini API対応、RSSベース実ニュース検索、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.54
+ * Version: 1.2.55
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.54');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.55');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -4166,6 +4166,12 @@ class AINewsAutoPoster {
         // シンプルな1段階プロンプト（プレースホルダー版）
         $prompt = "【{検索キーワード}】に関する【{ニュース収集言語}】のニュース記事を検索し、以下の構成で記事を【{出力言語}】で作成してください。\n\n";
         
+        $prompt .= "**検索指示:**\n";
+        $prompt .= "- {出力言語}のニュースソースを優先し、次に英語、その他の言語の順で検索してください\n";
+        $prompt .= "- 参考情報源は3〜5個を選択してください\n";
+        $prompt .= "- 各ソースには必ず有効なURLを含めてください\n";
+        $prompt .= "- [参考リンク]のような無効な形式は絶対に使用しないでください\n\n";
+        
         $prompt .= "**必須の記事構成:**\n";
         $prompt .= "1. タイトル（20文字程度）\n";
         $prompt .= "2. 簡潔なリード文\n";
@@ -4179,9 +4185,11 @@ class AINewsAutoPoster {
         $prompt .= "```\n";
         $prompt .= "タイトル: [20文字程度のタイトル]\n\n";
         $prompt .= "参考情報源:\n";
-        $prompt .= "- [ニュースタイトル1](URL1)\n";
-        $prompt .= "- [ニュースタイトル2](URL2)\n";
-        $prompt .= "- [ニュースタイトル3](URL3)\n\n";
+        $prompt .= "- [ニュースタイトル1](完全なURL1)\n";
+        $prompt .= "- [ニュースタイトル2](完全なURL2)\n";
+        $prompt .= "- [ニュースタイトル3](完全なURL3)\n";
+        $prompt .= "- [ニュースタイトル4](完全なURL4)\n";
+        $prompt .= "- [ニュースタイトル5](完全なURL5)\n\n";
         $prompt .= "[{文字数}文字程度の導入段落：なぜこのニュースが重要なのかを詳しく説明]\n\n";
         $prompt .= "[{文字数}文字程度の背景段落：なぜ今これが起こっているのか、業界背景を詳しく説明]\n\n";
         $prompt .= "[{文字数}文字程度の考察段落：今後どのような影響があるか、専門的考察を詳しく説明]\n\n";
@@ -4193,6 +4201,8 @@ class AINewsAutoPoster {
         $prompt .= "- 【{検索キーワード}】関連のニュースのみ検索\n";
         $prompt .= "- 文体：{文体}風\n";
         $prompt .= "- 全体で{文字数}文字程度に収める\n";
+        $prompt .= "- 参考情報源は3〜5個、すべて有効なURLを必須とする\n";
+        $prompt .= "- URLが取得できない場合は別のソースを選択する\n";
         $prompt .= "- シンプルな文章のみで、Markdownや特殊記号は一切使用しない\n";
         $prompt .= "- 各段落は空行で区切る\n";
         $prompt .= "- 各セクションは均等に配分し、簡潔にまとめる\n";
@@ -4242,8 +4252,22 @@ class AINewsAutoPoster {
         
         $this->log('info', 'Geminiシンプル1段階プロンプト生成開始');
         
+        // 言語優先度を設定
+        $language_priority = '';
+        if ($output_language === 'japanese') {
+            $language_priority = '日本語のニュースソースを優先し、次に英語、その他の言語の順で検索してください。';
+        } else {
+            $language_priority = '英語のニュースソースを優先し、次に現地語、その他の言語の順で検索してください。';
+        }
+        
         // シンプルな1段階プロンプト
         $prompt = "【{$search_keywords}】に関する【{$news_collection_language}】のニュース記事を検索し、以下の構成で{$article_word_count}文字程度の記事を【{$output_language_name}】で作成してください。\n\n";
+        
+        $prompt .= "**検索指示:**\n";
+        $prompt .= "- {$language_priority}\n";
+        $prompt .= "- 参考情報源は3〜5個を選択してください\n";
+        $prompt .= "- 各ソースには必ず有効なURLを含めてください\n";
+        $prompt .= "- [参考リンク]のような無効な形式は絶対に使用しないでください\n\n";
         
         $prompt .= "**必須の記事構成:**\n";
         $prompt .= "1. タイトル（20文字程度）\n";
@@ -4258,9 +4282,11 @@ class AINewsAutoPoster {
         $prompt .= "```\n";
         $prompt .= "タイトル: [20文字程度のタイトル]\n\n";
         $prompt .= "参考情報源:\n";
-        $prompt .= "- [ニュースタイトル1](URL1)\n";
-        $prompt .= "- [ニュースタイトル2](URL2)\n";
-        $prompt .= "- [ニュースタイトル3](URL3)\n\n";
+        $prompt .= "- [ニュースタイトル1](完全なURL1)\n";
+        $prompt .= "- [ニュースタイトル2](完全なURL2)\n";
+        $prompt .= "- [ニュースタイトル3](完全なURL3)\n";
+        $prompt .= "- [ニュースタイトル4](完全なURL4)\n";
+        $prompt .= "- [ニュースタイトル5](完全なURL5)\n\n";
         $prompt .= "[{文字数}文字程度の導入段落：なぜこのニュースが重要なのかを詳しく説明]\n\n";
         $prompt .= "[{文字数}文字程度の背景段落：なぜ今これが起こっているのか、業界背景を詳しく説明]\n\n";
         $prompt .= "[{文字数}文字程度の考察段落：今後どのような影響があるか、専門的考察を詳しく説明]\n\n";
@@ -4272,6 +4298,8 @@ class AINewsAutoPoster {
         $prompt .= "- 【{$search_keywords}】関連のニュースのみ検索\n";
         $prompt .= "- 文体：{$writing_style}風\n";
         $prompt .= "- 全体で{$article_word_count}文字程度に収める\n";
+        $prompt .= "- 参考情報源は3〜5個、すべて有効なURLを必須とする\n";
+        $prompt .= "- URLが取得できない場合は別のソースを選択する\n";
         $prompt .= "- シンプルな文章のみで、Markdownや特殊記号は一切使用しない\n";
         $prompt .= "- 各段落は空行で区切る\n";
         $prompt .= "- 各セクションは均等に配分し、簡潔にまとめる\n";
