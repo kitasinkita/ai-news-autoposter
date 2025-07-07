@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。v2.0：プロンプト結果に任せる方式で高品質記事生成。Claude/Gemini API対応、文字数制限なし、自然なレイアウト。最新版は GitHub からダウンロードしてください。
- * Version: 2.0.1
+ * Version: 2.0.2
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.0.1');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.0.2');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -2119,26 +2119,34 @@ class AINewsAutoPoster {
         
         $lines = explode("\n", trim($response));
         $title = '最新ニュース: ' . date('Y年m月d日');
+        $content = trim($response);
         
-        // 自然なタイトルを抽出（Geminiが生成した可能性の高い行）
-        foreach ($lines as $line) {
-            $line = trim($line);
-            // HTMLタグを除去してチェック
-            $clean_line = strip_tags($line);
+        // 最初の行をタイトルとして抽出（プロンプトで指定した20文字以内のタイトル）
+        if (!empty($lines)) {
+            $first_line = trim($lines[0]);
+            $clean_first_line = strip_tags($first_line);
             
-            if (mb_strlen($clean_line) > 10 && mb_strlen($clean_line) < 100) {
-                // ニュースタイトルっぽい行（数字、キーワードを含む）
-                if (preg_match('/(\d{4}年|\d{1,2}月|最新|ニュース|トレンド|アウトドア|ギア|キャンプ|登山)/u', $clean_line) && 
-                    !preg_match('/^(参考|出典|ソース|URL|http|www|概要|要約|背景|影響)/u', $clean_line)) {
-                    $title = $clean_line;
-                    break;
+            // 最初の行が20文字以内で、記事内容っぽい場合はタイトルとして採用
+            if (mb_strlen($clean_first_line) >= 5 && mb_strlen($clean_first_line) <= 25) {
+                // 明らかに不適切でない場合はタイトルとして使用
+                if (!preg_match('/^(まず|その後|以下|1本目|2本目|3本目|http|www)/u', $clean_first_line)) {
+                    $title = $clean_first_line;
+                    // タイトル行を除いたコンテンツを作成
+                    $content_lines = array_slice($lines, 1);
+                    $content = trim(implode("\n", $content_lines));
+                    $this->log('info', '最初の行をタイトルとして抽出: ' . $title);
                 }
             }
         }
         
+        // コンテンツが空になった場合は元の回答を使用
+        if (empty($content)) {
+            $content = trim($response);
+        }
+        
         return array(
             'title' => $title,
-            'content' => trim($response), // Geminiの判断に任せて生回答をそのまま使用
+            'content' => $content, // Geminiの判断に任せて生回答を使用（タイトルのみ除去）
             'tags' => array('アウトドア', 'ニュース', 'AI生成')
         );
     }
@@ -4250,13 +4258,15 @@ class AINewsAutoPoster {
         // 段落あたり文字数を事前計算
         $per_paragraph_chars = intval($article_word_count / 5); // 5段落で分割
         
-        // 明確な3記事指定プロンプト（Test #3）
-        $prompt = "{$search_keywords}に関する{$news_collection_language}のニュースを正確に3本選んで紹介してください。各記事にはURLを含めてください。\n\n";
+        // 日付付きタイトル生成を含む明確な3記事指定プロンプト
+        $today = date('Y年m月d日');
+        $prompt = "まず、{$search_keywords}に関する今日（{$today}）のニュースを要約した20文字以内の簡潔なタイトルを1行目に書いてください。\n\n";
+        $prompt .= "その後、{$search_keywords}に関する{$news_collection_language}のニュースを正確に3本選んで紹介してください。各記事にはURLを含めてください。\n\n";
         $prompt .= "以下の形式で3つの記事すべてを完全に書いてください：\n\n";
         $prompt .= "1本目の記事：\n- タイトル\n- URL\n- 概要と要約\n- 背景・文脈\n- 今後の影響（500文字程度の考察）\n\n";
         $prompt .= "2本目の記事：\n- タイトル\n- URL\n- 概要と要約\n- 背景・文脈\n- 今後の影響（500文字程度の考察）\n\n";
         $prompt .= "3本目の記事：\n- タイトル\n- URL\n- 概要と要約\n- 背景・文脈\n- 今後の影響（500文字程度の考察）\n\n";
-        $prompt .= "必ず3つの記事すべてを最後まで完全に書いてください。";
+        $prompt .= "必ず最初にタイトル（20文字以内）を書き、その後3つの記事すべてを最後まで完全に書いてください。";
         
         // プレースホルダーを実際の値に置換
         $prompt = str_replace('{文字数}', $per_paragraph_chars, $prompt);
