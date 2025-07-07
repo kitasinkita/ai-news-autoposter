@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。Claude/Gemini API対応、RSSベース実ニュース検索、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.35
+ * Version: 1.2.36
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.35');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.36');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1075,16 +1075,16 @@ class AINewsAutoPoster {
         if ($is_gemini) {
             $this->log('info', 'Gemini APIを呼び出します...');
             
-            // Gemini 2.5でGoogle Search Groundingを優先試行（2段階プロセス）
-            if ($model === 'gemini-2.5-flash') {
-                $this->log('info', 'Gemini 2.5 - 2段階プロセス開始: 第1段階（ニュース検索）');
+            // Gemini 2.0/2.5でGoogle Search Groundingを優先試行（2段階プロセス）
+            if ($model === 'gemini-2.5-flash' || $model === 'gemini-2.0-flash-exp') {
+                $this->log('info', $model . ' - 2段階プロセス開始: 第1段階（ニュース検索）');
                 
                 // 第1段階: ニュース検索でURL・タイトル一覧を取得
                 $search_prompt = $this->build_gemini_search_only_prompt($settings);
                 $search_response = $this->call_gemini_api($search_prompt, $settings['gemini_api_key'] ?? '', $model);
                 
                 if (is_wp_error($search_response)) {
-                    $this->log('warning', 'Gemini 2.5 第1段階失敗、RSSベースにフォールバック: ' . $search_response->get_error_message());
+                    $this->log('warning', $model . ' 第1段階失敗、RSSベースにフォールバック: ' . $search_response->get_error_message());
                     if (!empty($news_data)) {
                         $gemini_prompt = $this->build_news_based_prompt($settings, $news_data, 'gemini');
                         $ai_response = $this->call_gemini_api($gemini_prompt, $settings['gemini_api_key'] ?? '', $model);
@@ -1097,12 +1097,12 @@ class AINewsAutoPoster {
                     $grounding_sources = array();
                     if (is_array($search_response) && isset($search_response['grounding_sources'])) {
                         $grounding_sources = $search_response['grounding_sources'];
-                        $this->log('info', 'Gemini 2.5 第1段階成功: ' . count($grounding_sources) . '件のニュースソースを取得');
+                        $this->log('info', $model . ' 第1段階成功: ' . count($grounding_sources) . '件のニュースソースを取得');
                     }
                     
                     if (!empty($grounding_sources)) {
                         // 第2段階: 取得したURL群を元に記事生成
-                        $this->log('info', 'Gemini 2.5 - 第2段階開始: 記事生成');
+                        $this->log('info', $model . ' - 第2段階開始: 記事生成');
                         $article_prompt = $this->build_gemini_article_from_sources_prompt($settings, $grounding_sources);
                         $ai_response = $this->call_gemini_api($article_prompt, $settings['gemini_api_key'] ?? '', $model);
                         
@@ -1117,12 +1117,12 @@ class AINewsAutoPoster {
                                     'grounding_sources' => $grounding_sources
                                 );
                             }
-                            $this->log('info', 'Gemini 2.5 第2段階成功: 記事生成完了');
+                            $this->log('info', $model . ' 第2段階成功: 記事生成完了');
                         } else {
-                            $this->log('error', 'Gemini 2.5 第2段階失敗: ' . $ai_response->get_error_message());
+                            $this->log('error', $model . ' 第2段階失敗: ' . $ai_response->get_error_message());
                         }
                     } else {
-                        $this->log('warning', 'Gemini 2.5 第1段階失敗、RSSベースにフォールバック: ' . $search_response->get_error_message());
+                        $this->log('warning', $model . ' 第1段階失敗、RSSベースにフォールバック: ' . $search_response->get_error_message());
                         // RSSベースでニュース取得し、grounding_sources形式に変換
                         if (!empty($news_data)) {
                             $grounding_sources = array();
@@ -2930,21 +2930,21 @@ class AINewsAutoPoster {
         $settings = get_option('ai_news_autoposter_settings', array());
         $expected_chars = $settings['article_word_count'] ?? 500;
         
-        // Gemini 2.5でGoogle Search Groundingを使用する場合はトークンを調整
-        if ($model === 'gemini-2.5-flash') {
+        // Gemini 2.0/2.5でGoogle Search Groundingを使用する場合はトークンを調整
+        if ($model === 'gemini-2.5-flash' || $model === 'gemini-2.0-flash-exp') {
             // プロンプト長に応じて動的に調整（実際のAPI制限: 出力65,536トークン）
             $input_tokens = intval($prompt_length / 4); // おおよその入力トークン数
-            $max_output_tokens = 65536; // Gemini 2.5 Flash の実際の出力制限
+            $max_output_tokens = 65536; // Gemini 2.0/2.5 Flash の実際の出力制限
             
             // 第1段階（ニュース検索）の場合は出力を制限
             if (strpos($prompt, '最新ニュース') !== false && strpos($prompt, '3〜5件') !== false) {
                 $max_tokens = 2000; // 第1段階: ニュース検索用
-                $this->log('info', 'Gemini第1段階用にmaxOutputTokensを' . $max_tokens . 'に設定（入力トークン概算: ' . $input_tokens . '）');
+                $this->log('info', $model . '第1段階用にmaxOutputTokensを' . $max_tokens . 'に設定（入力トークン概算: ' . $input_tokens . '）');
             } else {
                 // 第2段階: 記事生成用（設定された文字数に応じて調整）
                 $article_tokens = intval($expected_chars / 0.5); // 1トークン≈0.5文字として計算
                 $max_tokens = min($article_tokens * 2, 8000); // 余裕を持った設定
-                $this->log('info', 'Gemini第2段階用にmaxOutputTokensを' . $max_tokens . 'に設定（入力トークン概算: ' . $input_tokens . '）');
+                $this->log('info', $model . '第2段階用にmaxOutputTokensを' . $max_tokens . 'に設定（入力トークン概算: ' . $input_tokens . '）');
             }
             
             // 最低限の出力を保証
@@ -2984,14 +2984,14 @@ class AINewsAutoPoster {
             )
         );
         
-        // Google Search Grounding - Gemini 2.5のみ対応（エラー時はRSSフォールバック）
-        if ($model === 'gemini-2.5-flash') {
+        // Google Search Grounding - Gemini 2.0/2.5対応（エラー時はRSSフォールバック）
+        if ($model === 'gemini-2.5-flash' || $model === 'gemini-2.0-flash-exp') {
             $body['tools'] = array(
                 array(
                     'google_search' => new stdClass()
                 )
             );
-            $this->log('info', 'Gemini 2.5でGoogle Search Grounding有効化（エラー時はRSSフォールバック）');
+            $this->log('info', $model . 'でGoogle Search Grounding有効化（エラー時はRSSフォールバック）');
         } else {
             $this->log('info', 'Google Search Grounding非対応モデル、RSSベースニュース検索を使用');
         }
