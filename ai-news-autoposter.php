@@ -2030,6 +2030,11 @@ class AINewsAutoPoster {
         
         $this->log('info', 'Claude API呼び出しを開始します。プロンプト長: ' . strlen($prompt) . '文字');
         
+        // プロンプト内容をログに出力（デバッグ用）
+        $this->log('info', '=== Claude APIプロンプト内容 ===');
+        $this->log('info', $prompt);
+        $this->log('info', '=== プロンプト終了 ===');
+        
         $headers = array(
             'Content-Type' => 'application/json',
             'x-api-key' => $api_key,
@@ -2912,6 +2917,11 @@ class AINewsAutoPoster {
         $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . $model . ':generateContent?key=' . $api_key;
         
         $this->log('info', 'Gemini API呼び出しを開始します。モデル: ' . $model);
+        
+        // プロンプト内容をログに出力（デバッグ用）
+        $this->log('info', '=== Gemini APIプロンプト内容 ===');
+        $this->log('info', $prompt);
+        $this->log('info', '=== プロンプト終了 ===');
         
         // プロンプトの長さと設定に基づいてmaxOutputTokensを動的に設定
         $prompt_length = strlen($prompt);
