@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。Claude/Gemini API対応、RSSベース実ニュース検索、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.34
+ * Version: 1.2.35
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.34');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.35');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -2932,21 +2932,23 @@ class AINewsAutoPoster {
         
         // Gemini 2.5でGoogle Search Groundingを使用する場合はトークンを調整
         if ($model === 'gemini-2.5-flash') {
-            // プロンプト長に応じて動的に調整（入力+出力でAPI制限を超えないように）
+            // プロンプト長に応じて動的に調整（実際のAPI制限: 出力65,536トークン）
             $input_tokens = intval($prompt_length / 4); // おおよその入力トークン数
-            $max_available_tokens = 7000; // Gemini 2.5の制限を少し余裕を持って設定
+            $max_output_tokens = 65536; // Gemini 2.5 Flash の実際の出力制限
             
             // 第1段階（ニュース検索）の場合は出力を制限
             if (strpos($prompt, '最新ニュース') !== false && strpos($prompt, '3〜5件') !== false) {
-                $max_tokens = min(1200, $max_available_tokens - $input_tokens); // 第1段階を少し増加
-                $this->log('info', 'Gemini第1段階用にmaxOutputTokensを' . $max_tokens . 'に制限（入力トークン概算: ' . $input_tokens . '）');
+                $max_tokens = 2000; // 第1段階: ニュース検索用
+                $this->log('info', 'Gemini第1段階用にmaxOutputTokensを' . $max_tokens . 'に設定（入力トークン概算: ' . $input_tokens . '）');
             } else {
-                $max_tokens = min(2200, $max_available_tokens - $input_tokens); // 第2段階を少し削減
+                // 第2段階: 記事生成用（設定された文字数に応じて調整）
+                $article_tokens = intval($expected_chars / 0.5); // 1トークン≈0.5文字として計算
+                $max_tokens = min($article_tokens * 2, 8000); // 余裕を持った設定
                 $this->log('info', 'Gemini第2段階用にmaxOutputTokensを' . $max_tokens . 'に設定（入力トークン概算: ' . $input_tokens . '）');
             }
             
             // 最低限の出力を保証
-            $max_tokens = max($max_tokens, strpos($prompt, '最新ニュース') !== false ? 600 : 1500);
+            $max_tokens = max($max_tokens, strpos($prompt, '最新ニュース') !== false ? 800 : 2000);
         } else {
             // 文字数をトークン数に変換（1トークン ≈ 0.7文字として計算）
             $expected_tokens = intval($expected_chars / 0.5); // より余裕を持った計算
@@ -3834,15 +3836,21 @@ class AINewsAutoPoster {
         
         $this->log('info', 'Gemini第2段階記事生成プロンプト生成開始: ' . count($grounding_sources) . '件のソース');
         
+        // Google NewsやRSSのURLをクリーンアップしてプロンプトサイズを削減
+        $cleaned_sources = array();
+        foreach ($grounding_sources as $index => $source) {
+            $title = $source['title'] ?? "ニュース記事" . ($index + 1);
+            $url = $this->clean_news_url($source['url'] ?? "#");
+            $cleaned_sources[] = array('title' => $title, 'url' => $url);
+        }
+        
         $prompt = "あなたは{$writing_style}風の文体で記事を書く優秀なジャーナリストです。\n\n";
         $prompt .= "以下のニュースソースを参考に、「{$search_keywords}」に関する包括的な記事を作成してください。\n\n";
         
-        // 参考ニュースソースの一覧を冒頭に表示
+        // 参考ニュースソースの一覧を冒頭に表示（クリーンアップ済み）
         $prompt .= "## 参考ニュースソース\n\n";
-        foreach ($grounding_sources as $index => $source) {
-            $title = $source['title'] ?? "ニュース記事" . ($index + 1);
-            $url = $source['url'] ?? "#";
-            $prompt .= ($index + 1) . ". [{$title}]({$url})\n";
+        foreach ($cleaned_sources as $index => $source) {
+            $prompt .= ($index + 1) . ". [{$source['title']}]({$source['url']})\n";
         }
         $prompt .= "\n";
         
@@ -3890,6 +3898,37 @@ class AINewsAutoPoster {
         
         $this->log('info', 'Gemini第2段階記事生成プロンプト生成完了');
         return $prompt;
+    }
+    
+    /**
+     * Google NewsやRSSのURLをクリーンアップしてプロンプトサイズを削減
+     */
+    private function clean_news_url($url) {
+        // Google NewsのURLは非常に長いので短縮
+        if (strpos($url, 'news.google.com') !== false) {
+            // Google NewsのURLから実際のドメインを抽出
+            if (preg_match('/url=([^&]+)/', $url, $matches)) {
+                $decoded_url = urldecode($matches[1]);
+                $parsed = parse_url($decoded_url);
+                if ($parsed && isset($parsed['host'])) {
+                    return 'https://' . $parsed['host'];
+                }
+            }
+            return 'https://news.google.com';
+        }
+        
+        // 長いRSSパラメータを削除
+        if (strpos($url, '?') !== false) {
+            $url = strtok($url, '?');
+        }
+        
+        // HTMLエンティティをデコード
+        $url = html_entity_decode($url, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        
+        // 不要な文字を削除
+        $url = preg_replace('/[<>"]/', '', $url);
+        
+        return $url;
     }
     
     /**
