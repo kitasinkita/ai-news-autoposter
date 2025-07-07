@@ -6,11 +6,25 @@
 [![PHP](https://img.shields.io/badge/PHP-7.4+-purple.svg)](https://php.net)
 [![License](https://img.shields.io/badge/License-GPL%20v2-green.svg)](LICENSE)
 [![Claude AI](https://img.shields.io/badge/AI-Claude%20Sonnet%204-orange.svg)](https://anthropic.com)
-[![Version](https://img.shields.io/badge/Version-1.2.55-green.svg)](https://github.com/kitasinkita/ai-news-autoposter/releases)
+[![Version](https://img.shields.io/badge/Version-2.0.0-green.svg)](https://github.com/kitasinkita/ai-news-autoposter/releases)
 
 ## 📖 概要
 
-AI News AutoPosterは、**Claude Sonnet 4**と**Gemini 2.5 Flash**を活用して**任意のキーワード**に関するニュースを自動生成・投稿するWordPressプラグインです。Google Search Grounding機能により最新情報を取り込み、アウトドア、テクノロジー、ビジネス、スポーツなど任意のジャンルで高品質な記事を1時間間隔で自動投稿します。多言語対応、カスタムプロンプト、SEO最適化機能を備えた完全自動システムです。
+AI News AutoPosterは、**Claude Sonnet 4**と**Gemini 2.5 Flash**を活用して**任意のキーワード**に関するニュースを自動生成・投稿するWordPressプラグインです。**v2.0**では「プロンプト結果に任せる方式」を採用し、文字数制限や複雑な後処理を排除してAIの自然な判断を最大限活用。Google Search Grounding機能により最新情報を取り込み、高品質で自然な記事を生成します。
+
+## 🆕 v2.0の新機能
+
+### 🎯 プロンプト結果に任せる方式
+- **文字数制限なし** - AIが適切な長さを自動判断
+- **構造強制変更なし** - 生成された内容をそのまま使用
+- **複雑な後処理排除** - URL修正などの人為的な加工を無効化
+- **3記事完全構造** - 明確な指定で3本の記事を確実に生成
+- **自然なレイアウト** - HTMLタグの適切な開閉で美しい表示
+
+### 📈 大幅な品質向上
+- **maxOutputTokens増加** - 3記事分の十分な生成容量（最大20,000トークン）
+- **記事完全性100%** - 途中で切れない完全な記事生成
+- **自然な終了** - 句点で正しく終わる文章構造
 
 ## ✨ 主な機能
 

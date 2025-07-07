@@ -2,8 +2,8 @@
 /**
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
- * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。Claude/Gemini API対応、RSSベース実ニュース検索、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.55
+ * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。v2.0：プロンプト結果に任せる方式で高品質記事生成。Claude/Gemini API対応、文字数制限なし、自然なレイアウト。最新版は GitHub からダウンロードしてください。
+ * Version: 2.0.0
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.55');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.0.0');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1231,11 +1231,11 @@ class AINewsAutoPoster {
             $grounding_sources = $ai_response['grounding_sources'] ?? array();
             $article_data = $this->parse_ai_response($ai_response['text']);
             
-            // 記事にグラウンディングソースを統合
-            // グラウンディングソースを記事末尾に追加（本文は保持）
+            // プロンプト結果に任せる方式: グラウンディングソース追加処理も無効化
+            // Geminiの生回答をそのまま使用（メタデータとしてのみ保存）
             if (!empty($grounding_sources)) {
-                $this->log('info', count($grounding_sources) . '件のグラウンディングソースを記事末尾に追加');
-                $article_data = $this->append_grounding_sources($article_data, $grounding_sources, $search_keywords);
+                $this->log('info', '📝 グラウンディングソース' . count($grounding_sources) . '件をメタデータとしてのみ保存（記事内容は変更せず）');
+                // メタデータとして保存するが、記事内容は変更しない
             }
         } else {
             // Claude APIまたは古いGemini形式の場合
@@ -1348,33 +1348,9 @@ class AINewsAutoPoster {
         
         $this->log('info', '投稿データ詳細: タイトル=' . mb_strlen($post_data['post_title']) . '文字、コンテンツ=' . $content_length . '文字、ステータス=' . $post_data['post_status'] . '、カテゴリ=' . json_encode($post_data['post_category']));
         
-        // コンテンツが長すぎる場合は短縮（記事本体のみを対象）
-        // 設定された文字数制限を記事本体のみに適用
-        $user_word_count = $settings['article_word_count'] ?? 500;
-        $max_content_length = $user_word_count; // 記事本体のみの制限
-        
-        if ($content_length > $max_content_length) {
-            $this->log('warning', 'コンテンツが長すぎます(' . $content_length . '文字)。設定文字数(' . $user_word_count . ')に短縮します。');
-            
-            // 記事本体のみを短縮（参考情報源・免責事項は後で追加）
-            $target_length = $max_content_length - 50; // 安全マージン
-            $trimmed_content = mb_substr($post_data['post_content'], 0, $target_length);
-            
-            // 最後の完全な段落で終わるように調整
-            $last_paragraph_pos = mb_strrpos($trimmed_content, "\n\n");
-            if ($last_paragraph_pos !== false && $last_paragraph_pos > $target_length * 0.8) {
-                $trimmed_content = mb_substr($trimmed_content, 0, $last_paragraph_pos);
-            }
-            
-            // 文の途中で切れないように最後の句点で調整
-            $last_period_pos = mb_strrpos($trimmed_content, "。");
-            if ($last_period_pos !== false && $last_period_pos > $target_length * 0.7) {
-                $trimmed_content = mb_substr($trimmed_content, 0, $last_period_pos + 1);
-            }
-            
-            $post_data['post_content'] = $trimmed_content;
-            $this->log('info', '短縮後のコンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字（記事本体のみ）');
-        }
+        // 文字数制限を無効化（プロンプト結果に任せる）
+        // Geminiの判断に任せて自然な長さの記事を生成
+        $this->log('info', '📝 プロンプト結果に任せる方式: 文字数制限を無効化');
         
         $this->log('info', 'コンテンツ長チェック完了。投稿作成処理を開始します。');
         
@@ -1514,25 +1490,9 @@ class AINewsAutoPoster {
         ini_set('memory_limit', '512M');
         set_time_limit(300); // 5分のタイムアウト
         
-        // 最終コンテンツサイズチェックと緊急短縮（免責事項を考慮）
+        // 緊急短縮も無効化（プロンプト結果に任せる）
         $final_content_length = mb_strlen($post_data['post_content']);
-        
-        // 免責事項の長さを計算
-        $disclaimer_length = 0;
-        if ($settings['enable_disclaimer'] ?? true) {
-            $disclaimer_text = $settings['disclaimer_text'] ?? '';
-            $disclaimer_length = mb_strlen($disclaimer_text) + 200; // HTML要素分も考慮
-        }
-        
-        // 免責事項分を考慮した最大文字数
-        $max_emergency_length = 3000 - $disclaimer_length;
-        $emergency_trim_length = 2800 - $disclaimer_length;
-        
-        if ($final_content_length > $max_emergency_length) {
-            $this->log('warning', '最終コンテンツが長すぎます(' . $final_content_length . '文字)。免責事項を考慮して' . $emergency_trim_length . '文字に緊急短縮します。');
-            $post_data['post_content'] = mb_substr($post_data['post_content'], 0, $emergency_trim_length) . "\n\n※ 記事が長いため緊急短縮しています。";
-            $this->log('info', '緊急短縮後のコンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字（免責事項追加前）');
-        }
+        $this->log('info', '📝 プロンプト結果に任せる方式: 緊急短縮も無効化。最終コンテンツ長: ' . $final_content_length . '文字');
         
         // wp_insert_post実行直前の最終ログ
         $memory_usage = memory_get_usage(true) / 1024 / 1024; // MB
@@ -1573,13 +1533,9 @@ class AINewsAutoPoster {
         $this->log('info', 'クリーニング前の免責事項: ' . ($has_disclaimer_before ? '有り' : '無し'));
         $this->log('info', 'クリーニング後の免責事項: ' . ($has_disclaimer_after ? '有り' : '無し'));
         
-        // コンテンツ長チェック（問題解決により制限を緩和）
-        if (mb_strlen($post_data['post_content']) > 10000) {
-            $post_data['post_content'] = mb_substr($post_data['post_content'], 0, 9500) . "\n\n[記事は制限により短縮されています]";
-            $this->log('warning', 'コンテンツが10000文字を超えたため短縮しました');
-        } else {
-            $this->log('info', 'コンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字（正常範囲）');
-        }
+        // プロンプト結果に任せる方式: 10000文字制限も無効化
+        $content_length = mb_strlen($post_data['post_content']);
+        $this->log('info', '📝 プロンプト結果に任せる方式: 文字数制限なし。コンテンツ長: ' . $content_length . '文字');
         
         // PHPエラーをキャッチするためのoutput buffering開始
         ob_start();
@@ -1666,8 +1622,11 @@ class AINewsAutoPoster {
         
         $this->log('info', '投稿作成成功。投稿ID: ' . $post_id);
         
-        // 投稿作成後に参考情報源と免責事項を追加（文字数制限の影響を受けない）
-        $this->add_reference_sources_and_disclaimer($post_id, $grounding_sources, $settings);
+        // 後処理は最小限に（免責事項のみ、構造変更なし）
+        if ($settings['enable_disclaimer'] ?? true) {
+            $this->add_minimal_disclaimer($post_id, $settings);
+        }
+        $this->log('info', '📝 プロンプト結果に任せる方式: 最小限の後処理のみ実行');
         
         // メタデータを個別に追加（投稿作成後に安全に処理）
         foreach ($meta_data as $meta_key => $meta_value) {
@@ -2155,13 +2114,33 @@ class AINewsAutoPoster {
      * AIレスポンス解析
      */
     private function parse_ai_response($response) {
-        // 構造化レスポンス（TITLE:, TAGS:, CONTENT:）の場合
-        if (strpos($response, 'TITLE:') !== false && strpos($response, 'CONTENT:') !== false) {
-            return $this->parse_structured_response($response);
+        // プロンプト結果に任せる方式: 生回答を最小限の処理で使用
+        $this->log('info', '📝 プロンプト結果に任せる方式: 生回答を最小限処理で使用');
+        
+        $lines = explode("\n", trim($response));
+        $title = '最新ニュース: ' . date('Y年m月d日H時i分');
+        
+        // 自然なタイトルを抽出（Geminiが生成した可能性の高い行）
+        foreach ($lines as $line) {
+            $line = trim($line);
+            // HTMLタグを除去してチェック
+            $clean_line = strip_tags($line);
+            
+            if (mb_strlen($clean_line) > 10 && mb_strlen($clean_line) < 100) {
+                // ニュースタイトルっぽい行（数字、キーワードを含む）
+                if (preg_match('/(\d{4}年|\d{1,2}月|最新|ニュース|トレンド|アウトドア|ギア|キャンプ|登山)/u', $clean_line) && 
+                    !preg_match('/^(参考|出典|ソース|URL|http|www|概要|要約|背景|影響)/u', $clean_line)) {
+                    $title = $clean_line;
+                    break;
+                }
+            }
         }
         
-        // シンプルなレスポンス（タイトルと本文のみ）の場合
-        return $this->parse_simple_response($response);
+        return array(
+            'title' => $title,
+            'content' => trim($response), // Geminiの判断に任せて生回答をそのまま使用
+            'tags' => array('アウトドア', 'ニュース', 'AI生成')
+        );
     }
     
     /**
@@ -3131,9 +3110,9 @@ class AINewsAutoPoster {
                 $max_tokens = 2000; // 第1段階: ニュース検索用
                 $this->log('info', $model . '第1段階用にmaxOutputTokensを' . $max_tokens . 'に設定（入力トークン概算: ' . $input_tokens . '）');
             } else {
-                // 第2段階: 記事生成用（設定された文字数に応じて調整）
+                // 第2段階: 記事生成用（3記事完全生成のため大幅増加）
                 $article_tokens = intval($expected_chars / 0.5); // 1トークン≈0.5文字として計算
-                $max_tokens = min($article_tokens * 2, 8000); // 余裕を持った設定
+                $max_tokens = min($article_tokens * 3, 20000); // 3記事分の余裕を持った設定
                 $this->log('info', $model . '第2段階用にmaxOutputTokensを' . $max_tokens . 'に設定（入力トークン概算: ' . $input_tokens . '）');
             }
             
@@ -3147,15 +3126,15 @@ class AINewsAutoPoster {
             $max_tokens = $expected_tokens;
             
             if ($prompt_length > 2000) {
-                $max_tokens = min($expected_tokens, 4000); // 制限を大幅緩和
+                $max_tokens = min($expected_tokens, 15000); // 3記事完全生成のため大幅増加
             } elseif ($prompt_length > 1500) {
-                $max_tokens = min($expected_tokens, 4500);
+                $max_tokens = min($expected_tokens, 18000); // 3記事完全生成のため大幅増加
             } else {
-                $max_tokens = min($expected_tokens, 5000); // 完結した記事のため最大値増加
+                $max_tokens = min($expected_tokens, 20000); // 3記事完全生成のため大幅増加
             }
             
             // 最低限の長さを保証
-            $max_tokens = max($max_tokens, 2500); // 最低値を大幅に上げる
+            $max_tokens = max($max_tokens, 8000); // 3記事分の最低値
         }
         
         $this->log('info', '設定文字数: ' . $expected_chars . '、プロンプト長: ' . $prompt_length . '文字、maxOutputTokens: ' . $max_tokens);
@@ -4161,56 +4140,32 @@ class AINewsAutoPoster {
      * Gemini用シンプル1段階プロンプトテンプレート（プレースホルダー版）
      */
     private function build_gemini_simple_prompt_template() {
-        $this->log('info', 'Geminiシンプルプロンプトテンプレート生成開始');
+        $this->log('info', 'プロンプト結果に任せる方式のテンプレート生成開始');
         
-        // シンプルな1段階プロンプト（プレースホルダー版）
-        $prompt = "【{検索キーワード}】に関する【{ニュース収集言語}】のニュース記事を検索し、以下の構成で記事を【{出力言語}】で作成してください。\n\n";
+        // プロンプト結果に任せる方式（v2.0）- 明確な3記事構造指定
+        $prompt = "{検索キーワード}に関する{ニュース収集言語}のニュースを正確に3本選んで紹介してください。各記事にはURLを含めてください。\n\n";
+        $prompt .= "以下の形式で3つの記事すべてを完全に書いてください：\n\n";
+        $prompt .= "1本目の記事：\n- タイトル\n- URL\n- 概要と要約\n- 背景・文脈\n- 今後の影響（500文字程度の考察）\n\n";
+        $prompt .= "2本目の記事：\n- タイトル\n- URL\n- 概要と要約\n- 背景・文脈\n- 今後の影響（500文字程度の考察）\n\n";
+        $prompt .= "3本目の記事：\n- タイトル\n- URL\n- 概要と要約\n- 背景・文脈\n- 今後の影響（500文字程度の考察）\n\n";
+        $prompt .= "必ず3つの記事すべてを最後まで完全に書いてください。\n\n";
         
-        $prompt .= "**検索指示:**\n";
-        $prompt .= "- {出力言語}のニュースソースを優先し、次に英語、その他の言語の順で検索してください\n";
-        $prompt .= "- 参考情報源は3〜5個を選択してください\n";
-        $prompt .= "- 各ソースには必ず有効なURLを含めてください\n";
-        $prompt .= "- [参考リンク]のような無効な形式は絶対に使用しないでください\n\n";
+        $prompt .= "【プロンプト結果に任せる方式について】\n";
+        $prompt .= "このプロンプトは、Geminiの自然な判断に任せて高品質な記事を生成する方式です。\n";
+        $prompt .= "- 文字数制限なし（Geminiが適切な長さを判断）\n";
+        $prompt .= "- 構造の強制変更なし（生成された内容をそのまま使用）\n";
+        $prompt .= "- URL修正などの複雑な後処理なし\n\n";
         
-        $prompt .= "**必須の記事構成:**\n";
-        $prompt .= "1. タイトル（20文字程度）\n";
-        $prompt .= "2. 簡潔なリード文\n";
-        $prompt .= "3. 背景・文脈\n";
-        $prompt .= "4. 影響・考察\n";
-        $prompt .= "5. 推察・今後の展望\n";
-        $prompt .= "6. まとめ\n\n";
+        $prompt .= "【利用可能なプレースホルダー】\n";
+        $prompt .= "{検索キーワード} - 記事のテーマとなるキーワード\n";
+        $prompt .= "{ニュース収集言語} - 検索対象の言語（日本語と英語など）\n";
+        $prompt .= "{出力言語} - 記事の出力言語\n";
+        $prompt .= "{文体} - 記事の文体スタイル\n\n";
         
-        $prompt .= "**出力形式:**\n";
-        $prompt .= "必ず以下の形式で全体を{文字数}文字程度で出力してください：\n\n";
-        $prompt .= "```\n";
-        $prompt .= "タイトル: [20文字程度のタイトル]\n\n";
-        $prompt .= "参考情報源:\n";
-        $prompt .= "- [ニュースタイトル1](完全なURL1)\n";
-        $prompt .= "- [ニュースタイトル2](完全なURL2)\n";
-        $prompt .= "- [ニュースタイトル3](完全なURL3)\n";
-        $prompt .= "- [ニュースタイトル4](完全なURL4)\n";
-        $prompt .= "- [ニュースタイトル5](完全なURL5)\n\n";
-        $prompt .= "[{文字数}文字程度の導入段落：なぜこのニュースが重要なのかを詳しく説明]\n\n";
-        $prompt .= "[{文字数}文字程度の背景段落：なぜ今これが起こっているのか、業界背景を詳しく説明]\n\n";
-        $prompt .= "[{文字数}文字程度の考察段落：今後どのような影響があるか、専門的考察を詳しく説明]\n\n";
-        $prompt .= "[{文字数}文字程度の展望段落：根拠のある今後の展開予測を詳しく説明]\n\n";
-        $prompt .= "[{文字数}文字程度のまとめ段落：総論的なまとめを詳しく説明]\n";
-        $prompt .= "```\n\n";
+        $prompt .= "※このプロンプトはv2.0方式（プロンプト結果に任せる）を採用しており、\n";
+        $prompt .= "　従来の複雑な後処理を排除してGeminiの自然な判断を最大限活用します。";
         
-        $prompt .= "**重要:**\n";
-        $prompt .= "- 【{検索キーワード}】関連のニュースのみ検索\n";
-        $prompt .= "- 文体：{文体}風\n";
-        $prompt .= "- 全体で{文字数}文字程度に収める\n";
-        $prompt .= "- 参考情報源は3〜5個、すべて有効なURLを必須とする\n";
-        $prompt .= "- URLが取得できない場合は別のソースを選択する\n";
-        $prompt .= "- シンプルな文章のみで、Markdownや特殊記号は一切使用しない\n";
-        $prompt .= "- 各段落は空行で区切る\n";
-        $prompt .= "- 各セクションは均等に配分し、簡潔にまとめる\n";
-        $prompt .= "- 「簡潔なリード文:」「背景・文脈:」などの見出しラベルは記載しない\n";
-        $prompt .= "- 自然な記事の流れになるように段落を構成する\n";
-        $prompt .= "- 参考情報源のリストだけで終わらず、必ず本文を完全に書く\n";
-        
-        $this->log('info', 'Geminiシンプルプロンプトテンプレート生成完了: ' . mb_strlen($prompt) . '文字');
+        $this->log('info', 'プロンプト結果に任せる方式テンプレート生成完了: ' . mb_strlen($prompt) . '文字');
         return $prompt;
     }
     
@@ -4260,54 +4215,18 @@ class AINewsAutoPoster {
             $language_priority = '英語のニュースソースを優先し、次に現地語、その他の言語の順で検索してください。';
         }
         
-        // シンプルな1段階プロンプト
-        $prompt = "【{$search_keywords}】に関する【{$news_collection_language}】のニュース記事を検索し、以下の構成で{$article_word_count}文字程度の記事を【{$output_language_name}】で作成してください。\n\n";
+        // 段落あたり文字数を事前計算
+        $per_paragraph_chars = intval($article_word_count / 5); // 5段落で分割
         
-        $prompt .= "**検索指示:**\n";
-        $prompt .= "- {$language_priority}\n";
-        $prompt .= "- 参考情報源は3〜5個を選択してください\n";
-        $prompt .= "- 各ソースには必ず有効なURLを含めてください\n";
-        $prompt .= "- [参考リンク]のような無効な形式は絶対に使用しないでください\n\n";
-        
-        $prompt .= "**必須の記事構成:**\n";
-        $prompt .= "1. タイトル（20文字程度）\n";
-        $prompt .= "2. 簡潔なリード文\n";
-        $prompt .= "3. 背景・文脈\n";
-        $prompt .= "4. 影響・考察\n";
-        $prompt .= "5. 推察・今後の展望\n";
-        $prompt .= "6. まとめ\n\n";
-        
-        $prompt .= "**出力形式:**\n";
-        $prompt .= "必ず以下の形式で全体を{文字数}文字程度で出力してください：\n\n";
-        $prompt .= "```\n";
-        $prompt .= "タイトル: [20文字程度のタイトル]\n\n";
-        $prompt .= "参考情報源:\n";
-        $prompt .= "- [ニュースタイトル1](完全なURL1)\n";
-        $prompt .= "- [ニュースタイトル2](完全なURL2)\n";
-        $prompt .= "- [ニュースタイトル3](完全なURL3)\n";
-        $prompt .= "- [ニュースタイトル4](完全なURL4)\n";
-        $prompt .= "- [ニュースタイトル5](完全なURL5)\n\n";
-        $prompt .= "[{文字数}文字程度の導入段落：なぜこのニュースが重要なのかを詳しく説明]\n\n";
-        $prompt .= "[{文字数}文字程度の背景段落：なぜ今これが起こっているのか、業界背景を詳しく説明]\n\n";
-        $prompt .= "[{文字数}文字程度の考察段落：今後どのような影響があるか、専門的考察を詳しく説明]\n\n";
-        $prompt .= "[{文字数}文字程度の展望段落：根拠のある今後の展開予測を詳しく説明]\n\n";
-        $prompt .= "[{文字数}文字程度のまとめ段落：総論的なまとめを詳しく説明]\n";
-        $prompt .= "```\n\n";
-        
-        $prompt .= "**重要:**\n";
-        $prompt .= "- 【{$search_keywords}】関連のニュースのみ検索\n";
-        $prompt .= "- 文体：{$writing_style}風\n";
-        $prompt .= "- 全体で{$article_word_count}文字程度に収める\n";
-        $prompt .= "- 参考情報源は3〜5個、すべて有効なURLを必須とする\n";
-        $prompt .= "- URLが取得できない場合は別のソースを選択する\n";
-        $prompt .= "- シンプルな文章のみで、Markdownや特殊記号は一切使用しない\n";
-        $prompt .= "- 各段落は空行で区切る\n";
-        $prompt .= "- 各セクションは均等に配分し、簡潔にまとめる\n";
-        $prompt .= "- 「簡潔なリード文:」「背景・文脈:」などの見出しラベルは記載しない\n";
-        $prompt .= "- 自然な記事の流れになるように段落を構成する\n";
+        // 明確な3記事指定プロンプト（Test #3）
+        $prompt = "{$search_keywords}に関する{$news_collection_language}のニュースを正確に3本選んで紹介してください。各記事にはURLを含めてください。\n\n";
+        $prompt .= "以下の形式で3つの記事すべてを完全に書いてください：\n\n";
+        $prompt .= "1本目の記事：\n- タイトル\n- URL\n- 概要と要約\n- 背景・文脈\n- 今後の影響（500文字程度の考察）\n\n";
+        $prompt .= "2本目の記事：\n- タイトル\n- URL\n- 概要と要約\n- 背景・文脈\n- 今後の影響（500文字程度の考察）\n\n";
+        $prompt .= "3本目の記事：\n- タイトル\n- URL\n- 概要と要約\n- 背景・文脈\n- 今後の影響（500文字程度の考察）\n\n";
+        $prompt .= "必ず3つの記事すべてを最後まで完全に書いてください。";
         
         // プレースホルダーを実際の値に置換
-        $per_paragraph_chars = intval($article_word_count / 5); // 5段落で分割
         $prompt = str_replace('{文字数}', $per_paragraph_chars, $prompt);
         
         $this->log('info', 'Geminiシンプル1段階プロンプト生成完了: ' . mb_strlen($prompt) . '文字');
@@ -4971,52 +4890,188 @@ class AINewsAutoPoster {
                     }
                 }, $content);
                 
-                // grounding_sourcesがある場合、マッチングでリンクを追加
+                // grounding_sourcesがある場合、正しいURLに強制置換
                 if (!empty($grounding_sources)) {
-                    // grounding_sourcesからタイトルとURLのマッピングを作成
-                    $source_map = array();
-                    foreach ($grounding_sources as $source) {
+                    $this->log('info', 'Grounding Sourcesを使用してURL修正を開始します: ' . count($grounding_sources) . '件');
+                    
+                    // grounding_sourcesからタイトルとURLの正確なマッピングを作成
+                    $title_url_map = array();
+                    $domain_map = array();
+                    foreach ($grounding_sources as $index => $source) {
                         if (isset($source['title']) && isset($source['link'])) {
                             $clean_title = trim(strip_tags($source['title']));
-                            $source_map[$clean_title] = $source['link'];
+                            $correct_url = $source['link'];
+                            
+                            // タイトルベースのマッピング（より正確）
+                            $title_url_map[$clean_title] = $correct_url;
+                            
+                            // ドメインベースのマッピング（フォールバック）
+                            $parsed = parse_url($correct_url);
+                            if (isset($parsed['host'])) {
+                                $domain = $parsed['host'];
+                                $domain = preg_replace('/^www\./', '', $domain); // www.を除去
+                                $domain_map[$domain] = $correct_url;
+                                $this->log('info', "URL マッピング: タイトル='{$clean_title}' ドメイン={$domain} -> {$correct_url}");
+                            }
                         }
                     }
                     
-                    // [参考リンク]やURLが無いアイテムをgrounding_sourcesとマッチング
-                    $content = preg_replace_callback('/(<li>)([^<]+?)\s*\(([^)]*)\)([^<]*)(<\/li>)/', function($matches) use ($source_map) {
+                    // 記事内のURLを正しいGrounding APIのURLに置換
+                    // 1. プレーンテキスト形式のURL置換
+                    $content = preg_replace_callback('/(<li>)([^<]+?)\s*\((https?:\/\/[^)]*)\)([^<]*)(<\/li>)/', function($matches) use ($title_url_map, $domain_map) {
+                        $title = trim($matches[2]);
+                        $article_url = trim($matches[3]);
+                        $additional_text = trim($matches[4]);
+                        
+                        // タイトル正規化関数
+                        $normalize_title = function($t) {
+                            // HTML エンティティをデコード
+                            $t = html_entity_decode($t, ENT_QUOTES, 'UTF-8');
+                            // 余分な空白を削除
+                            $t = preg_replace('/\s+/', ' ', trim($t));
+                            // 特殊文字を削除
+                            $t = preg_replace('/[|｜\\\\\/\[\]()（）「」『』【】<>]/', '', $t);
+                            return $t;
+                        };
+                        
+                        $normalized_title = $normalize_title($title);
+                        
+                        // 1. タイトルベースの完全一致チェック（最優先）
+                        if (isset($title_url_map[$title])) {
+                            $correct_url = $title_url_map[$title];
+                            $this->log('info', "タイトル完全一致でURL置換: '{$title}' {$article_url} -> {$correct_url}");
+                            return $matches[1] . '<a href="' . esc_url($correct_url) . '" target="_blank">' . esc_html($title) . '</a>' . $additional_text . $matches[5];
+                        }
+                        
+                        // 2. 正規化タイトルでの一致チェック
+                        foreach ($title_url_map as $grounding_title => $grounding_url) {
+                            $normalized_grounding = $normalize_title($grounding_title);
+                            if ($normalized_title === $normalized_grounding) {
+                                $this->log('info', "正規化タイトル一致でURL置換: '{$title}' <-> '{$grounding_title}' {$article_url} -> {$grounding_url}");
+                                return $matches[1] . '<a href="' . esc_url($grounding_url) . '" target="_blank">' . esc_html($title) . '</a>' . $additional_text . $matches[5];
+                            }
+                        }
+                        
+                        // 3. タイトル部分一致チェック（類似度60%以上に緩和）
+                        foreach ($title_url_map as $grounding_title => $grounding_url) {
+                            if (mb_strlen($normalized_title) >= 8 && mb_strlen($grounding_title) >= 8) {
+                                $similarity = 0;
+                                similar_text($normalized_title, $normalize_title($grounding_title), $similarity);
+                                if ($similarity >= 60) {
+                                    $this->log('info', "タイトル類似一致でURL置換: '{$title}' <-> '{$grounding_title}' ({$similarity}%) {$article_url} -> {$grounding_url}");
+                                    return $matches[1] . '<a href="' . esc_url($grounding_url) . '" target="_blank">' . esc_html($title) . '</a>' . $additional_text . $matches[5];
+                                }
+                            }
+                        }
+                        
+                        // 4. ドメインベースの置換（フォールバック）
+                        $parsed = parse_url($article_url);
+                        if (isset($parsed['host'])) {
+                            $article_domain = preg_replace('/^www\./', '', $parsed['host']);
+                            
+                            // ドメインが一致する正しいURLがあるかチェック
+                            if (isset($domain_map[$article_domain])) {
+                                $correct_url = $domain_map[$article_domain];
+                                $this->log('info', "ドメイン一致でURL置換: {$article_url} -> {$correct_url}");
+                                return $matches[1] . '<a href="' . esc_url($correct_url) . '" target="_blank">' . esc_html($title) . '</a>' . $additional_text . $matches[5];
+                            }
+                        }
+                        
+                        // 5. マッチしない場合は通常のリンク化
+                        if (filter_var($article_url, FILTER_VALIDATE_URL)) {
+                            $this->log('info', "Grounding URL一致なし、元URLを使用: {$article_url}");
+                            return $matches[1] . '<a href="' . esc_url($article_url) . '" target="_blank">' . esc_html($title) . '</a>' . $additional_text . $matches[5];
+                        }
+                        
+                        return $matches[0];
+                    }, $content);
+                    
+                    // 2. HTMLリンク形式のURL置換
+                    $content = preg_replace_callback('/(<li><a href=")([^"]+)("[^>]*>)([^<]+)(<\/a><\/li>)/', function($matches) use ($title_url_map, $domain_map) {
+                        $url_start = $matches[1];
+                        $current_url = $matches[2];
+                        $link_attrs = $matches[3];
+                        $title = $matches[4];
+                        $url_end = $matches[5];
+                        
+                        // HTMLエンティティをデコード
+                        $decoded_title = html_entity_decode($title, ENT_QUOTES, 'UTF-8');
+                        
+                        // タイトル正規化関数
+                        $normalize_title = function($t) {
+                            $t = html_entity_decode($t, ENT_QUOTES, 'UTF-8');
+                            $t = preg_replace('/\s+/', ' ', trim($t));
+                            $t = preg_replace('/[|｜\\\\\/\[\]()（）「」『』【】<>]/', '', $t);
+                            return $t;
+                        };
+                        
+                        // 1. タイトル完全一致チェック
+                        if (isset($title_url_map[$decoded_title])) {
+                            $correct_url = $title_url_map[$decoded_title];
+                            $this->log('info', "HTMLリンク完全一致でURL置換: '{$decoded_title}' {$current_url} -> {$correct_url}");
+                            return $url_start . esc_url($correct_url) . $link_attrs . esc_html($decoded_title) . $url_end;
+                        }
+                        
+                        // 2. 正規化タイトルでの一致チェック
+                        $normalized_title = $normalize_title($decoded_title);
+                        foreach ($title_url_map as $grounding_title => $grounding_url) {
+                            $normalized_grounding = $normalize_title($grounding_title);
+                            if ($normalized_title === $normalized_grounding) {
+                                $this->log('info', "HTMLリンク正規化一致でURL置換: '{$decoded_title}' <-> '{$grounding_title}' {$current_url} -> {$grounding_url}");
+                                return $url_start . esc_url($grounding_url) . $link_attrs . esc_html($decoded_title) . $url_end;
+                            }
+                        }
+                        
+                        // 3. 類似度チェック（60%以上）
+                        foreach ($title_url_map as $grounding_title => $grounding_url) {
+                            if (mb_strlen($normalized_title) >= 8 && mb_strlen($grounding_title) >= 8) {
+                                $similarity = 0;
+                                similar_text($normalized_title, $normalize_title($grounding_title), $similarity);
+                                if ($similarity >= 60) {
+                                    $this->log('info', "HTMLリンク類似一致でURL置換: '{$decoded_title}' <-> '{$grounding_title}' ({$similarity}%) {$current_url} -> {$grounding_url}");
+                                    return $url_start . esc_url($grounding_url) . $link_attrs . esc_html($decoded_title) . $url_end;
+                                }
+                            }
+                        }
+                        
+                        // マッチしない場合は元のまま
+                        return $matches[0];
+                    }, $content);
+                    
+                    // [参考リンク]の場合のフォールバック処理
+                    $content = preg_replace_callback('/(<li>)([^<]+?)\s*\(([^)]*)\)([^<]*)(<\/li>)/', function($matches) use ($title_url_map) {
                         $title = trim($matches[2]);
                         $link_text = trim($matches[3]);
                         $additional_text = trim($matches[4]);
                         
-                        // 既にHTTPSリンクが設定されている場合はスキップ
+                        // 既にリンク化済みの場合はスキップ
                         if (strpos($matches[0], '<a href=') !== false) {
                             return $matches[0];
                         }
                         
-                        // URLでない場合はgrounding_sourcesから検索
-                        if (!preg_match('/^https?:\/\//', $link_text)) {
-                            $url = null;
-                            foreach ($source_map as $source_title => $source_url) {
-                                // タイトルの部分一致でURLを検索
-                                if (strpos($title, $source_title) !== false || strpos($source_title, $title) !== false) {
-                                    $url = $source_url;
-                                    break;
-                                }
-                                // より緩い条件：最初の5文字が一致
-                                if (mb_strlen($title) >= 5 && mb_strlen($source_title) >= 5) {
-                                    if (mb_substr($title, 0, 5) === mb_substr($source_title, 0, 5)) {
-                                        $url = $source_url;
-                                        break;
+                        // [参考リンク]の場合、Grounding URLを優先使用
+                        if (strpos($link_text, '参考リンク') !== false || !preg_match('/^https?:\/\//', $link_text)) {
+                            // 1. タイトル完全一致チェック
+                            if (isset($title_url_map[$title])) {
+                                $correct_url = $title_url_map[$title];
+                                $this->log('info', "[参考リンク] タイトル完全一致でURL置換: '{$title}' -> {$correct_url}");
+                                return $matches[1] . '<a href="' . esc_url($correct_url) . '" target="_blank">' . esc_html($title) . '</a>' . $additional_text . $matches[5];
+                            }
+                            
+                            // 2. タイトル類似性チェック
+                            foreach ($title_url_map as $grounding_title => $grounding_url) {
+                                if (mb_strlen($title) >= 5 && mb_strlen($grounding_title) >= 5) {
+                                    $similarity = 0;
+                                    similar_text($title, $grounding_title, $similarity);
+                                    if ($similarity > 60) { // 60%以上の類似度
+                                        $this->log('info', "[参考リンク] タイトル類似性マッチ: '{$title}' <-> '{$grounding_title}' ({$similarity}%) -> {$grounding_url}");
+                                        return $matches[1] . '<a href="' . esc_url($grounding_url) . '" target="_blank">' . esc_html($title) . '</a>' . $additional_text . $matches[5];
                                     }
                                 }
                             }
-                            
-                            if ($url) {
-                                return $matches[1] . '<a href="' . esc_url($url) . '" target="_blank">' . esc_html($title) . '</a>' . $additional_text . $matches[5];
-                            }
                         }
                         
-                        return $matches[0]; // マッチしない場合は元のまま
+                        return $matches[0];
                     }, $content);
                 }
                 
@@ -5052,6 +5107,204 @@ class AINewsAutoPoster {
             $final_length = mb_strlen($content);
             $added_length = $final_length - $original_length;
             $this->log('info', '投稿内容を更新しました。追加文字数: ' . $added_length . '文字、最終文字数: ' . $final_length . '文字');
+        }
+    }
+    
+    /**
+     * 記事末尾にGrounding URLリストを追加（比較テスト用）
+     */
+    private function add_grounding_sources_list($post_id, $grounding_sources, $settings) {
+        $this->log('info', 'Grounding URLリストの追加を開始します。投稿ID: ' . $post_id);
+        
+        // 現在の投稿内容を取得
+        $post = get_post($post_id);
+        if (!$post) {
+            $this->log('error', '投稿ID ' . $post_id . ' が見つかりません');
+            return;
+        }
+        
+        $content = $post->post_content;
+        
+        // Grounding Sourcesがある場合のみ処理
+        if (!empty($grounding_sources)) {
+            $this->log('info', 'Grounding Sources: ' . count($grounding_sources) . '件');
+            
+            // Grounding URLリストを作成
+            $grounding_list = "\n\n<hr>\n\n<h3>🔗 検索で使用された実際のソース（Grounding API URL）</h3>\n<ul>\n";
+            
+            foreach ($grounding_sources as $index => $source) {
+                // 'link'または'url'キーをチェック（Geminiの構造に対応）
+                $url = $source['link'] ?? $source['url'] ?? null;
+                if (isset($source['title']) && !empty($url)) {
+                    $clean_title = trim(strip_tags($source['title']));
+                    $grounding_url = $url;
+                    
+                    $grounding_list .= '<li><a href="' . esc_url($grounding_url) . '" target="_blank">' . esc_html($clean_title) . '</a></li>' . "\n";
+                    $this->log('info', "Grounding URL追加: {$clean_title} -> {$grounding_url}");
+                }
+            }
+            
+            $grounding_list .= "</ul>\n";
+            $grounding_list .= '<p><small><em>注：このリストは記事生成時にGoogle Search Groundingが実際に使用したURLです。本文中のリンクと比較してご確認ください。</em></small></p>';
+            
+            // 免責事項を追加
+            if ($settings['enable_disclaimer'] ?? true) {
+                $disclaimer_text = $settings['disclaimer_text'] ?? '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。';
+                
+                $disclaimer_html = '<div style="margin-top: 20px;padding: 10px;background-color: #f0f0f0;border-left: 4px solid #ccc;font-size: 14px;color: #666">' . 
+                                  esc_html($disclaimer_text) . '</div>';
+                
+                $grounding_list .= "\n" . $disclaimer_html;
+                $this->log('info', '免責事項を追加しました');
+            }
+            
+            // コンテンツに追加
+            $updated_content = $content . $grounding_list;
+            
+            // 投稿内容を更新
+            $updated_post = array(
+                'ID' => $post_id,
+                'post_content' => $updated_content
+            );
+            
+            $update_result = wp_update_post($updated_post);
+            if (is_wp_error($update_result)) {
+                $this->log('error', '投稿更新に失敗: ' . $update_result->get_error_message());
+            } else {
+                $this->log('info', 'Grounding URLリストを記事末尾に追加しました');
+                
+                // メタデータとしてGrounding Sourcesも保存
+                update_post_meta($post_id, '_grounding_sources', $grounding_sources);
+                $this->log('info', 'Grounding Sourcesをメタデータに保存しました');
+            }
+        } else {
+            $this->log('info', 'Grounding Sourcesが空のため、リスト追加をスキップします');
+        }
+    }
+    
+    /**
+     * 最小限の免責事項追加（構造変更なし）
+     */
+    private function add_minimal_disclaimer($post_id, $settings) {
+        $disclaimer_text = $settings['disclaimer_text'] ?? '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。';
+        
+        if (empty($disclaimer_text)) {
+            $this->log('info', '免責事項が設定されていないため、追加をスキップします');
+            return;
+        }
+        
+        // 既存の投稿を取得
+        $post = get_post($post_id);
+        if (!$post) {
+            $this->log('error', '投稿ID ' . $post_id . ' が見つかりません');
+            return;
+        }
+        
+        $content = $post->post_content;
+        
+        // 既に免責事項が含まれている場合はスキップ
+        if (strpos($content, $disclaimer_text) !== false) {
+            $this->log('info', '免責事項は既に含まれています');
+            return;
+        }
+        
+        // 末尾に免責事項を追加（HTMLタグ付き）
+        $disclaimer_html = "\n\n<div class=\"ai-disclaimer\" style=\"margin-top: 2em; padding: 1em; background-color: #f9f9f9; border-left: 4px solid #ddd; font-size: 0.9em; color: #666;\">\n" . 
+                          "<p>" . esc_html($disclaimer_text) . "</p>\n" . 
+                          "</div>";
+        
+        $updated_content = $content . $disclaimer_html;
+        
+        // 投稿を更新
+        $updated_post = array(
+            'ID' => $post_id,
+            'post_content' => $updated_content
+        );
+        
+        $update_result = wp_update_post($updated_post);
+        if (is_wp_error($update_result)) {
+            $this->log('error', '免責事項追加に失敗: ' . $update_result->get_error_message());
+        } else {
+            $this->log('info', '最小限の免責事項を末尾に追加しました');
+        }
+    }
+    
+    /**
+     * ログに記録されたGrounding URLを記事に強制適用
+     */
+    private function apply_logged_grounding_urls($post_id, $grounding_sources) {
+        $this->log('info', 'ログ記録されたGrounding URLの強制適用を開始します。投稿ID: ' . $post_id);
+        
+        // 現在の投稿内容を取得
+        $post = get_post($post_id);
+        if (!$post) {
+            $this->log('error', '投稿ID ' . $post_id . ' が見つかりません');
+            return;
+        }
+        
+        $content = $post->post_content;
+        $original_content = $content;
+        
+        // Grounding Sourcesがある場合のみ処理
+        if (!empty($grounding_sources)) {
+            $this->log('info', 'Grounding Sources適用対象: ' . count($grounding_sources) . '件');
+            
+            // ドメイン→Grounding URLマッピングを作成
+            $domain_to_grounding_url = array();
+            foreach ($grounding_sources as $index => $source) {
+                $url = $source['link'] ?? $source['url'] ?? null;
+                $title = $source['title'] ?? '';
+                
+                if (!empty($url) && !empty($title)) {
+                    // タイトルからドメインを抽出（例：netsea.jp）
+                    $domain = $title;
+                    $domain_to_grounding_url[$domain] = $url;
+                    $this->log('info', "ドメインマッピング: {$domain} -> {$url}");
+                }
+            }
+            
+            // 記事内のすべてのリンクを確認し、対応するGrounding URLがあれば置換
+            $content = preg_replace_callback('/<a href="([^"]+)"([^>]*)>([^<]+)<\/a>/', function($matches) use ($domain_to_grounding_url) {
+                $current_url = $matches[1];
+                $attributes = $matches[2];
+                $link_text = $matches[3];
+                
+                // 現在のURLのドメインを抽出
+                $parsed = parse_url($current_url);
+                if (isset($parsed['host'])) {
+                    $current_domain = preg_replace('/^www\./', '', $parsed['host']);
+                    
+                    // マッピングに一致するドメインがあるかチェック
+                    foreach ($domain_to_grounding_url as $mapped_domain => $grounding_url) {
+                        if (strpos($mapped_domain, $current_domain) !== false || strpos($current_domain, $mapped_domain) !== false) {
+                            $this->log('info', "URL置換: {$current_url} -> {$grounding_url}");
+                            return '<a href="' . esc_url($grounding_url) . '"' . $attributes . '>' . $link_text . '</a>';
+                        }
+                    }
+                }
+                
+                // 一致しない場合は元のまま
+                return $matches[0];
+            }, $content);
+            
+            // 変更があった場合のみ更新
+            if ($content !== $original_content) {
+                $updated_post = array(
+                    'ID' => $post_id,
+                    'post_content' => $content
+                );
+                
+                $update_result = wp_update_post($updated_post);
+                if (is_wp_error($update_result)) {
+                    $this->log('error', 'Grounding URL適用時の投稿更新に失敗: ' . $update_result->get_error_message());
+                } else {
+                    $this->log('info', 'ログ記録されたGrounding URLを記事に強制適用しました');
+                }
+            } else {
+                $this->log('info', '適用対象のURLが見つからなかったため、変更はありませんでした');
+            }
+        } else {
+            $this->log('info', 'Grounding Sourcesが空のため、Grounding URL適用をスキップします');
         }
     }
 }
