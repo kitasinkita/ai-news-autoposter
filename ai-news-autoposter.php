@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。Claude/Gemini API対応、RSSベース実ニュース検索、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.31
+ * Version: 1.2.32
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.31');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.32');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -76,7 +76,6 @@ class AINewsAutoPoster {
                 'post_category' => get_option('default_category'),
                 'seo_focus_keyword' => 'AI ニュース',
                 'meta_description_template' => '最新の業界ニュースをお届けします。{title}について詳しく解説いたします。',
-                'enable_featured_image' => true,
                 'post_status' => 'publish',
                 'enable_tags' => true,
                 'search_keywords' => 'AI ニュース, 人工知能, 機械学習, ChatGPT, OpenAI',
@@ -269,47 +268,74 @@ class AINewsAutoPoster {
      */
     public function settings_page() {
         if (isset($_POST['submit'])) {
-            $settings = array(
-                'claude_api_key' => sanitize_text_field($_POST['claude_api_key']),
-                'claude_model' => sanitize_text_field($_POST['claude_model']),
-                'gemini_api_key' => sanitize_text_field($_POST['gemini_api_key']),
-                'auto_publish' => isset($_POST['auto_publish']),
-                'schedule_time' => sanitize_text_field($_POST['schedule_time']),
-                'max_posts_per_day' => intval($_POST['max_posts_per_day']),
-                'post_category' => intval($_POST['post_category']),
-                'seo_focus_keyword' => sanitize_text_field($_POST['seo_focus_keyword']),
-                'meta_description_template' => sanitize_textarea_field($_POST['meta_description_template']),
-                'enable_featured_image' => isset($_POST['enable_featured_image']),
-                'post_status' => sanitize_text_field($_POST['post_status']),
-                'enable_tags' => isset($_POST['enable_tags']),
-                'search_keywords' => sanitize_text_field($_POST['search_keywords']),
-                'writing_style' => sanitize_text_field($_POST['writing_style']),
-                'news_languages' => isset($_POST['news_languages']) ? array_map('sanitize_text_field', $_POST['news_languages']) : array(),
-                'output_language' => sanitize_text_field($_POST['output_language']),
-                'article_word_count' => intval($_POST['article_word_count']),
-                'enable_disclaimer' => isset($_POST['enable_disclaimer']),
-                'disclaimer_text' => sanitize_textarea_field($_POST['disclaimer_text']),
-                'sources_section_title' => sanitize_text_field($_POST['sources_section_title']),
-                'image_generation_type' => sanitize_text_field($_POST['image_generation_type']),
-                'dalle_api_key' => sanitize_text_field($_POST['dalle_api_key']),
-                'unsplash_access_key' => sanitize_text_field($_POST['unsplash_access_key']),
-                'news_sources' => $this->parse_news_sources($_POST)
-            );
+            // 選択されたモデルに応じたAPIキーのバリデーション
+            $selected_model = sanitize_text_field($_POST['claude_model']);
+            $claude_api_key = sanitize_text_field($_POST['claude_api_key']);
+            $gemini_api_key = sanitize_text_field($_POST['gemini_api_key']);
             
-            // 開始時刻から1時間おきのスケジュールを自動生成
-            $schedule_times = $this->generate_hourly_schedule($settings['schedule_time'], $settings['max_posts_per_day']);
-            $settings['schedule_times'] = $schedule_times;
+            $validation_error = false;
+            $error_message = '';
             
-            update_option('ai_news_autoposter_settings', $settings);
+            // モデルがGeminiかClaudeかを判定してバリデーション
+            if (strpos($selected_model, 'gemini') === 0) {
+                // Geminiモデルが選択された場合、Gemini APIキーが必須
+                if (empty($gemini_api_key)) {
+                    $validation_error = true;
+                    $error_message = 'Geminiモデルを選択した場合、Gemini APIキーの入力が必要です。';
+                }
+            } else {
+                // Claudeモデルが選択された場合、Claude APIキーが必須
+                if (empty($claude_api_key)) {
+                    $validation_error = true;
+                    $error_message = 'Claudeモデルを選択した場合、Claude APIキーの入力が必要です。';
+                }
+            }
             
-            // Cronスケジュール更新
-            $this->clear_all_cron_schedules();
-            $this->setup_multiple_schedules($settings['schedule_times']);
-            
-            // 設定確認ログ
-            $this->log('info', 'Cronスケジュールを更新しました。開始時刻: ' . $settings['schedule_time'] . ', 最大投稿数: ' . $settings['max_posts_per_day']);
-            
-            echo '<div class="notice notice-success"><p>設定を保存しました。</p></div>';
+            if ($validation_error) {
+                echo '<div class="notice notice-error"><p>' . esc_html($error_message) . '</p></div>';
+            } else {
+                // バリデーションが通った場合のみ設定を保存
+                $settings = array(
+                    'claude_api_key' => $claude_api_key,
+                    'claude_model' => $selected_model,
+                    'gemini_api_key' => $gemini_api_key,
+                    'auto_publish' => isset($_POST['auto_publish']),
+                    'schedule_time' => sanitize_text_field($_POST['schedule_time']),
+                    'max_posts_per_day' => intval($_POST['max_posts_per_day']),
+                    'post_category' => intval($_POST['post_category']),
+                    'seo_focus_keyword' => sanitize_text_field($_POST['seo_focus_keyword']),
+                    'meta_description_template' => sanitize_textarea_field($_POST['meta_description_template']),
+                    'post_status' => sanitize_text_field($_POST['post_status']),
+                    'enable_tags' => isset($_POST['enable_tags']),
+                    'search_keywords' => sanitize_text_field($_POST['search_keywords']),
+                    'writing_style' => sanitize_text_field($_POST['writing_style']),
+                    'news_languages' => isset($_POST['news_languages']) ? array_map('sanitize_text_field', $_POST['news_languages']) : array(),
+                    'output_language' => sanitize_text_field($_POST['output_language']),
+                    'article_word_count' => intval($_POST['article_word_count']),
+                    'enable_disclaimer' => isset($_POST['enable_disclaimer']),
+                    'disclaimer_text' => sanitize_textarea_field($_POST['disclaimer_text']),
+                    'sources_section_title' => sanitize_text_field($_POST['sources_section_title']),
+                    'image_generation_type' => sanitize_text_field($_POST['image_generation_type']),
+                    'dalle_api_key' => sanitize_text_field($_POST['dalle_api_key']),
+                    'unsplash_access_key' => sanitize_text_field($_POST['unsplash_access_key']),
+                    'news_sources' => $this->parse_news_sources($_POST)
+                );
+                
+                // 開始時刻から1時間おきのスケジュールを自動生成
+                $schedule_times = $this->generate_hourly_schedule($settings['schedule_time'], $settings['max_posts_per_day']);
+                $settings['schedule_times'] = $schedule_times;
+                
+                update_option('ai_news_autoposter_settings', $settings);
+                
+                // Cronスケジュール更新
+                $this->clear_all_cron_schedules();
+                $this->setup_multiple_schedules($settings['schedule_times']);
+                
+                // 設定確認ログ
+                $this->log('info', 'Cronスケジュールを更新しました。開始時刻: ' . $settings['schedule_time'] . ', 最大投稿数: ' . $settings['max_posts_per_day']);
+                
+                echo '<div class="notice notice-success"><p>設定を保存しました。</p></div>';
+            }
         }
         
         $settings = get_option('ai_news_autoposter_settings', array());
@@ -336,7 +362,7 @@ class AINewsAutoPoster {
         ?>
         
         <div class="wrap">
-            <h1>AI News AutoPoster 設定</h1>
+            <h1>AI News AutoPoster 設定 <span style="font-size: 14px; color: #666; margin-left: 10px;">v<?php echo AI_NEWS_AUTOPOSTER_VERSION; ?></span></h1>
             
             <form method="post" action="" id="ai-news-settings-form">
                 <?php wp_nonce_field('ai_news_autoposter_settings', 'ai_news_autoposter_nonce'); ?>
@@ -598,15 +624,6 @@ class AINewsAutoPoster {
                         </td>
                     </tr>
                     
-                    <tr>
-                        <th scope="row">アイキャッチ画像</th>
-                        <td>
-                            <label>
-                                <input type="checkbox" name="enable_featured_image" <?php checked($settings['enable_featured_image'] ?? true); ?> />
-                                自動でアイキャッチ画像を生成する
-                            </label>
-                        </td>
-                    </tr>
                 </table>
                 
                 <!-- ===== その他設定 ===== -->
@@ -859,30 +876,59 @@ class AINewsAutoPoster {
         
         $this->log('info', '手動投稿を開始します');
         
-        // 出力バッファリングを開始してログ出力をキャプチャ
+        // 既存の出力バッファを全てクリア
+        while (ob_get_level()) {
+            ob_end_clean();
+        }
+        
+        // 新しい出力バッファリングを開始してログ出力をキャプチャ
         ob_start();
         
         try {
             $result = $this->generate_and_publish_article(false, 'manual');
             
             // バッファをクリア（ログ出力を破棄）
-            ob_end_clean();
+            while (ob_get_level()) {
+                ob_end_clean();
+            }
             
             if (is_wp_error($result)) {
                 $this->log('error', '手動投稿失敗: ' . $result->get_error_message());
+                
+                // 最終的なクリーンアップ
+                if (ob_get_level()) {
+                    ob_end_clean();
+                }
+                
                 wp_send_json_error($result->get_error_message());
             } else {
                 $this->log('success', '手動投稿成功: 投稿ID ' . $result);
-                wp_send_json_success(array(
+                $response_data = array(
                     'post_id' => $result,
                     'edit_url' => admin_url('post.php?post=' . $result . '&action=edit'),
                     'view_url' => get_permalink($result)
-                ));
+                );
+                $this->log('info', 'JSON レスポンスデータ: ' . json_encode($response_data));
+                
+                // 最終的なクリーンアップ
+                if (ob_get_level()) {
+                    ob_end_clean();
+                }
+                
+                wp_send_json_success($response_data);
             }
         } catch (Exception $e) {
             // バッファをクリア
-            ob_end_clean();
+            while (ob_get_level()) {
+                ob_end_clean();
+            }
             $this->log('error', '手動投稿例外: ' . $e->getMessage());
+            
+            // 最終的なクリーンアップ
+            if (ob_get_level()) {
+                ob_end_clean();
+            }
+            
             wp_send_json_error('処理中にエラーが発生しました: ' . $e->getMessage());
         }
     }
@@ -1523,9 +1569,9 @@ class AINewsAutoPoster {
             wp_set_post_tags($post_id, $article_data['tags']);
         }
         
-        // アイキャッチ画像を生成
-        if ($settings['enable_featured_image']) {
-            $this->log('info', 'アイキャッチ画像生成を開始します');
+        // アイキャッチ画像を生成（画像生成方式が「なし」以外の場合）
+        if (($settings['image_generation_type'] ?? 'placeholder') !== 'none') {
+            $this->log('info', 'アイキャッチ画像生成を開始します（方式: ' . ($settings['image_generation_type'] ?? 'placeholder') . '）');
             try {
                 $this->generate_featured_image($post_id, $article_data['title'], $article_data['content'], $settings);
             } catch (Exception $e) {

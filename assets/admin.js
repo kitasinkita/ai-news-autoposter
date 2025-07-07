@@ -104,6 +104,7 @@
             $.ajax({
                 url: ai_news_autoposter_ajax.ajax_url,
                 type: 'POST',
+                dataType: 'json', // JSONレスポンスを明示的に指定
                 data: {
                     action: 'test_api_connection',
                     nonce: ai_news_autoposter_ajax.nonce
@@ -180,6 +181,7 @@
             $.ajax({
                 url: ai_news_autoposter_ajax.ajax_url,
                 type: 'POST',
+                dataType: 'json', // JSONレスポンスを明示的に指定
                 data: {
                     action: 'generate_test_article',
                     nonce: ai_news_autoposter_ajax.nonce
@@ -278,12 +280,12 @@
             if (isEnabled) {
                 $status.removeClass('ai-news-status-disabled')
                        .addClass('ai-news-status-enabled')
-                       .text('有効');
+                       .text('自動投稿有効');
                 AINewsAutoPoster.showNotification('success', '自動投稿を有効にしました。');
             } else {
                 $status.removeClass('ai-news-status-enabled')
                        .addClass('ai-news-status-disabled')
-                       .text('無効');
+                       .text('自動投稿無効');
                 AINewsAutoPoster.showNotification('warning', '自動投稿を無効にしました。');
             }
         },
@@ -292,6 +294,7 @@
             $.ajax({
                 url: ai_news_autoposter_ajax.ajax_url,
                 type: 'POST',
+                dataType: 'json', // JSONレスポンスを明示的に指定
                 data: {
                     action: 'get_stats',
                     nonce: ai_news_autoposter_ajax.nonce
@@ -310,11 +313,11 @@
                         if (stats.auto_publish_enabled) {
                             $('#auto-publish-status').removeClass('ai-news-status-disabled')
                                                    .addClass('ai-news-status-enabled')
-                                                   .text('有効');
+                                                   .text('自動投稿有効');
                         } else {
                             $('#auto-publish-status').removeClass('ai-news-status-enabled')
                                                    .addClass('ai-news-status-disabled')
-                                                   .text('無効');
+                                                   .text('自動投稿無効');
                         }
                     }
                 }
@@ -345,6 +348,7 @@
             $.ajax({
                 url: ai_news_autoposter_ajax.ajax_url,
                 type: 'POST',
+                dataType: 'json', // JSONレスポンスを明示的に指定
                 data: {
                     action: 'clear_logs',
                     nonce: ai_news_autoposter_ajax.nonce
@@ -437,6 +441,7 @@
                 $.ajax({
                     url: ai_news_autoposter_ajax.ajax_url,
                     type: 'POST',
+                    dataType: 'json', // JSONレスポンスを明示的に指定
                     data: {
                         action: 'autosave_setting',
                         nonce: ai_news_autoposter_ajax.nonce,
@@ -600,6 +605,7 @@
             $.ajax({
                 url: ai_news_autoposter_ajax.ajax_url,
                 type: 'POST',
+                dataType: 'json', // JSONレスポンスを明示的に指定
                 data: {
                     action: 'manual_post_now',
                     nonce: ai_news_autoposter_ajax.nonce
@@ -612,6 +618,7 @@
                     console.log('AJAX Response:', response);
                     console.log('Response type:', typeof response);
                     console.log('Response.success:', response.success);
+                    console.log('Response.data:', response.data);
                     
                     if (response.success) {
                         AINewsAutoPoster.showNotification('success', 
@@ -622,7 +629,9 @@
                         
                     } else {
                         console.log('Response data:', response.data);
-                        AINewsAutoPoster.showNotification('error', '記事投稿に失敗しました: ' + response.data);
+                        console.log('Full response object:', JSON.stringify(response, null, 2));
+                        const errorMessage = response.data || 'エラーが発生しました';
+                        AINewsAutoPoster.showNotification('error', '記事投稿に失敗しました: ' + errorMessage);
                     }
                 },
                 error: function(xhr, status, error) {
@@ -693,6 +702,7 @@
             $.ajax({
                 url: ai_news_autoposter_ajax.ajax_url,
                 type: 'POST',
+                dataType: 'json', // JSONレスポンスを明示的に指定
                 data: {
                     action: 'test_cron_execution',
                     nonce: ai_news_autoposter_ajax.nonce
