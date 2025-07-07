@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。Claude/Gemini API対応、RSSベース実ニュース検索、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.36
+ * Version: 1.2.37
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.36');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.37');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1122,7 +1122,7 @@ class AINewsAutoPoster {
                             $this->log('error', $model . ' 第2段階失敗: ' . $ai_response->get_error_message());
                         }
                     } else {
-                        $this->log('warning', $model . ' 第1段階失敗、RSSベースにフォールバック: ' . $search_response->get_error_message());
+                        $this->log('warning', $model . ' 第1段階でGrounding情報が見つからず、RSSベースにフォールバック');
                         // RSSベースでニュース取得し、grounding_sources形式に変換
                         if (!empty($news_data)) {
                             $grounding_sources = array();
@@ -3847,10 +3847,10 @@ class AINewsAutoPoster {
         $prompt = "あなたは{$writing_style}風の文体で記事を書く優秀なジャーナリストです。\n\n";
         $prompt .= "以下のニュースソースを参考に、「{$search_keywords}」に関する包括的な記事を作成してください。\n\n";
         
-        // 参考ニュースソースの一覧を冒頭に表示（クリーンアップ済み）
-        $prompt .= "## 参考ニュースソース\n\n";
+        // 参考ニュースソースの一覧（プロンプト用）
+        $prompt .= "**利用可能なニュースソース:**\n";
         foreach ($cleaned_sources as $index => $source) {
-            $prompt .= ($index + 1) . ". [{$source['title']}]({$source['url']})\n";
+            $prompt .= ($index + 1) . ". {$source['title']} ({$source['url']})\n";
         }
         $prompt .= "\n";
         
@@ -3861,23 +3861,23 @@ class AINewsAutoPoster {
         $prompt .= "- 言語: {$output_language}\n";
         $prompt .= "- 構成: タイトル、導入、本文（複数段落）、結論\n\n";
         
-        $prompt .= "**記事構成（{$article_word_count}文字以内厳守）:**\n";
+        $prompt .= "**記事構成（{$article_word_count}文字以内厳守）:**\n\n";
+        $prompt .= "必ず以下の順序で記事を構成してください：\n\n";
         $prompt .= "```\n";
-        $prompt .= "タイトル: [記事タイトル]\n\n";
+        $prompt .= "タイトル: [魅力的な見出し]\n\n";
         $prompt .= "## 今日の{$search_keywords}関連のニュース\n\n";
-        $prompt .= "- [参考記事1のタイトル](URL1)\n";
-        $prompt .= "- [参考記事2のタイトル](URL2)\n";
-        $prompt .= "...\n\n";
-        $prompt .= "[導入段落 - 簡潔に]\n\n";
-        $prompt .= "[本文段落1: 最新動向の詳細 - 具体的事実中心]\n\n";
-        $prompt .= "[本文段落2: 関連企業・団体の取り組み - 要点整理]\n\n";
-        $prompt .= "[本文段落3: 業界への影響と専門家の見解 - 重要なポイントのみ]\n\n";
-        $prompt .= "[本文段落4: 今後の展望と予測 - 簡潔にまとめ]\n\n";
-        $prompt .= "[結論段落 - 短く締めくくり]\n\n";
+        foreach ($cleaned_sources as $index => $source) {
+            $prompt .= "- [{$source['title']}]({$source['url']})\n";
+        }
+        $prompt .= "\n[導入段落]\n\n";
+        $prompt .= "[本文段落1: 最新動向]\n\n";
+        $prompt .= "[本文段落2: 企業の取り組み]\n\n";
+        $prompt .= "[本文段落3: 業界への影響]\n\n";
+        $prompt .= "[結論段落]\n\n";
         $prompt .= "## 参考情報源\n\n";
-        $prompt .= "1. [参考記事1のタイトル](URL1)\n";
-        $prompt .= "2. [参考記事2のタイトル](URL2)\n";
-        $prompt .= "...\n";
+        foreach ($cleaned_sources as $index => $source) {
+            $prompt .= ($index + 1) . ". [{$source['title']}]({$source['url']})\n";
+        }
         $prompt .= "```\n\n";
         $prompt .= "**文字数管理**: 各段落の文字数を調整し、全体で{$article_word_count}文字以内に収めてください。\n\n";
         
@@ -3892,8 +3892,9 @@ class AINewsAutoPoster {
         $prompt .= "- 現在の状況、過去の経緯、今後の展望を文字数制限内で整理してください\n";
         $prompt .= "- 業界や社会に与える具体的な影響を、ニュースソースの情報を基に分析してください\n";
         $prompt .= "- **絶対条件**: 記事は{$article_word_count}文字以内で完全に完成させてください\n";
-        $prompt .= "- **必須**: 冒頭の「今日の○○ニュース」と最後の「参考情報源」セクションを必ず含めてください\n";
-        $prompt .= "- 実際のニュースタイトルとURLを使用してリンクを作成してください\n";
+        $prompt .= "- **必須**: 上記の記事構成テンプレートに完全に従ってください\n";
+        $prompt .= "- **重要**: 「今日の{$search_keywords}関連のニュース」と「参考情報源」セクションは絶対に省略しないでください\n";
+        $prompt .= "- 上記の利用可能なニュースソースの実際のタイトルとURLを使用してリンクを作成してください\n";
         $prompt .= "- 推測や一般論ではなく、ニュースソースから得られる具体的事実に基づいて記述してください\n";
         
         $this->log('info', 'Gemini第2段階記事生成プロンプト生成完了');
