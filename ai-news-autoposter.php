@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。Claude/Gemini API対応、RSSベース実ニュース検索、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.49
+ * Version: 1.2.50
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.49');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.50');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -4177,6 +4177,10 @@ class AINewsAutoPoster {
         $prompt .= "**出力形式:**\n";
         $prompt .= "```\n";
         $prompt .= "タイトル: [20文字程度のタイトル]\n\n";
+        $prompt .= "参考情報源:\n";
+        $prompt .= "- [ニュースタイトル1](URL1)\n";
+        $prompt .= "- [ニュースタイトル2](URL2)\n";
+        $prompt .= "- [ニュースタイトル3](URL3)\n\n";
         $prompt .= "[なぜこのニュースが重要なのかを自然な導入文で説明]\n\n";
         $prompt .= "[なぜ今これが起こっているのか、業界背景を自然な段落で説明]\n\n";
         $prompt .= "[今後どのような影響があるか、専門的考察を自然な段落で説明]\n\n";
@@ -4193,6 +4197,8 @@ class AINewsAutoPoster {
         $prompt .= "- 各セクションは均等に配分し、簡潔にまとめる\n";
         $prompt .= "- 「簡潔なリード文:」「背景・文脈:」などの見出しラベルは記載しない\n";
         $prompt .= "- 自然な記事の流れになるように段落を構成する\n";
+        $prompt .= "- 必ず「参考情報源:」セクションを記事冒頭に含め、実際に参照したニュースサイトのタイトルとURLを記載する\n";
+        $prompt .= "- 参考情報源は [タイトル](URL) の形式で3〜5件程度リストアップする\n";
         
         $this->log('info', 'Geminiシンプルプロンプトテンプレート生成完了: ' . mb_strlen($prompt) . '文字');
         return $prompt;
@@ -4250,6 +4256,10 @@ class AINewsAutoPoster {
         $prompt .= "**出力形式:**\n";
         $prompt .= "```\n";
         $prompt .= "タイトル: [20文字程度のタイトル]\n\n";
+        $prompt .= "参考情報源:\n";
+        $prompt .= "- [ニュースタイトル1](URL1)\n";
+        $prompt .= "- [ニュースタイトル2](URL2)\n";
+        $prompt .= "- [ニュースタイトル3](URL3)\n\n";
         $prompt .= "[なぜこのニュースが重要なのかを自然な導入文で説明]\n\n";
         $prompt .= "[なぜ今これが起こっているのか、業界背景を自然な段落で説明]\n\n";
         $prompt .= "[今後どのような影響があるか、専門的考察を自然な段落で説明]\n\n";
