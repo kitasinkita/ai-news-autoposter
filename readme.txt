@@ -100,7 +100,7 @@ AI News AutoPosterは、Claude Sonnet 4とGemini 2.5 Flashを使用して**任�
 
 = 無料で使用できますか？ =
 
-プラグイン自体は無料（GPL v2ライセンス）ですが、AIサービス提供者（Google・Anthropic）のAPI利用料金が別途発生します。料金は各社によって変更される可能性があるため、最新価格は公式サイトでご確認ください。参考：Gemini（1日1-3記事なら無料枠内運用可能）、Claude（月$5-40程度・使用量による）
+プラグイン自体は無料（GPL v2ライセンス）ですが、AIサービス提供者（Google・Anthropic）のAPI利用料金が別途発生します。料金は各社によって変更される可能性があるため、最新価格は公式サイトでご確認ください。参考：Gemini 1.5 Flash（最安・1日3記事まで無料枠）、Gemini 2.5 Flash（推奨・月$1-2程度）、Claude Haiku（月$2-8程度）、Claude Sonnet（月$18-90程度）
 
 = 他のAIサービスに対応していますか？ =
 
