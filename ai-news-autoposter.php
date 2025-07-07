@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。Claude/Gemini API対応、RSSベース実ニュース検索、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.48
+ * Version: 1.2.49
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.48');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.49');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -2421,6 +2421,13 @@ class AINewsAutoPoster {
         // 日付ヘッダー（##2025年7月7日など）も削除
         $content = preg_replace('/^#{1,6}\s*\d{4}年\d{1,2}月\d{1,2}日.*$/m', '', $content);
         
+        // 構造化された見出しラベルを除去
+        $content = preg_replace('/^簡潔なリード文[:：]\s*/m', '', $content);
+        $content = preg_replace('/^背景[・･]文脈[:：]\s*/m', '', $content);
+        $content = preg_replace('/^影響[・･]考察[:：]\s*/m', '', $content);
+        $content = preg_replace('/^推察[・･]今後の展望[:：]\s*/m', '', $content);
+        $content = preg_replace('/^まとめ[:：]\s*/m', '', $content);
+        
         // 余分な空行を除去（UTF-8フラグ追加）
         $content = preg_replace('/\n\s*\n\s*\n/u', "\n\n", $content);
         
@@ -4170,11 +4177,11 @@ class AINewsAutoPoster {
         $prompt .= "**出力形式:**\n";
         $prompt .= "```\n";
         $prompt .= "タイトル: [20文字程度のタイトル]\n\n";
-        $prompt .= "[簡潔なリード文：なぜこのニュースが重要なのか]\n\n";
-        $prompt .= "[なぜ今これが起こっているのか、業界背景を説明]\n\n";
-        $prompt .= "[今後どのような影響があるか、専門的考察]\n\n";
-        $prompt .= "[根拠のある今後の展開予測]\n\n";
-        $prompt .= "[総論的なまとめ]\n";
+        $prompt .= "[なぜこのニュースが重要なのかを自然な導入文で説明]\n\n";
+        $prompt .= "[なぜ今これが起こっているのか、業界背景を自然な段落で説明]\n\n";
+        $prompt .= "[今後どのような影響があるか、専門的考察を自然な段落で説明]\n\n";
+        $prompt .= "[根拠のある今後の展開予測を自然な段落で説明]\n\n";
+        $prompt .= "[総論的なまとめを自然な段落で説明]\n";
         $prompt .= "```\n\n";
         
         $prompt .= "**重要:**\n";
@@ -4184,6 +4191,8 @@ class AINewsAutoPoster {
         $prompt .= "- シンプルな文章のみで、Markdownや特殊記号は一切使用しない\n";
         $prompt .= "- 各段落は空行で区切る\n";
         $prompt .= "- 各セクションは均等に配分し、簡潔にまとめる\n";
+        $prompt .= "- 「簡潔なリード文:」「背景・文脈:」などの見出しラベルは記載しない\n";
+        $prompt .= "- 自然な記事の流れになるように段落を構成する\n";
         
         $this->log('info', 'Geminiシンプルプロンプトテンプレート生成完了: ' . mb_strlen($prompt) . '文字');
         return $prompt;
@@ -4241,11 +4250,11 @@ class AINewsAutoPoster {
         $prompt .= "**出力形式:**\n";
         $prompt .= "```\n";
         $prompt .= "タイトル: [20文字程度のタイトル]\n\n";
-        $prompt .= "[簡潔なリード文：なぜこのニュースが重要なのか]\n\n";
-        $prompt .= "[なぜ今これが起こっているのか、業界背景を説明]\n\n";
-        $prompt .= "[今後どのような影響があるか、専門的考察]\n\n";
-        $prompt .= "[根拠のある今後の展開予測]\n\n";
-        $prompt .= "[総論的なまとめ]\n";
+        $prompt .= "[なぜこのニュースが重要なのかを自然な導入文で説明]\n\n";
+        $prompt .= "[なぜ今これが起こっているのか、業界背景を自然な段落で説明]\n\n";
+        $prompt .= "[今後どのような影響があるか、専門的考察を自然な段落で説明]\n\n";
+        $prompt .= "[根拠のある今後の展開予測を自然な段落で説明]\n\n";
+        $prompt .= "[総論的なまとめを自然な段落で説明]\n";
         $prompt .= "```\n\n";
         
         $prompt .= "**重要:**\n";
@@ -4255,6 +4264,8 @@ class AINewsAutoPoster {
         $prompt .= "- シンプルな文章のみで、Markdownや特殊記号は一切使用しない\n";
         $prompt .= "- 各段落は空行で区切る\n";
         $prompt .= "- 各セクションは均等に配分し、簡潔にまとめる\n";
+        $prompt .= "- 「簡潔なリード文:」「背景・文脈:」などの見出しラベルは記載しない\n";
+        $prompt .= "- 自然な記事の流れになるように段落を構成する\n";
         
         $this->log('info', 'Geminiシンプル1段階プロンプト生成完了: ' . mb_strlen($prompt) . '文字');
         return $prompt;
