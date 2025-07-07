@@ -6,7 +6,7 @@
 [![PHP](https://img.shields.io/badge/PHP-7.4+-purple.svg)](https://php.net)
 [![License](https://img.shields.io/badge/License-GPL%20v2-green.svg)](LICENSE)
 [![Claude AI](https://img.shields.io/badge/AI-Claude%20Sonnet%204-orange.svg)](https://anthropic.com)
-[![Version](https://img.shields.io/badge/Version-1.2.33-green.svg)](https://github.com/kitasinkita/ai-news-autoposter/releases)
+[![Version](https://img.shields.io/badge/Version-1.2.34-green.svg)](https://github.com/kitasinkita/ai-news-autoposter/releases)
 
 ## 📖 概要
 
@@ -321,6 +321,13 @@ ai-news-autoposter/
 詳細は[トラブルシューティングガイド](docs/troubleshooting.md)を参照
 
 ## 🔄 更新履歴
+
+### v1.2.34 (2025-07-07)
+- **データベースエラー修正**: MySQL UTF-8文字処理とデータベース互換性の改善
+- **文字クリーニング機能強化**: 全角文字の半角変換、制御文字除去、WordPressサニタイゼーション
+- **参考情報源セクション修復**: RSSフォールバック時の「今日の○○ニュース」と「参考情報源」表示問題を解決
+- **トークン使用量最適化**: Gemini第1段階と第2段階のトークン配分を調整してAPI制限エラーを改善
+- **抜粋自動生成機能**: タイトルから20文字程度の簡潔な要約を自動生成する機能を追加
 
 ### v1.2.33 (2025-07-07)
 - **第一段階プロンプト改善**: ニュース収集言語を明示的に指定するよう修正

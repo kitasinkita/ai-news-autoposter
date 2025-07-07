@@ -4,7 +4,7 @@ Tags: ai, automation, news, claude, gemini, seo, auto-post, artificial intellige
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.2.33
+Stable tag: 1.2.34
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -131,6 +131,13 @@ Claude Sonnet 4とGemini 2.5 Flashの高度な言語能力により、人間レ�
 5. 生成された記事例 - 夏目漱石風文体
 
 == Changelog ==
+
+= 1.2.34 =
+* データベースエラー修正 - MySQL互換性とUTF-8文字処理の改善
+* 文字クリーニング機能強化 - 全角文字の半角変換、制御文字除去
+* 参考情報源セクション修復 - RSSフォールバック時の表示問題解決
+* トークン使用量最適化 - 第1段階と第2段階のバランス調整
+* 抜粋自動生成機能追加 - タイトルから20文字程度の要約生成
 
 = 1.2.33 =
 * 第一段階プロンプト改善 - ニュース収集言語を明示的に指定
