@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。Claude/Gemini API対応、RSSベース実ニュース検索、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.52
+ * Version: 1.2.53
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.52');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.53');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -4189,15 +4189,13 @@ class AINewsAutoPoster {
         $prompt .= "[{文字数}文字程度のまとめ段落：総論的なまとめを詳しく説明]\n";
         $prompt .= "```\n\n";
         
-        $prompt .= "**重要な指示:**\n";
+        $prompt .= "**重要:**\n";
         $prompt .= "- 【{検索キーワード}】関連のニュースのみ検索\n";
         $prompt .= "- 文体：{文体}風\n";
-        $prompt .= "- 全体で必ず{文字数}文字程度の本文を作成（参考情報源は文字数に含めない）\n";
-        $prompt .= "- 参考情報源は必ず3つのみ、[タイトル](URL)の形式で記載\n";
-        $prompt .= "- タイトルの後に必ず5つの段落（導入・背景・考察・展望・まとめ）を書く\n";
-        $prompt .= "- 各段落は{文字数}を5で割った文字数程度で詳しく書く\n";
+        $prompt .= "- 全体で{文字数}文字程度に収める\n";
         $prompt .= "- シンプルな文章のみで、Markdownや特殊記号は一切使用しない\n";
         $prompt .= "- 各段落は空行で区切る\n";
+        $prompt .= "- 各セクションは均等に配分し、簡潔にまとめる\n";
         $prompt .= "- 「簡潔なリード文:」「背景・文脈:」などの見出しラベルは記載しない\n";
         $prompt .= "- 自然な記事の流れになるように段落を構成する\n";
         $prompt .= "- 参考情報源のリストだけで終わらず、必ず本文を完全に書く\n";
