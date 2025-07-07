@@ -6,7 +6,7 @@
 [![PHP](https://img.shields.io/badge/PHP-7.4+-purple.svg)](https://php.net)
 [![License](https://img.shields.io/badge/License-GPL%20v2-green.svg)](LICENSE)
 [![Claude AI](https://img.shields.io/badge/AI-Claude%20Sonnet%204-orange.svg)](https://anthropic.com)
-[![Version](https://img.shields.io/badge/Version-1.2.34-green.svg)](https://github.com/kitasinkita/ai-news-autoposter/releases)
+[![Version](https://img.shields.io/badge/Version-1.2.35-green.svg)](https://github.com/kitasinkita/ai-news-autoposter/releases)
 
 ## 📖 概要
 
@@ -321,6 +321,12 @@ ai-news-autoposter/
 詳細は[トラブルシューティングガイド](docs/troubleshooting.md)を参照
 
 ## 🔄 更新履歴
+
+### v1.2.35 (2025-07-07)
+- **Gemini APIトークン制限完全解決**: 実際の制限（65,536出力トークン）に対応し「トークン上限」エラーを解消
+- **URLクリーニング機能追加**: Google News URLの300-400文字の不要なエンコードを削除してプロンプトサイズを30-40%削減
+- **動的トークン配分最適化**: 第1段階（ニュース検索）2,000トークン、第2段階（記事生成）8,000トークンに調整
+- **プロンプト効率化**: clean_news_url()メソッドでAPIリクエストの安定性を大幅向上
 
 ### v1.2.34 (2025-07-07)
 - **データベースエラー修正**: MySQL UTF-8文字処理とデータベース互換性の改善
