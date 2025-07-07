@@ -2891,12 +2891,18 @@ class AINewsAutoPoster {
             // プロンプト長に応じて動的に調整（入力+出力でAPI制限を超えないように）
             $input_tokens = intval($prompt_length / 4); // おおよその入力トークン数
             $max_available_tokens = 7000; // Gemini 2.5の制限を少し余裕を持って設定
-            $max_tokens = min(2500, $max_available_tokens - $input_tokens); // 安全な出力トークン数
+            
+            // 第1段階（ニュース検索）の場合は出力を制限
+            if (strpos($prompt, '最新ニュース') !== false && strpos($prompt, '3〜5件') !== false) {
+                $max_tokens = min(800, $max_available_tokens - $input_tokens); // 第1段階は短く
+                $this->log('info', 'Gemini第1段階用にmaxOutputTokensを' . $max_tokens . 'に制限（入力トークン概算: ' . $input_tokens . '）');
+            } else {
+                $max_tokens = min(2500, $max_available_tokens - $input_tokens); // 第2段階は通常通り
+                $this->log('info', 'Gemini第2段階用にmaxOutputTokensを' . $max_tokens . 'に設定（入力トークン概算: ' . $input_tokens . '）');
+            }
             
             // 最低限の出力を保証
-            $max_tokens = max($max_tokens, 1500);
-            
-            $this->log('info', 'Gemini 2.5 + Grounding用にmaxOutputTokensを' . $max_tokens . 'に設定（入力トークン概算: ' . $input_tokens . '）');
+            $max_tokens = max($max_tokens, strpos($prompt, '最新ニュース') !== false ? 500 : 1500);
         } else {
             // 文字数をトークン数に変換（1トークン ≈ 0.7文字として計算）
             $expected_tokens = intval($expected_chars / 0.5); // より余裕を持った計算
@@ -3760,19 +3766,14 @@ class AINewsAutoPoster {
         
         $this->log('info', 'Gemini第1段階ニュース検索プロンプト生成開始');
         
-        $prompt = "あなたは優秀なニュースリサーチャーです。【{$search_keywords}】について最新のニュースを【{$news_collection_language}】で検索し、関連するニュース記事のタイトルとURLの一覧を5〜10件取得してください。過去1週間以内の最新記事を優先し、タイトルは正確に、URLは実際にアクセス可能なものを提供してください。\n\n";
+        $prompt = "【{$search_keywords}】について最新ニュースを【{$news_collection_language}】で検索し、関連記事を3〜5件取得してください。\n\n";
         
-        $prompt .= "以下の形式で、関連性の高いニュース記事をリストアップしてください：\n\n";
-        $prompt .= "## 最新ニュース一覧\n\n";
-        $prompt .= "1. [記事タイトル1](URL1)\n";
-        $prompt .= "2. [記事タイトル2](URL2)\n";
-        $prompt .= "3. [記事タイトル3](URL3)\n";
-        $prompt .= "...\n\n";
-        $prompt .= "重要:\n";
-        $prompt .= "- 記事は過去1週間以内の最新のものを優先してください\n";
-        $prompt .= "- タイトルは正確に取得してください\n";
-        $prompt .= "- URLは実際にアクセス可能なものを提供してください\n";
-        $prompt .= "- 重複する記事は避けてください\n";
+        $prompt .= "以下の形式で簡潔に：\n\n";
+        $prompt .= "## 最新ニュース\n\n";
+        $prompt .= "1. [タイトル1](URL1)\n";
+        $prompt .= "2. [タイトル2](URL2)\n";
+        $prompt .= "3. [タイトル3](URL3)\n\n";
+        $prompt .= "条件: 過去1週間以内、重複除く、実アクセス可能URL\n";
         
         $this->log('info', 'Gemini第1段階ニュース検索プロンプト生成完了');
         return $prompt;
