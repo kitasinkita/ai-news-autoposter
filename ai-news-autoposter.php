@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。Claude/Gemini API対応、RSSベース実ニュース検索、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.51
+ * Version: 1.2.52
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.51');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.52');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -4913,21 +4913,51 @@ class AINewsAutoPoster {
         $content = $post->post_content;
         $original_length = mb_strlen($content);
         
-        // 参考情報源がMarkdownリンクとして含まれている場合、HTMLリンクに変換
-        if (!empty($grounding_sources) && strpos($content, '**参考情報源：**') !== false) {
-            // Markdownリンクを見つけてHTMLに変換
-            $content = preg_replace_callback('/\[([^\]]+)\]\(([^)]+)\)/', function($matches) {
-                $title = $matches[1];
-                $url = $matches[2];
-                return '<a href="' . esc_url($url) . '" target="_blank">' . esc_html($title) . '</a>';
-            }, $content);
-            
-            // **太字**をHTMLに変換
-            $content = preg_replace('/\*\*([^*]+)\*\*/', '<strong>$1</strong>', $content);
-            
-            $this->log('info', 'Markdownリンクを' . count($grounding_sources) . '件HTMLに変換しました');
-        } else {
-            $this->log('info', '参考情報源セクションが見つかりません');
+        // 参考情報源をクリック可能なリンクに変換
+        if (!empty($grounding_sources)) {
+            // Markdownリンクがある場合はHTMLに変換
+            if (strpos($content, '**参考情報源：**') !== false) {
+                // Markdownリンクを見つけてHTMLに変換
+                $content = preg_replace_callback('/\[([^\]]+)\]\(([^)]+)\)/', function($matches) {
+                    $title = $matches[1];
+                    $url = $matches[2];
+                    return '<a href="' . esc_url($url) . '" target="_blank">' . esc_html($title) . '</a>';
+                }, $content);
+                
+                // **太字**をHTMLに変換
+                $content = preg_replace('/\*\*([^*]+)\*\*/', '<strong>$1</strong>', $content);
+                
+                $this->log('info', 'Markdownリンクを' . count($grounding_sources) . '件HTMLに変換しました');
+            }
+            // プレーンテキストの参考情報源をリンクに変換
+            else if (strpos($content, '参考情報源:') !== false) {
+                // 参考情報源セクションのリストアイテムをHTMLリンクに変換
+                $content = preg_replace_callback('/(<li>)([^<]+?)\s*\((https?:\/\/[^)]+)\)([^<]*)(<\/li>)/', function($matches) {
+                    $title = trim($matches[2]);
+                    $url = trim($matches[3]);
+                    $additional_text = trim($matches[4]);
+                    
+                    return $matches[1] . '<a href="' . esc_url($url) . '" target="_blank">' . esc_html($title) . '</a>' . $additional_text . $matches[5];
+                }, $content);
+                
+                // [参考リンク]のような場合も処理
+                $content = preg_replace_callback('/(<li>)([^<]+?)\s*\(([^)]+)\)([^<]*)(<\/li>)/', function($matches) {
+                    $title = trim($matches[2]);
+                    $link_text = trim($matches[3]);
+                    $additional_text = trim($matches[4]);
+                    
+                    // URLでない場合はリンクにしない
+                    if (preg_match('/^https?:\/\//', $link_text)) {
+                        return $matches[1] . '<a href="' . esc_url($link_text) . '" target="_blank">' . esc_html($title) . '</a>' . $additional_text . $matches[5];
+                    } else {
+                        return $matches[0]; // URLでない場合は元のまま
+                    }
+                }, $content);
+                
+                $this->log('info', 'プレーンテキストの参考情報源をHTMLリンクに変換しました');
+            } else {
+                $this->log('info', '参考情報源セクションが見つかりません');
+            }
         }
         
         // 免責事項を追加
