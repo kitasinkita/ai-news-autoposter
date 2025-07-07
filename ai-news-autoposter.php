@@ -1249,9 +1249,9 @@ class AINewsAutoPoster {
         
         $this->log('info', '記事データ解析完了。タイトル: ' . $article_data['title']);
         
-        // 最終的なコンテンツ処理（免責事項追加）
+        // 最終的なコンテンツ処理（文字数制限のみ、参考情報源・免責事項は後で追加）
         $this->log('info', '最終コンテンツ処理を実行中...');
-        $article_data['content'] = $this->post_process_content($article_data['content'], $settings);
+        $article_data['content'] = $this->post_process_content($article_data['content'], $settings, false); // 免責事項追加を無効化
         
         // 投稿データを準備
         $this->log('info', 'WordPress投稿データを準備中...');
@@ -1347,46 +1347,16 @@ class AINewsAutoPoster {
         
         $this->log('info', '投稿データ詳細: タイトル=' . mb_strlen($post_data['post_title']) . '文字、コンテンツ=' . $content_length . '文字、ステータス=' . $post_data['post_status'] . '、カテゴリ=' . json_encode($post_data['post_category']));
         
-        // コンテンツが長すぎる場合は短縮（データベースエラー回避＆免責事項保護）
-        // 免責事項を考慮した文字数制限
-        $disclaimer_length = 0;
-        if ($settings['enable_disclaimer'] ?? true) {
-            $disclaimer_text = $settings['disclaimer_text'] ?? '';
-            $disclaimer_length = mb_strlen($disclaimer_text) + 250; // HTML要素分も考慮
-        }
-        
-        // 設定された文字数制限を尊重
+        // コンテンツが長すぎる場合は短縮（記事本体のみを対象）
+        // 設定された文字数制限を記事本体のみに適用
         $user_word_count = $settings['article_word_count'] ?? 500;
-        $max_content_length = min($user_word_count, 2500 - $disclaimer_length); // より厳格な制限
+        $max_content_length = $user_word_count; // 記事本体のみの制限
         
         if ($content_length > $max_content_length) {
-            $this->log('warning', 'コンテンツが長すぎます(' . $content_length . '文字)。設定文字数(' . $user_word_count . ')と免責事項を考慮して' . $max_content_length . '文字に短縮します。');
+            $this->log('warning', 'コンテンツが長すぎます(' . $content_length . '文字)。設定文字数(' . $user_word_count . ')に短縮します。');
             
-            // 免責事項と参考情報源を保護するために先に抽出
-            $disclaimer_pattern = '/<div[^>]*style="[^"]*background-color:\s*#f0f0f0[^"]*"[^>]*>.*?<\/div>/s';
-            $extracted_disclaimer = '';
-            if (preg_match($disclaimer_pattern, $post_data['post_content'], $matches)) {
-                $extracted_disclaimer = $matches[0];
-                // 免責事項を一時的に削除
-                $post_data['post_content'] = preg_replace($disclaimer_pattern, '', $post_data['post_content']);
-                $this->log('info', '免責事項を一時保護しました: ' . mb_strlen($extracted_disclaimer) . '文字');
-            }
-            
-            // 参考情報源セクションを保護するために先に抽出
-            $reference_pattern = '/## 参考情報源.*$/s';
-            $extracted_references = '';
-            if (preg_match($reference_pattern, $post_data['post_content'], $matches)) {
-                $extracted_references = $matches[0];
-                // 参考情報源を一時的に削除
-                $post_data['post_content'] = preg_replace($reference_pattern, '', $post_data['post_content']);
-                $this->log('info', '参考情報源を一時保護しました: ' . mb_strlen($extracted_references) . '文字');
-            }
-            
-            // 設定文字数を超過している場合は厳格に短縮
-            // 保護された部分の長さを考慮
-            $protected_length = mb_strlen($extracted_disclaimer) + mb_strlen($extracted_references);
-            $target_length = $max_content_length - $protected_length - 100; // 安全マージン
-            $this->log('info', '保護セクション長: ' . $protected_length . '文字、本文ターゲット長: ' . $target_length . '文字');
+            // 記事本体のみを短縮（参考情報源・免責事項は後で追加）
+            $target_length = $max_content_length - 50; // 安全マージン
             $trimmed_content = mb_substr($post_data['post_content'], 0, $target_length);
             
             // 最後の完全な段落で終わるように調整
@@ -1401,20 +1371,8 @@ class AINewsAutoPoster {
                 $trimmed_content = mb_substr($trimmed_content, 0, $last_period_pos + 1);
             }
             
-            // 参考情報源を再び追加
-            if (!empty($extracted_references)) {
-                $trimmed_content = trim($trimmed_content) . "\n\n" . $extracted_references;
-                $this->log('info', '参考情報源を復元しました');
-            }
-            
-            // 免責事項を再び追加
-            if (!empty($extracted_disclaimer)) {
-                $trimmed_content = trim($trimmed_content) . "\n\n" . $extracted_disclaimer;
-                $this->log('info', '免責事項を復元しました');
-            }
-            
             $post_data['post_content'] = $trimmed_content;
-            $this->log('info', '短縮後のコンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字（参考情報源・免責事項復元後）');
+            $this->log('info', '短縮後のコンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字（記事本体のみ）');
         }
         
         $this->log('info', 'コンテンツ長チェック完了。投稿作成処理を開始します。');
@@ -1704,6 +1662,9 @@ class AINewsAutoPoster {
         }
         
         $this->log('info', '投稿作成成功。投稿ID: ' . $post_id);
+        
+        // 投稿作成後に参考情報源と免責事項を追加（文字数制限の影響を受けない）
+        $this->add_reference_sources_and_disclaimer($post_id, $grounding_sources, $settings);
         
         // メタデータを個別に追加（投稿作成後に安全に処理）
         foreach ($meta_data as $meta_key => $meta_value) {
@@ -2759,7 +2720,7 @@ class AINewsAutoPoster {
     /**
      * 記事内容の後処理（Markdown変換、免責事項追加など）
      */
-    private function post_process_content($content, $settings = null) {
+    private function post_process_content($content, $settings = null, $add_disclaimer = true) {
         // 文字化けチェック - 無効なUTF-8の場合は基本処理のみ
         if (!mb_check_encoding($content, 'UTF-8')) {
             $this->log('warning', '文字化けが検出されたため、基本処理のみ実行');
@@ -2774,24 +2735,28 @@ class AINewsAutoPoster {
             $content = $this->convert_markdown_to_html($content);
         }
         
-        // 免責事項を追加
-        if ($settings === null) {
-            $settings = get_option('ai_news_autoposter_settings', array());
-        }
-        $enable_disclaimer = $settings['enable_disclaimer'] ?? true;
-        $disclaimer_text = $settings['disclaimer_text'] ?? '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。';
-        
-        $this->log('info', 'post_process_content開始 - 免責事項処理');
-        $this->log('info', '免責事項設定: 有効=' . ($enable_disclaimer ? 'true' : 'false') . ', テキスト長=' . mb_strlen($disclaimer_text));
-        $this->log('info', 'コンテンツ処理前の長さ: ' . mb_strlen($content) . '文字');
-        
-        if ($enable_disclaimer && !empty($disclaimer_text)) {
-            $before_length = mb_strlen($content);
-            $content = trim($content) . "\n\n<div style=\"margin-top: 20px; padding: 10px; background-color: #f0f0f0; border-left: 4px solid #ccc; font-size: 14px; color: #666;\">" . $disclaimer_text . "</div>";
-            $after_length = mb_strlen($content);
-            $this->log('success', '免責事項を追加しました。追加前: ' . $before_length . '文字 → 追加後: ' . $after_length . '文字');
+        // 免責事項を追加（後処理で追加する場合はスキップ）
+        if ($add_disclaimer) {
+            if ($settings === null) {
+                $settings = get_option('ai_news_autoposter_settings', array());
+            }
+            $enable_disclaimer = $settings['enable_disclaimer'] ?? true;
+            $disclaimer_text = $settings['disclaimer_text'] ?? '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。';
+            
+            $this->log('info', 'post_process_content開始 - 免責事項処理');
+            $this->log('info', '免責事項設定: 有効=' . ($enable_disclaimer ? 'true' : 'false') . ', テキスト長=' . mb_strlen($disclaimer_text));
+            $this->log('info', 'コンテンツ処理前の長さ: ' . mb_strlen($content) . '文字');
+            
+            if ($enable_disclaimer && !empty($disclaimer_text)) {
+                $before_length = mb_strlen($content);
+                $content = trim($content) . "\n\n<div style=\"margin-top: 20px; padding: 10px; background-color: #f0f0f0; border-left: 4px solid #ccc; font-size: 14px; color: #666;\">" . $disclaimer_text . "</div>";
+                $after_length = mb_strlen($content);
+                $this->log('success', '免責事項を追加しました。追加前: ' . $before_length . '文字 → 追加後: ' . $after_length . '文字');
+            } else {
+                $this->log('warning', '免責事項が追加されませんでした。有効: ' . ($enable_disclaimer ? 'true' : 'false') . ', テキスト長: ' . mb_strlen($disclaimer_text));
+            }
         } else {
-            $this->log('warning', '免責事項が追加されませんでした。有効: ' . ($enable_disclaimer ? 'true' : 'false') . ', テキスト長: ' . mb_strlen($disclaimer_text));
+            $this->log('info', 'post_process_content: 免責事項追加をスキップ（後処理で追加予定）');
         }
         
         return trim($content);
@@ -4460,6 +4425,69 @@ class AINewsAutoPoster {
         }
         
         return $excerpt;
+    }
+    
+    /**
+     * 投稿作成後に参考情報源と免責事項を追加
+     */
+    private function add_reference_sources_and_disclaimer($post_id, $grounding_sources, $settings) {
+        $this->log('info', '参考情報源と免責事項の後処理を開始します。投稿ID: ' . $post_id);
+        
+        // 現在の投稿内容を取得
+        $post = get_post($post_id);
+        if (!$post) {
+            $this->log('error', '投稿ID ' . $post_id . ' が見つかりません');
+            return;
+        }
+        
+        $content = $post->post_content;
+        $original_length = mb_strlen($content);
+        
+        // 参考情報源セクションを追加
+        if (!empty($grounding_sources)) {
+            $this->log('info', count($grounding_sources) . '件の参考情報源を追加中...');
+            
+            $reference_section = "\n\n<h2>参考情報源</h2>\n<ol>\n";
+            foreach ($grounding_sources as $index => $source) {
+                $title = $source['title'] ?? ('ニュース記事' . ($index + 1));
+                $url = $source['url'] ?? '#';
+                $reference_section .= '<li><a href="' . esc_url($url) . '" target="_blank">' . esc_html($title) . '</a></li>' . "\n";
+            }
+            $reference_section .= "</ol>";
+            
+            $content .= $reference_section;
+            $this->log('info', '参考情報源セクションを追加しました');
+        } else {
+            $this->log('info', '参考情報源がないためスキップします');
+        }
+        
+        // 免責事項を追加
+        if ($settings['enable_disclaimer'] ?? true) {
+            $disclaimer_text = $settings['disclaimer_text'] ?? '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。';
+            
+            $disclaimer_html = '<div style="margin-top: 20px;padding: 10px;background-color: #f0f0f0;border-left: 4px solid #ccc;font-size: 14px;color: #666">' . 
+                              esc_html($disclaimer_text) . '</div>';
+            
+            $content .= "\n\n" . $disclaimer_html;
+            $this->log('info', '免責事項を追加しました');
+        } else {
+            $this->log('info', '免責事項は無効に設定されているためスキップします');
+        }
+        
+        // 投稿内容を更新
+        $updated_post = array(
+            'ID' => $post_id,
+            'post_content' => $content
+        );
+        
+        $update_result = wp_update_post($updated_post);
+        if (is_wp_error($update_result)) {
+            $this->log('error', '投稿更新に失敗: ' . $update_result->get_error_message());
+        } else {
+            $final_length = mb_strlen($content);
+            $added_length = $final_length - $original_length;
+            $this->log('info', '投稿内容を更新しました。追加文字数: ' . $added_length . '文字、最終文字数: ' . $final_length . '文字');
+        }
     }
 }
 
