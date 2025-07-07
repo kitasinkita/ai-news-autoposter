@@ -6,7 +6,7 @@
 [![PHP](https://img.shields.io/badge/PHP-7.4+-purple.svg)](https://php.net)
 [![License](https://img.shields.io/badge/License-GPL%20v2-green.svg)](LICENSE)
 [![Claude AI](https://img.shields.io/badge/AI-Claude%20Sonnet%204-orange.svg)](https://anthropic.com)
-[![Version](https://img.shields.io/badge/Version-1.2.27-green.svg)](https://github.com/kitasinkita/ai-news-autoposter/releases)
+[![Version](https://img.shields.io/badge/Version-1.2.33-green.svg)](https://github.com/kitasinkita/ai-news-autoposter/releases)
 
 ## 📖 概要
 
@@ -297,6 +297,24 @@ ai-news-autoposter/
 ```
 
 詳細は[トラブルシューティングガイド](docs/troubleshooting.md)を参照
+
+## 🔄 更新履歴
+
+### v1.2.33 (2025-07-07)
+- **第一段階プロンプト改善**: ニュース収集言語を明示的に指定するよう修正
+- **投稿数制限変更**: 1日の最大投稿数を最大5件に制限（安全性向上）
+- **UI改善**: 
+  - 自動投稿無効時に「予定されていません」と表示
+  - 「テスト記事生成」→「下書き記事生成」に文言変更
+  - 手動実行説明文を「記事を手動生成できます。自動投稿は「設定」で登録ください。」に変更
+- **Unsplash画像機能強化**:
+  - 記事内容から動的キーワード抽出（12カテゴリー対応）
+  - 画像選択にランダム性を追加（毎回異なる画像）
+  - アウトドア、AI、ビジネスなど内容に応じた適切な画像選定
+- **バグ修正**:
+  - Claude APIフォールバック時のモデル指定エラー修正
+  - Gemini APIトークン制限エラーの動的調整
+  - 免責事項が文字数制限で削除される問題を解決
 
 ## 🔄 バージョン履歴
 

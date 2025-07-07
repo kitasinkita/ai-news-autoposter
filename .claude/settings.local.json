@@ -22,7 +22,9 @@
       "Bash(sed:*)",
       "Bash(/usr/local/bin/php:*)",
       "Bash(docker exec:*)",
-      "Bash(docker cp:*)"
+      "Bash(docker cp:*)",
+      "Bash(/usr/bin/php:*)",
+      "Bash(git tag:*)"
     ],
     "deny": []
   }

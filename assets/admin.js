@@ -154,7 +154,7 @@
             const originalText = $button.text();
             
             // 確認ダイアログ
-            if (!confirm('テスト記事を生成しますか？この処理には時間がかかる場合があります。')) {
+            if (!confirm('下書き記事を生成しますか？この処理には時間がかかる場合があります。')) {
                 return;
             }
             
@@ -251,8 +251,8 @@
             }
             
             // 投稿数検証
-            if (isNaN(maxPosts) || maxPosts < 1 || maxPosts > 24) {
-                errors.push('1日の最大投稿数は1-24の範囲で設定してください。');
+            if (isNaN(maxPosts) || maxPosts < 1 || maxPosts > 5) {
+                errors.push('1日の最大投稿数は1-5の範囲で設定してください。');
             }
             
             // 開始時刻検証

@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。Claude/Gemini API対応、RSSベース実ニュース検索、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.32
+ * Version: 1.2.33
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.32');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.33');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -76,7 +76,7 @@ class AINewsAutoPoster {
                 'post_category' => get_option('default_category'),
                 'seo_focus_keyword' => 'AI ニュース',
                 'meta_description_template' => '最新の業界ニュースをお届けします。{title}について詳しく解説いたします。',
-                'post_status' => 'publish',
+                'post_status' => 'draft',
                 'enable_tags' => true,
                 'search_keywords' => 'AI ニュース, 人工知能, 機械学習, ChatGPT, OpenAI',
                 'writing_style' => '夏目漱石',
@@ -241,16 +241,24 @@ class AINewsAutoPoster {
                             </tr>
                             <tr>
                                 <td><strong>次回実行予定:</strong></td>
-                                <td id="next-run-time"><?php echo $next_scheduled ? date('Y-m-d H:i:s', $next_scheduled) : '未設定'; ?></td>
+                                <td id="next-run-time"><?php 
+                                    if (!($settings['auto_publish'] ?? false)) {
+                                        echo '予定されていません（自動投稿が無効）';
+                                    } elseif ($next_scheduled) {
+                                        echo date('Y-m-d H:i:s', $next_scheduled);
+                                    } else {
+                                        echo '未設定';
+                                    }
+                                ?></td>
                             </tr>
                         </table>
                     </div>
                     
                     <div class="ai-news-status-card">
                         <h3>手動実行</h3>
-                        <p>テスト用に記事を手動生成できます。</p>
+                        <p>記事を手動生成できます。自動投稿は「設定」で登録ください。</p>
                         <div class="ai-news-button-group">
-                            <button type="button" class="ai-news-button-primary" id="generate-test-article">テスト記事生成</button>
+                            <button type="button" class="ai-news-button-primary" id="generate-test-article">下書き記事生成</button>
                             <button type="button" class="ai-news-button-primary" id="manual-post-now">今すぐ投稿</button>
                             <button type="button" class="ai-news-button-secondary" id="test-api-connection">API接続テスト</button>
                             <button type="button" class="ai-news-button-secondary" id="test-cron-execution">Cron実行テスト</button>
@@ -537,7 +545,7 @@ class AINewsAutoPoster {
                                 <code>{文体}</code> - 文体スタイル<br><br>
                                 <strong>デフォルトプロンプト（Gemini 2.5の場合）：</strong><br>
                                 <strong>第1段階（ニュース検索）：</strong><br>
-                                「あなたは優秀なニュースリサーチャーです。【{キーワード}】について最新のニュースを検索し、関連するニュース記事のタイトルとURLの一覧を5〜10件取得してください。過去1週間以内の最新記事を優先し、タイトルは正確に、URLは実際にアクセス可能なものを提供してください。」<br><br>
+                                「あなたは優秀なニュースリサーチャーです。【{キーワード}】について最新のニュースを【{ニュース収集言語}】で検索し、関連するニュース記事のタイトルとURLの一覧を5〜10件取得してください。過去1週間以内の最新記事を優先し、タイトルは正確に、URLは実際にアクセス可能なものを提供してください。」<br><br>
                                 <strong>第2段階（詳細記事生成）：</strong><br>
                                 「あなたは{文体}風の文体で記事を書く優秀なジャーナリストです。取得したニュースソースの内容を詳細に調査・分析し、重要な数値・日付・人名・企業名・統計データを正確に引用してください。『〜によると』『〜が発表した』『〜のデータでは』という形で具体的事実を引用し、専門家のコメント、企業の具体的取り組み、過去の経緯から今後の展望まで時系列で整理し、約{文字数}文字の包括的な記事を{言語}で作成してください。」<br><br>
                                 <strong>その他のモデル：</strong><br>
@@ -596,7 +604,7 @@ class AINewsAutoPoster {
                     <tr>
                         <th scope="row">1日の最大投稿数</th>
                         <td>
-                            <input type="number" id="max_posts_per_day" name="max_posts_per_day" value="<?php echo esc_attr($settings['max_posts_per_day'] ?? 1); ?>" min="1" max="24" />
+                            <input type="number" id="max_posts_per_day" name="max_posts_per_day" value="<?php echo esc_attr($settings['max_posts_per_day'] ?? 1); ?>" min="1" max="5" />
                         </td>
                     </tr>
                     
@@ -814,12 +822,24 @@ class AINewsAutoPoster {
         }
         
         $settings = get_option('ai_news_autoposter_settings', array());
+        // 次回実行予定の表示ロジック
+        $auto_publish_enabled = $settings['auto_publish'] ?? false;
+        $next_scheduled = wp_next_scheduled('ai_news_autoposter_daily_cron');
+        
+        if (!$auto_publish_enabled) {
+            $next_run_text = '予定されていません（自動投稿が無効）';
+        } elseif ($next_scheduled) {
+            $next_run_text = date('Y-m-d H:i:s', $next_scheduled);
+        } else {
+            $next_run_text = '未設定';
+        }
+        
         $stats = array(
             'posts_today' => $this->get_posts_count_today(),
             'total_posts' => $this->get_total_posts_count(),
             'last_run' => get_option('ai_news_autoposter_last_run', 'まだ実行されていません'),
-            'next_run' => wp_next_scheduled('ai_news_autoposter_daily_cron') ? date('Y-m-d H:i:s', wp_next_scheduled('ai_news_autoposter_daily_cron')) : '未設定',
-            'auto_publish_enabled' => $settings['auto_publish'] ?? false
+            'next_run' => $next_run_text,
+            'auto_publish_enabled' => $auto_publish_enabled
         );
         
         wp_send_json_success($stats);
@@ -1264,30 +1284,55 @@ class AINewsAutoPoster {
         
         $this->log('info', '投稿データ詳細: タイトル=' . mb_strlen($post_data['post_title']) . '文字、コンテンツ=' . $content_length . '文字、ステータス=' . $post_data['post_status'] . '、カテゴリ=' . json_encode($post_data['post_category']));
         
-        // コンテンツが長すぎる場合は短縮（データベースエラー回避）
+        // コンテンツが長すぎる場合は短縮（データベースエラー回避＆免責事項保護）
         // 免責事項を考慮した文字数制限
         $disclaimer_length = 0;
         if ($settings['enable_disclaimer'] ?? true) {
             $disclaimer_text = $settings['disclaimer_text'] ?? '';
-            $disclaimer_length = mb_strlen($disclaimer_text) + 200; // HTML要素分も考慮
+            $disclaimer_length = mb_strlen($disclaimer_text) + 250; // HTML要素分も考慮
         }
         
-        $max_content_length = 2500 - $disclaimer_length; // 免責事項分を差し引く
+        // 設定された文字数制限を尊重
+        $user_word_count = $settings['article_word_count'] ?? 500;
+        $max_content_length = min($user_word_count, 2500 - $disclaimer_length); // より厳格な制限
         
         if ($content_length > $max_content_length) {
-            $this->log('warning', 'コンテンツが長すぎます(' . $content_length . '文字)。免責事項を考慮して' . $max_content_length . '文字に短縮します。');
+            $this->log('warning', 'コンテンツが長すぎます(' . $content_length . '文字)。設定文字数(' . $user_word_count . ')と免責事項を考慮して' . $max_content_length . '文字に短縮します。');
             
-            // 免責事項分を除いた文字数で切り詰め
-            $trimmed_content = mb_substr($post_data['post_content'], 0, $max_content_length - 100);
+            // 免責事項を保護するために、免責事項を先に抽出
+            $disclaimer_pattern = '/<div[^>]*style="[^"]*background-color:\s*#f0f0f0[^"]*"[^>]*>.*?<\/div>/s';
+            $extracted_disclaimer = '';
+            if (preg_match($disclaimer_pattern, $post_data['post_content'], $matches)) {
+                $extracted_disclaimer = $matches[0];
+                // 免責事項を一時的に削除
+                $post_data['post_content'] = preg_replace($disclaimer_pattern, '', $post_data['post_content']);
+                $this->log('info', '免責事項を一時保護しました: ' . mb_strlen($extracted_disclaimer) . '文字');
+            }
+            
+            // 設定文字数を超過している場合は厳格に短縮
+            $target_length = $max_content_length - 50; // 安全マージン
+            $trimmed_content = mb_substr($post_data['post_content'], 0, $target_length);
             
             // 最後の完全な段落で終わるように調整
             $last_paragraph_pos = mb_strrpos($trimmed_content, "\n\n");
-            if ($last_paragraph_pos !== false && $last_paragraph_pos > $max_content_length * 0.8) {
+            if ($last_paragraph_pos !== false && $last_paragraph_pos > $target_length * 0.8) {
                 $trimmed_content = mb_substr($trimmed_content, 0, $last_paragraph_pos);
             }
             
+            // 文の途中で切れないように最後の句点で調整
+            $last_period_pos = mb_strrpos($trimmed_content, "。");
+            if ($last_period_pos !== false && $last_period_pos > $target_length * 0.7) {
+                $trimmed_content = mb_substr($trimmed_content, 0, $last_period_pos + 1);
+            }
+            
+            // 免責事項を再び追加
+            if (!empty($extracted_disclaimer)) {
+                $trimmed_content = trim($trimmed_content) . "\n\n" . $extracted_disclaimer;
+                $this->log('info', '免責事項を復元しました');
+            }
+            
             $post_data['post_content'] = $trimmed_content;
-            $this->log('info', '短縮後のコンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字（免責事項追加前）');
+            $this->log('info', '短縮後のコンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字（免責事項復元後）');
         }
         
         $this->log('info', 'コンテンツ長チェック完了。投稿作成処理を開始します。');
@@ -1461,7 +1506,14 @@ class AINewsAutoPoster {
         
         // 最終的な文字クリーニング（データベースエラー防止）
         $post_data['post_title'] = $this->clean_text_for_database($post_data['post_title']);
+        $content_before_clean = $post_data['post_content'];
         $post_data['post_content'] = $this->clean_text_for_database($post_data['post_content']);
+        
+        // 免責事項チェック
+        $has_disclaimer_before = strpos($content_before_clean, '注：この記事は') !== false;
+        $has_disclaimer_after = strpos($post_data['post_content'], '注：この記事は') !== false;
+        $this->log('info', 'クリーニング前の免責事項: ' . ($has_disclaimer_before ? '有り' : '無し'));
+        $this->log('info', 'クリーニング後の免責事項: ' . ($has_disclaimer_after ? '有り' : '無し'));
         
         // コンテンツ長チェック（問題解決により制限を緩和）
         if (mb_strlen($post_data['post_content']) > 10000) {
@@ -1562,6 +1614,13 @@ class AINewsAutoPoster {
         if ($saved_post) {
             $this->log('info', '保存後のタイトル: "' . mb_substr($saved_post->post_title, 0, 50) . '"');
             $this->log('info', '保存後のコンテンツ先頭100文字: "' . mb_substr($saved_post->post_content, 0, 100) . '"');
+            
+            // 免責事項が保存されているかチェック
+            $saved_has_disclaimer = strpos($saved_post->post_content, '注：この記事は') !== false;
+            $this->log('info', '保存後の免責事項: ' . ($saved_has_disclaimer ? '有り' : '無し'));
+            if (!$saved_has_disclaimer) {
+                $this->log('warning', '免責事項が保存されていません。コンテンツ末尾100文字: "' . mb_substr($saved_post->post_content, -100) . '"');
+            }
         }
         
         // タグを追加
@@ -1731,7 +1790,7 @@ class AINewsAutoPoster {
         $prompt .= "【重要】: 2024年以前の古い情報ではなく、{$current_year}年の最新情報のみを使用してください。\n\n";
         $prompt .= "【{$language_text}】のニュースから、【{$search_keywords}】に関する{$current_year}年の最新ニュース（特に直近数ヶ月の新しい情報）を送ってください。5本ぐらいが理想です。\n";
         $prompt .= "ニュースの背景や文脈を簡単にまとめ、かつ、上記の最新ニュースのリンク先を参考情報元として記事のタイトルとリンクを記載し、なぜ今、これが起こっているのか、という背景情報を踏まえて、今後どのような影響をあたえるのか、推察もしてください。\n";
-        $prompt .= "全部で【{$word_count}文字】程度にまとめてください。充実した内容で。\n";
+        $prompt .= "全部で【{$word_count}文字以内】に必ずまとめてください。この文字数制限は厳守してください。充実した内容で。\n";
         if ($writing_style !== '標準') {
             $prompt .= "文体は{$writing_style}風でお願いします。\n";
         }
@@ -1912,8 +1971,16 @@ class AINewsAutoPoster {
             'anthropic-version' => '2023-06-01'
         );
         
+        // Claude APIでは常にClaudeモデルを使用（Geminiモデルが設定されていても）
+        $claude_model = $settings['claude_model'] ?? 'claude-3-5-haiku-20241022';
+        if (strpos($claude_model, 'gemini') === 0) {
+            // Geminiモデルが設定されている場合はデフォルトのClaudeモデルを使用
+            $claude_model = 'claude-3-5-haiku-20241022';
+            $this->log('info', 'Claude API: Geminiモデルが設定されているため、デフォルトClaudeモデル（' . $claude_model . '）を使用');
+        }
+        
         $body = array(
-            'model' => $settings['claude_model'] ?? 'claude-3-5-haiku-20241022',
+            'model' => $claude_model,
             'max_tokens' => 2000, // トークン数を削減して処理時間短縮
             'messages' => array(
                 array(
@@ -2610,11 +2677,17 @@ class AINewsAutoPoster {
         $enable_disclaimer = $settings['enable_disclaimer'] ?? true;
         $disclaimer_text = $settings['disclaimer_text'] ?? '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。';
         
+        $this->log('info', 'post_process_content開始 - 免責事項処理');
+        $this->log('info', '免責事項設定: 有効=' . ($enable_disclaimer ? 'true' : 'false') . ', テキスト長=' . mb_strlen($disclaimer_text));
+        $this->log('info', 'コンテンツ処理前の長さ: ' . mb_strlen($content) . '文字');
+        
         if ($enable_disclaimer && !empty($disclaimer_text)) {
-            $this->log('info', '免責事項を追加中: ' . $disclaimer_text);
+            $before_length = mb_strlen($content);
             $content = trim($content) . "\n\n<div style=\"margin-top: 20px; padding: 10px; background-color: #f0f0f0; border-left: 4px solid #ccc; font-size: 14px; color: #666;\">" . $disclaimer_text . "</div>";
+            $after_length = mb_strlen($content);
+            $this->log('success', '免責事項を追加しました。追加前: ' . $before_length . '文字 → 追加後: ' . $after_length . '文字');
         } else {
-            $this->log('warning', '免責事項が追加されませんでした。有効: ' . ($enable_disclaimer ? 'true' : 'false') . ', テキスト長: ' . strlen($disclaimer_text));
+            $this->log('warning', '免責事項が追加されませんでした。有効: ' . ($enable_disclaimer ? 'true' : 'false') . ', テキスト長: ' . mb_strlen($disclaimer_text));
         }
         
         return trim($content);
@@ -2780,9 +2853,15 @@ class AINewsAutoPoster {
         
         // Gemini 2.5でGoogle Search Groundingを使用する場合はトークンを調整
         if ($model === 'gemini-2.5-flash') {
-            // 記事の完結性を保つため十分なトークン数を設定
-            $max_tokens = 4000; // 記事の途中切れを防ぐため増量
-            $this->log('info', 'Gemini 2.5 + Grounding用にmaxOutputTokensを4000に設定（完結記事生成）');
+            // プロンプト長に応じて動的に調整（入力+出力でAPI制限を超えないように）
+            $input_tokens = intval($prompt_length / 4); // おおよその入力トークン数
+            $max_available_tokens = 7000; // Gemini 2.5の制限を少し余裕を持って設定
+            $max_tokens = min(2500, $max_available_tokens - $input_tokens); // 安全な出力トークン数
+            
+            // 最低限の出力を保証
+            $max_tokens = max($max_tokens, 1500);
+            
+            $this->log('info', 'Gemini 2.5 + Grounding用にmaxOutputTokensを' . $max_tokens . 'に設定（入力トークン概算: ' . $input_tokens . '）');
         } else {
             // 文字数をトークン数に変換（1トークン ≈ 0.7文字として計算）
             $expected_tokens = intval($expected_chars / 0.5); // より余裕を持った計算
@@ -3047,23 +3126,19 @@ class AINewsAutoPoster {
      * アイキャッチ画像生成
      */
     private function generate_featured_image($post_id, $title, $content, $settings) {
-        // ネットワークエラー対策: プレースホルダー画像のみ使用
-        $this->log('info', 'プレースホルダー画像を生成中...');
-        return $this->generate_placeholder_image($post_id, $title);
-        
-        // DALL-E/Unsplashは一時的に無効化
-        /*
         $image_type = $settings['image_generation_type'] ?? 'placeholder';
         
         switch ($image_type) {
             case 'dalle':
-                return $this->generate_dalle_image($post_id, $title, $content, $settings);
+                // DALL-Eは一時的に無効化（ネットワークエラー対策）
+                $this->log('warning', 'DALL-E機能は一時的に無効化されています。プレースホルダー画像を使用します。');
+                return $this->generate_placeholder_image($post_id, $title);
             case 'unsplash':
                 return $this->generate_unsplash_image($post_id, $title, $content, $settings);
             default:
+                $this->log('info', 'プレースホルダー画像を生成中...');
                 return $this->generate_placeholder_image($post_id, $title);
         }
-        */
     }
     
     /**
@@ -3135,10 +3210,12 @@ class AINewsAutoPoster {
             // 検索キーワードを生成
             $search_query = $this->create_search_keywords($title, $content);
             
+            // 検索結果にランダム性を追加
+            $per_page = 10; // 複数の候補から選択
             $response = wp_remote_get('https://api.unsplash.com/search/photos?' . http_build_query(array(
                 'query' => $search_query,
                 'orientation' => 'landscape',
-                'per_page' => 1,
+                'per_page' => $per_page,
                 'order_by' => 'relevant'
             )), array(
                 'headers' => array(
@@ -3159,11 +3236,18 @@ class AINewsAutoPoster {
                 return $this->generate_placeholder_image($post_id, $title);
             }
             
-            $image_url = $body['results'][0]['urls']['regular'] ?? '';
+            // 複数の結果からランダムに選択
+            $results = $body['results'];
+            $random_index = array_rand($results);
+            $selected_image = $results[$random_index];
+            
+            $image_url = $selected_image['urls']['regular'] ?? '';
             if (empty($image_url)) {
                 $this->log('error', 'Unsplash画像URLが取得できませんでした');
                 return $this->generate_placeholder_image($post_id, $title);
             }
+            
+            $this->log('info', 'Unsplash画像を選択: ' . ($random_index + 1) . '/' . count($results) . ' 件目 (ID: ' . ($selected_image['id'] ?? 'unknown') . ')');
             
             return $this->download_and_set_image($post_id, $image_url, $title, 'unsplash');
             
@@ -3192,18 +3276,81 @@ class AINewsAutoPoster {
      * 検索キーワード作成（Unsplash用）
      */
     private function create_search_keywords($title, $content) {
-        // タイトルから重要なキーワードを抽出
+        // バックアップ: 元の固定ロジック（必要に応じて戻せるように）
+        /*
         $keywords = array('technology', 'artificial intelligence', 'digital', 'computer', 'innovation', 'future');
-        
-        // AI関連のキーワードを優先
         if (stripos($title, 'AI') !== false || stripos($title, '人工知能') !== false) {
             return 'artificial intelligence technology';
         }
         if (stripos($title, 'robot') !== false || stripos($title, 'ロボット') !== false) {
             return 'robot technology';
         }
-        
         return 'technology innovation';
+        */
+        
+        // 新しい動的キーワード抽出ロジック
+        $combined_text = $title . ' ' . strip_tags($content);
+        
+        // キーワードマッピング（日本語→英語）
+        $keyword_map = array(
+            // テクノロジー関連
+            'AI|人工知能|機械学習|ディープラーニング' => array('artificial intelligence', 'machine learning', 'technology'),
+            'ロボット|robot' => array('robot', 'robotics', 'automation'),
+            'スマート|IoT|デジタル' => array('smart technology', 'digital', 'innovation'),
+            
+            // アウトドア・スポーツ関連
+            'アウトドア|キャンプ|登山|ハイキング' => array('outdoor', 'camping', 'hiking', 'nature'),
+            'ギア|装備|用品' => array('equipment', 'gear', 'tools'),
+            'テント|寝袋|バックパック' => array('camping gear', 'outdoor equipment'),
+            
+            // ビジネス・経済関連
+            'ビジネス|企業|会社|経済' => array('business', 'corporate', 'office'),
+            '投資|金融|株式' => array('finance', 'investment', 'money'),
+            'マーケティング|売上|販売' => array('marketing', 'sales', 'commerce'),
+            
+            // ライフスタイル関連
+            '健康|医療|ヘルスケア' => array('health', 'medical', 'wellness'),
+            '教育|学習|研修' => array('education', 'learning', 'study'),
+            '料理|食事|グルメ' => array('food', 'cooking', 'culinary'),
+            '旅行|観光|ホテル' => array('travel', 'tourism', 'vacation'),
+            
+            // 一般的なトピック
+            '環境|エコ|持続可能' => array('environment', 'sustainability', 'eco friendly'),
+            'デザイン|アート|クリエイティブ' => array('design', 'creative', 'art'),
+            '音楽|エンターテイメント' => array('music', 'entertainment', 'performance')
+        );
+        
+        // マッチしたキーワードを収集
+        $matched_keywords = array();
+        foreach ($keyword_map as $pattern => $english_keywords) {
+            if (preg_match('/(' . $pattern . ')/iu', $combined_text)) {
+                $matched_keywords = array_merge($matched_keywords, $english_keywords);
+            }
+        }
+        
+        // マッチしたキーワードがない場合のフォールバック
+        if (empty($matched_keywords)) {
+            $fallback_keywords = array('business', 'technology', 'modern', 'professional', 'innovation');
+            $matched_keywords = $fallback_keywords;
+        }
+        
+        // ランダム性を追加：複数のキーワードからランダムに選択
+        $selected_keywords = array();
+        $num_keywords = min(2, count($matched_keywords)); // 最大2つのキーワード
+        $random_keys = array_rand($matched_keywords, $num_keywords);
+        
+        if (is_array($random_keys)) {
+            foreach ($random_keys as $key) {
+                $selected_keywords[] = $matched_keywords[$key];
+            }
+        } else {
+            $selected_keywords[] = $matched_keywords[$random_keys];
+        }
+        
+        $search_query = implode(' ', $selected_keywords);
+        $this->log('info', 'Unsplash検索クエリ: "' . $search_query . '" （抽出元: "' . mb_substr($combined_text, 0, 100) . '..."）');
+        
+        return $search_query;
     }
     
     /**
@@ -3560,14 +3707,27 @@ class AINewsAutoPoster {
      */
     private function build_gemini_search_only_prompt($settings) {
         $search_keywords = $settings['search_keywords'] ?? 'AI ニュース, 人工知能, 機械学習';
-        $output_language = $settings['output_language'] ?? 'japanese';
+        $news_languages = $settings['news_languages'] ?? array('japanese', 'english');
+        
+        // ニュース収集言語を文字列に変換
+        $language_map = array(
+            'japanese' => '日本語',
+            'english' => '英語',
+            'chinese' => '中国語'
+        );
+        $language_names = array();
+        foreach ($news_languages as $lang) {
+            if (isset($language_map[$lang])) {
+                $language_names[] = $language_map[$lang];
+            }
+        }
+        $news_collection_language = implode('、', $language_names);
         
         $this->log('info', 'Gemini第1段階ニュース検索プロンプト生成開始');
         
-        $prompt = "あなたは優秀なニュースリサーチャーです。以下のキーワードについて最新のニュースを検索し、関連するニュース記事のタイトルとURLの一覧を取得してください。\n\n";
-        $prompt .= "検索キーワード: {$search_keywords}\n";
-        $prompt .= "出力言語: {$output_language}\n\n";
-        $prompt .= "以下の形式で、関連性の高いニュース記事を5〜10件リストアップしてください：\n\n";
+        $prompt = "あなたは優秀なニュースリサーチャーです。【{$search_keywords}】について最新のニュースを【{$news_collection_language}】で検索し、関連するニュース記事のタイトルとURLの一覧を5〜10件取得してください。過去1週間以内の最新記事を優先し、タイトルは正確に、URLは実際にアクセス可能なものを提供してください。\n\n";
+        
+        $prompt .= "以下の形式で、関連性の高いニュース記事をリストアップしてください：\n\n";
         $prompt .= "## 最新ニュース一覧\n\n";
         $prompt .= "1. [記事タイトル1](URL1)\n";
         $prompt .= "2. [記事タイトル2](URL2)\n";
