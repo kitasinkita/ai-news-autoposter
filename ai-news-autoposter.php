@@ -2894,15 +2894,15 @@ class AINewsAutoPoster {
             
             // 第1段階（ニュース検索）の場合は出力を制限
             if (strpos($prompt, '最新ニュース') !== false && strpos($prompt, '3〜5件') !== false) {
-                $max_tokens = min(800, $max_available_tokens - $input_tokens); // 第1段階は短く
+                $max_tokens = min(1200, $max_available_tokens - $input_tokens); // 第1段階を少し増加
                 $this->log('info', 'Gemini第1段階用にmaxOutputTokensを' . $max_tokens . 'に制限（入力トークン概算: ' . $input_tokens . '）');
             } else {
-                $max_tokens = min(2500, $max_available_tokens - $input_tokens); // 第2段階は通常通り
+                $max_tokens = min(2200, $max_available_tokens - $input_tokens); // 第2段階を少し削減
                 $this->log('info', 'Gemini第2段階用にmaxOutputTokensを' . $max_tokens . 'に設定（入力トークン概算: ' . $input_tokens . '）');
             }
             
             // 最低限の出力を保証
-            $max_tokens = max($max_tokens, strpos($prompt, '最新ニュース') !== false ? 500 : 1500);
+            $max_tokens = max($max_tokens, strpos($prompt, '最新ニュース') !== false ? 600 : 1500);
         } else {
             // 文字数をトークン数に変換（1トークン ≈ 0.7文字として計算）
             $expected_tokens = intval($expected_chars / 0.5); // より余裕を持った計算
@@ -3812,12 +3812,20 @@ class AINewsAutoPoster {
         $prompt .= "**記事構成（{$article_word_count}文字以内厳守）:**\n";
         $prompt .= "```\n";
         $prompt .= "タイトル: [記事タイトル]\n\n";
+        $prompt .= "## 今日の{$search_keywords}関連のニュース\n\n";
+        $prompt .= "- [参考記事1のタイトル](URL1)\n";
+        $prompt .= "- [参考記事2のタイトル](URL2)\n";
+        $prompt .= "...\n\n";
         $prompt .= "[導入段落 - 簡潔に]\n\n";
         $prompt .= "[本文段落1: 最新動向の詳細 - 具体的事実中心]\n\n";
         $prompt .= "[本文段落2: 関連企業・団体の取り組み - 要点整理]\n\n";
         $prompt .= "[本文段落3: 業界への影響と専門家の見解 - 重要なポイントのみ]\n\n";
         $prompt .= "[本文段落4: 今後の展望と予測 - 簡潔にまとめ]\n\n";
-        $prompt .= "[結論段落 - 短く締めくくり]\n";
+        $prompt .= "[結論段落 - 短く締めくくり]\n\n";
+        $prompt .= "## 参考情報源\n\n";
+        $prompt .= "1. [参考記事1のタイトル](URL1)\n";
+        $prompt .= "2. [参考記事2のタイトル](URL2)\n";
+        $prompt .= "...\n";
         $prompt .= "```\n\n";
         $prompt .= "**文字数管理**: 各段落の文字数を調整し、全体で{$article_word_count}文字以内に収めてください。\n\n";
         
@@ -3832,7 +3840,8 @@ class AINewsAutoPoster {
         $prompt .= "- 現在の状況、過去の経緯、今後の展望を文字数制限内で整理してください\n";
         $prompt .= "- 業界や社会に与える具体的な影響を、ニュースソースの情報を基に分析してください\n";
         $prompt .= "- **絶対条件**: 記事は{$article_word_count}文字以内で完全に完成させてください\n";
-        $prompt .= "- 参考情報源のセクションは含めないでください（自動で追加されます）\n";
+        $prompt .= "- **必須**: 冒頭の「今日の○○ニュース」と最後の「参考情報源」セクションを必ず含めてください\n";
+        $prompt .= "- 実際のニュースタイトルとURLを使用してリンクを作成してください\n";
         $prompt .= "- 推測や一般論ではなく、ニュースソースから得られる具体的事実に基づいて記述してください\n";
         
         $this->log('info', 'Gemini第2段階記事生成プロンプト生成完了');
