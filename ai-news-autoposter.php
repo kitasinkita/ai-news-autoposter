@@ -1362,7 +1362,7 @@ class AINewsAutoPoster {
         if ($content_length > $max_content_length) {
             $this->log('warning', 'コンテンツが長すぎます(' . $content_length . '文字)。設定文字数(' . $user_word_count . ')と免責事項を考慮して' . $max_content_length . '文字に短縮します。');
             
-            // 免責事項を保護するために、免責事項を先に抽出
+            // 免責事項と参考情報源を保護するために先に抽出
             $disclaimer_pattern = '/<div[^>]*style="[^"]*background-color:\s*#f0f0f0[^"]*"[^>]*>.*?<\/div>/s';
             $extracted_disclaimer = '';
             if (preg_match($disclaimer_pattern, $post_data['post_content'], $matches)) {
@@ -1372,8 +1372,21 @@ class AINewsAutoPoster {
                 $this->log('info', '免責事項を一時保護しました: ' . mb_strlen($extracted_disclaimer) . '文字');
             }
             
+            // 参考情報源セクションを保護するために先に抽出
+            $reference_pattern = '/## 参考情報源.*$/s';
+            $extracted_references = '';
+            if (preg_match($reference_pattern, $post_data['post_content'], $matches)) {
+                $extracted_references = $matches[0];
+                // 参考情報源を一時的に削除
+                $post_data['post_content'] = preg_replace($reference_pattern, '', $post_data['post_content']);
+                $this->log('info', '参考情報源を一時保護しました: ' . mb_strlen($extracted_references) . '文字');
+            }
+            
             // 設定文字数を超過している場合は厳格に短縮
-            $target_length = $max_content_length - 50; // 安全マージン
+            // 保護された部分の長さを考慮
+            $protected_length = mb_strlen($extracted_disclaimer) + mb_strlen($extracted_references);
+            $target_length = $max_content_length - $protected_length - 100; // 安全マージン
+            $this->log('info', '保護セクション長: ' . $protected_length . '文字、本文ターゲット長: ' . $target_length . '文字');
             $trimmed_content = mb_substr($post_data['post_content'], 0, $target_length);
             
             // 最後の完全な段落で終わるように調整
@@ -1388,6 +1401,12 @@ class AINewsAutoPoster {
                 $trimmed_content = mb_substr($trimmed_content, 0, $last_period_pos + 1);
             }
             
+            // 参考情報源を再び追加
+            if (!empty($extracted_references)) {
+                $trimmed_content = trim($trimmed_content) . "\n\n" . $extracted_references;
+                $this->log('info', '参考情報源を復元しました');
+            }
+            
             // 免責事項を再び追加
             if (!empty($extracted_disclaimer)) {
                 $trimmed_content = trim($trimmed_content) . "\n\n" . $extracted_disclaimer;
@@ -1395,7 +1414,7 @@ class AINewsAutoPoster {
             }
             
             $post_data['post_content'] = $trimmed_content;
-            $this->log('info', '短縮後のコンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字（免責事項復元後）');
+            $this->log('info', '短縮後のコンテンツ長: ' . mb_strlen($post_data['post_content']) . '文字（参考情報源・免責事項復元後）');
         }
         
         $this->log('info', 'コンテンツ長チェック完了。投稿作成処理を開始します。');
