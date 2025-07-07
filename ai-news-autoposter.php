@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。Claude/Gemini API対応、RSSベース実ニュース検索、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.38
+ * Version: 1.2.39
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.38');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.39');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -3796,6 +3796,16 @@ class AINewsAutoPoster {
         $search_keywords = $settings['search_keywords'] ?? 'AI ニュース, 人工知能, 機械学習';
         $news_languages = $settings['news_languages'] ?? array('japanese', 'english');
         
+        // カスタムプロンプトがあればそれを使用（第1段階も対応）
+        $custom_prompt = $settings['custom_prompt'] ?? '';
+        if (!empty($custom_prompt) && strpos($custom_prompt, '第一段階') !== false) {
+            $this->log('info', 'カスタムプロンプト（第1段階）を使用します');
+            // 第一段階部分のみ抽出
+            if (preg_match('/第一段階[：:](.+?)(?:第二段階|$)/s', $custom_prompt, $matches)) {
+                return $this->build_custom_prompt($matches[1], $settings);
+            }
+        }
+        
         // ニュース収集言語を文字列に変換
         $language_map = array(
             'japanese' => '日本語',
@@ -3833,6 +3843,26 @@ class AINewsAutoPoster {
         $writing_style = $settings['writing_style'] ?? '夏目漱石';
         $article_word_count = $settings['article_word_count'] ?? 800;
         $output_language = $settings['output_language'] ?? 'japanese';
+        
+        // カスタムプロンプトがあればそれを使用（第2段階も対応）
+        $custom_prompt = $settings['custom_prompt'] ?? '';
+        if (!empty($custom_prompt) && strpos($custom_prompt, '第二段階') !== false) {
+            $this->log('info', 'カスタムプロンプト（第2段階）を使用します');
+            // 第二段階部分を抽出
+            if (preg_match('/第二段階[：:](.+?)(?:その上で|$)/s', $custom_prompt, $matches)) {
+                $second_stage = $matches[1];
+                // タイトル生成部分も含める
+                if (preg_match('/その上で(.+)/s', $custom_prompt, $title_matches)) {
+                    $second_stage .= "\n\n" . $title_matches[1];
+                }
+                // ニュースソース情報を追加
+                $news_info = "\n\n取得したニュース情報:\n";
+                foreach ($grounding_sources as $index => $source) {
+                    $news_info .= ($index + 1) . ". {$source['title']} ({$source['url']})\n";
+                }
+                return $this->build_custom_prompt($second_stage . $news_info, $settings);
+            }
+        }
         
         $this->log('info', 'Gemini第2段階記事生成プロンプト生成開始: ' . count($grounding_sources) . '件のソース');
         
