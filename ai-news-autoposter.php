@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。Claude/Gemini API対応、RSSベース実ニュース検索、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.40
+ * Version: 1.2.48
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.40');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.48');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -40,6 +40,7 @@ class AINewsAutoPoster {
         add_action('wp_ajax_autosave_setting', array($this, 'autosave_setting'));
         add_action('wp_ajax_manual_post_now', array($this, 'manual_post_now'));
         add_action('wp_ajax_test_cron_execution', array($this, 'test_cron_execution'));
+        add_action('wp_ajax_get_default_prompt', array($this, 'get_default_prompt'));
         
         // Cronフック
         add_action('ai_news_autoposter_daily_cron', array($this, 'execute_daily_post_generation'));
@@ -78,11 +79,11 @@ class AINewsAutoPoster {
                 'meta_description_template' => '最新の業界ニュースをお届けします。{title}について詳しく解説いたします。',
                 'post_status' => 'draft',
                 'enable_tags' => true,
-                'search_keywords' => 'AI ニュース, 人工知能, 機械学習, ChatGPT, OpenAI',
+                'search_keywords' => 'アウトドアギア, キャンプ用品, 登山用品, ハイキング用品, テント, 寝袋, バックパック',
                 'writing_style' => '夏目漱石',
                 'news_languages' => array('japanese', 'english'), // english, japanese, chinese
                 'output_language' => 'japanese', // japanese, english, chinese
-                'article_word_count' => 500,
+                'article_word_count' => 1500,
                 'enable_disclaimer' => true,
                 'disclaimer_text' => '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。',
                 'enable_excerpt' => true,
@@ -328,7 +329,8 @@ class AINewsAutoPoster {
                     'image_generation_type' => sanitize_text_field($_POST['image_generation_type']),
                     'dalle_api_key' => sanitize_text_field($_POST['dalle_api_key']),
                     'unsplash_access_key' => sanitize_text_field($_POST['unsplash_access_key']),
-                    'news_sources' => $this->parse_news_sources($_POST)
+                    'news_sources' => $this->parse_news_sources($_POST),
+                    'custom_prompt' => sanitize_textarea_field($_POST['custom_prompt'] ?? '')
                 );
                 
                 // 開始時刻から1時間おきのスケジュールを自動生成
@@ -556,17 +558,17 @@ class AINewsAutoPoster {
                                 <code>{キーワード}</code> - 検索キーワード<br>
                                 <code>{文字数}</code> - 記事文字数<br>
                                 <code>{文体}</code> - 文体スタイル<br><br>
-                                <strong>デフォルトプロンプト（Gemini 2.5の場合）：</strong><br>
-                                <strong>第1段階（ニュース検索）：</strong><br>
-                                「あなたは優秀なニュースリサーチャーです。【{キーワード}】について最新のニュースを【{ニュース収集言語}】で検索し、関連するニュース記事のタイトルとURLの一覧を5〜10件取得してください。過去1週間以内の最新記事を優先し、タイトルは正確に、URLは実際にアクセス可能なものを提供してください。」<br><br>
-                                <strong>第2段階（詳細記事生成）：</strong><br>
-                                「あなたは{文体}風の文体で記事を書く優秀なジャーナリストです。取得したニュースソースの内容を詳細に調査・分析し、重要な数値・日付・人名・企業名・統計データを正確に引用してください。『〜によると』『〜が発表した』『〜のデータでは』という形で具体的事実を引用し、専門家のコメント、企業の具体的取り組み、過去の経緯から今後の展望まで時系列で整理し、約{文字数}文字の包括的な記事を{言語}で作成してください。」<br><br>
-                                <strong>その他のモデル：</strong><br>
-                                「あなたは{文体}として、【{キーワード}】に関する最新ニュース情報を参考に、約{文字数}文字の読みやすく情報価値の高い記事を{言語}で作成してください。構成はタイトル、導入、本文（複数段落）、まとめとし、読者に価値を提供する内容にしてください。」
+                                <button type="button" id="show-default-prompt" class="button">現在のデフォルトプロンプトを表示</button>
+                                <div id="default-prompt-display" style="display: none; margin-top: 10px; padding: 10px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
+                                    <strong>現在のデフォルトプロンプト：</strong><br>
+                                    <div id="default-prompt-content" style="white-space: pre-wrap; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto; margin-top: 5px;"></div>
+                                    <p><small>文字数: <span id="default-prompt-length"></span> 文字</small></p>
+                                </div>
                             </p>
                         </td>
                     </tr>
                     
+                    <!-- 参考情報源セクションタイトル設定は削除（修正により不要）
                     <tr>
                         <th scope="row">参考情報源セクションタイトル</th>
                         <td>
@@ -587,6 +589,7 @@ class AINewsAutoPoster {
                             </p>
                         </td>
                     </tr>
+                    -->
                 </table>
                 
                 <!-- ===== スケジュール・投稿設定 ===== -->
@@ -682,6 +685,50 @@ class AINewsAutoPoster {
                 <?php submit_button('設定を保存', 'primary', 'submit', true, array('class' => 'ai-news-button-primary')); ?>
             </form>
         </div>
+        
+        <script type="text/javascript">
+        jQuery(document).ready(function($) {
+            // デフォルトプロンプト表示ボタンのクリックイベント
+            $('#show-default-prompt').click(function() {
+                var button = $(this);
+                var displayDiv = $('#default-prompt-display');
+                
+                if (displayDiv.is(':visible')) {
+                    displayDiv.hide();
+                    button.text('現在のデフォルトプロンプトを表示');
+                    return;
+                }
+                
+                button.text('読み込み中...');
+                button.prop('disabled', true);
+                
+                $.ajax({
+                    url: ai_news_autoposter_ajax.ajax_url,
+                    type: 'POST',
+                    data: {
+                        action: 'get_default_prompt',
+                        nonce: ai_news_autoposter_ajax.nonce
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            $('#default-prompt-content').text(response.data.prompt);
+                            $('#default-prompt-length').text(response.data.length);
+                            displayDiv.show();
+                            button.text('デフォルトプロンプトを非表示');
+                        } else {
+                            alert('エラー: ' + response.data);
+                        }
+                    },
+                    error: function() {
+                        alert('通信エラーが発生しました。');
+                    },
+                    complete: function() {
+                        button.prop('disabled', false);
+                    }
+                });
+            });
+        });
+        </script>
         <?php
     }
     
@@ -992,6 +1039,28 @@ class AINewsAutoPoster {
     }
     
     /**
+     * デフォルトプロンプトを取得するAJAXハンドラー
+     */
+    public function get_default_prompt() {
+        if (!wp_verify_nonce($_POST['nonce'], 'ai_news_autoposter_nonce')) {
+            wp_die('Security check failed');
+        }
+        
+        try {
+            // プレースホルダー形式のデフォルトプロンプトを生成
+            $default_prompt = $this->build_gemini_simple_prompt_template();
+            
+            wp_send_json_success(array(
+                'prompt' => $default_prompt,
+                'length' => mb_strlen($default_prompt)
+            ));
+            
+        } catch (Exception $e) {
+            wp_send_json_error('デフォルトプロンプトの取得に失敗しました: ' . $e->getMessage());
+        }
+    }
+    
+    /**
      * ニュースソース設定の解析
      */
     private function parse_news_sources($post_data) {
@@ -1075,86 +1144,11 @@ class AINewsAutoPoster {
         if ($is_gemini) {
             $this->log('info', 'Gemini APIを呼び出します...');
             
-            // Gemini 2.0/2.5でGoogle Search Groundingを優先試行（2段階プロセス）
+            // Gemini 2.0/2.5でGoogle Search Groundingを使用（シンプル1段階プロセス）
             if ($model === 'gemini-2.5-flash' || $model === 'gemini-2.0-flash-exp') {
-                $this->log('info', $model . ' - 2段階プロセス開始: 第1段階（ニュース検索）');
-                
-                // 第1段階: ニュース検索でURL・タイトル一覧を取得
-                $search_prompt = $this->build_gemini_search_only_prompt($settings);
-                $search_response = $this->call_gemini_api($search_prompt, $settings['gemini_api_key'] ?? '', $model);
-                
-                if (is_wp_error($search_response)) {
-                    $this->log('warning', $model . ' 第1段階失敗、RSSベースにフォールバック: ' . $search_response->get_error_message());
-                    if (!empty($news_data)) {
-                        $gemini_prompt = $this->build_news_based_prompt($settings, $news_data, 'gemini');
-                        $ai_response = $this->call_gemini_api($gemini_prompt, $settings['gemini_api_key'] ?? '', $model);
-                    } else {
-                        $this->log('error', 'RSSニュースデータも空のため、記事生成不可');
-                        return new WP_Error('no_news_data', 'Google Search Grounding制限中で、RSSニュースも取得できませんでした。');
-                    }
-                } else {
-                    // 第1段階成功 - Grounding情報を抽出
-                    $grounding_sources = array();
-                    if (is_array($search_response) && isset($search_response['grounding_sources'])) {
-                        $grounding_sources = $search_response['grounding_sources'];
-                        $this->log('info', $model . ' 第1段階成功: ' . count($grounding_sources) . '件のニュースソースを取得');
-                    }
-                    
-                    if (!empty($grounding_sources)) {
-                        // 第2段階: 取得したURL群を元に記事生成
-                        $this->log('info', $model . ' - 第2段階開始: 記事生成');
-                        $article_prompt = $this->build_gemini_article_from_sources_prompt($settings, $grounding_sources);
-                        $ai_response = $this->call_gemini_api($article_prompt, $settings['gemini_api_key'] ?? '', $model);
-                        
-                        // 第2段階のレスポンスにGrounding情報を統合
-                        if (!is_wp_error($ai_response)) {
-                            if (is_array($ai_response)) {
-                                $ai_response['grounding_sources'] = $grounding_sources;
-                            } else {
-                                // 文字列レスポンスの場合は配列に変換
-                                $ai_response = array(
-                                    'text' => $ai_response,
-                                    'grounding_sources' => $grounding_sources
-                                );
-                            }
-                            $this->log('info', $model . ' 第2段階成功: 記事生成完了');
-                        } else {
-                            $this->log('error', $model . ' 第2段階失敗: ' . $ai_response->get_error_message());
-                        }
-                    } else {
-                        $this->log('warning', $model . ' 第1段階でGrounding情報が見つからず、RSSベースにフォールバック');
-                        // RSSベースでニュース取得し、grounding_sources形式に変換
-                        if (!empty($news_data)) {
-                            $grounding_sources = array();
-                            foreach ($news_data as $news) {
-                                $grounding_sources[] = array(
-                                    'title' => $news['title'] ?? 'ニュース記事',
-                                    'url' => $news['url'] ?? '#'
-                                );
-                            }
-                            $this->log('info', 'RSSベースで' . count($grounding_sources) . '件のニュースソースを取得');
-                            
-                            // grounding_sourcesを使って記事生成
-                            $article_prompt = $this->build_gemini_article_from_sources_prompt($settings, $grounding_sources);
-                            $ai_response = $this->call_gemini_api($article_prompt, $settings['gemini_api_key'] ?? '', $model);
-                            
-                            // レスポンスにgrounding_sourcesを追加
-                            if (!is_wp_error($ai_response)) {
-                                if (is_array($ai_response)) {
-                                    $ai_response['grounding_sources'] = $grounding_sources;
-                                } else {
-                                    $ai_response = array(
-                                        'text' => $ai_response,
-                                        'grounding_sources' => $grounding_sources
-                                    );
-                                }
-                            }
-                        } else {
-                            $gemini_prompt = $this->build_gemini_news_search_prompt($settings);
-                            $ai_response = $this->call_gemini_api($gemini_prompt, $settings['gemini_api_key'] ?? '', $model);
-                        }
-                    }
-                }
+                $this->log('info', $model . ' - Google Search Groundingでシンプル1段階記事生成開始');
+                $gemini_prompt = $this->build_gemini_simple_prompt($settings);
+                $ai_response = $this->call_gemini_api($gemini_prompt, $settings['gemini_api_key'] ?? '', $model);
             } else {
                 // 他のGeminiモデルはRSSベース
                 if (!empty($news_data)) {
@@ -1238,9 +1232,10 @@ class AINewsAutoPoster {
             $article_data = $this->parse_ai_response($ai_response['text']);
             
             // 記事にグラウンディングソースを統合
+            // グラウンディングソースを記事末尾に追加（本文は保持）
             if (!empty($grounding_sources)) {
-                $this->log('info', count($grounding_sources) . '件のグラウンディングソースを記事に統合中...');
-                $article_data = $this->integrate_grounding_sources($article_data, $grounding_sources, $search_keywords);
+                $this->log('info', count($grounding_sources) . '件のグラウンディングソースを記事末尾に追加');
+                $article_data = $this->append_grounding_sources($article_data, $grounding_sources, $search_keywords);
             }
         } else {
             // Claude APIまたは古いGemini形式の場合
@@ -1305,6 +1300,12 @@ class AINewsAutoPoster {
         if (preg_match('/[^\x00-\x7F\x80-\xFF]{3,}/', $clean_content)) {
             $this->log('warning', '特殊文字パターンを検出しましたが、そのまま使用します');
         }
+        
+        // データベース互換性のための追加クリーニング
+        $this->log('info', 'clean_title_for_database実行前のタイトル: ' . mb_substr($clean_title, 0, 100));
+        $clean_title = $this->clean_title_for_database($clean_title);
+        $this->log('info', 'clean_title_for_database実行後のタイトル: ' . mb_substr($clean_title, 0, 100));
+        $clean_content = $this->clean_text_for_database($clean_content);
         
         // 基本的な投稿データを作成（メタデータは後で追加）
         $post_data = array(
@@ -1555,7 +1556,9 @@ class AINewsAutoPoster {
         }
         
         // 最終的な文字クリーニング（データベースエラー防止）
-        $post_data['post_title'] = $this->clean_text_for_database($post_data['post_title']);
+        $this->log('info', '最終クリーニング前のタイトル: ' . mb_substr($post_data['post_title'], 0, 100));
+        $post_data['post_title'] = $this->clean_title_for_database($post_data['post_title']);
+        $this->log('info', '最終クリーニング後のタイトル: ' . mb_substr($post_data['post_title'], 0, 100));
         $content_before_clean = $post_data['post_content'];
         $post_data['post_content'] = $this->clean_text_for_database($post_data['post_content']);
         
@@ -1873,11 +1876,7 @@ class AINewsAutoPoster {
         $prompt .= "---------------------------------\n";
         $prompt .= "適時、参照元リンクを本文中にいれてください。\n\n";
         
-        $prompt .= "**重要**: 記事の最後に必ず参考情報源セクションを含めてください：\n";
-        $prompt .= "## 参考情報源\n";
-        $prompt .= "- {$current_year}年の実際のニュース記事のタイトルとリンクを記載\n";
-        $prompt .= "- 2024年以前の古い記事は使用禁止\n";
-        $prompt .= "- 例: [OpenAI、{$current_year}年新機能発表]({$current_year}年のURL)\n";
+        // 参考情報源セクションの指示を削除（修正により削除）
         $prompt .= "- 例: [Google AI、{$current_year}年最新技術開発]({$current_year}年のURL)\n\n";
         
         return $prompt;
@@ -1941,20 +1940,28 @@ class AINewsAutoPoster {
             return '';
         }
         
+        $this->log('info', 'カスタムプロンプト構築開始: 入力長=' . mb_strlen($custom_prompt) . '文字');
+        
         $search_keywords = $settings['search_keywords'] ?? 'AI ニュース';
         $selected_languages = $settings['news_languages'] ?? array('japanese', 'english');
         $word_count = $settings['article_word_count'] ?? 500;
         $writing_style = $settings['writing_style'] ?? '夏目漱石';
         
+        $this->log('info', 'プレースホルダー値: キーワード=' . $search_keywords . ', 言語=' . implode(',', $selected_languages) . ', 文字数=' . $word_count . ', 文体=' . $writing_style);
+        
         // 言語指定を作成
         $language_names = array_map(array($this, 'get_language_name'), $selected_languages);
         $language_text = implode('と', $language_names);
+        
+        $this->log('info', '言語変換結果: ' . $language_text);
         
         // プレースホルダーを置換
         $prompt = str_replace('{言語}', $language_text, $custom_prompt);
         $prompt = str_replace('{キーワード}', $search_keywords, $prompt);
         $prompt = str_replace('{文字数}', $word_count, $prompt);
         $prompt = str_replace('{文体}', $writing_style, $prompt);
+        
+        $this->log('info', 'プレースホルダー置換後: 出力長=' . mb_strlen($prompt) . '文字');
         
         // 最終検証
         if (empty(trim($prompt))) {
@@ -2239,6 +2246,55 @@ class AINewsAutoPoster {
      * シンプルレスポンス解析
      */
     private function parse_simple_response($response) {
+        $this->log('debug', 'parse_simple_response: 入力レスポンス長=' . mb_strlen($response));
+        
+        // 新しい出力形式（タイトル: [タイトル]）に対応
+        if (preg_match('/^タイトル:\s*(.+?)$/m', $response, $matches)) {
+            $title = trim($matches[1]);
+            $this->log('debug', 'parse_simple_response: タイトル抽出成功=' . $title);
+            
+            // 構造化されたコンテンツを解析
+            $content = $this->parse_structured_content($response);
+            
+            $this->log('debug', 'parse_simple_response: 構造化解析後コンテンツ長=' . mb_strlen($content));
+            
+            // コンテンツが空の場合、別の方法で抽出
+            if (empty($content) || mb_strlen($content) < 50) {
+                $this->log('debug', 'parse_simple_response: コンテンツが短い、全体から再抽出');
+                // タイトル行を除去して残りを全て取得
+                $content = preg_replace('/^タイトル:\s*.+$/m', '', $response, 1);
+                $content = trim($content);
+            }
+            
+            // コンテンツのクリーンアップ
+            $content = $this->clean_content($content);
+            
+            $this->log('debug', 'parse_simple_response: 最終コンテンツ長=' . mb_strlen($content));
+            $this->log('debug', 'parse_simple_response: コンテンツプレビュー=' . mb_substr($content, 0, 100) . '...');
+            
+            // タイトルからタグを生成
+            $tags = array();
+            if (stripos($title . $content, 'AI') !== false) $tags[] = 'AI';
+            if (stripos($title . $content, '人工知能') !== false) $tags[] = '人工知能';
+            if (stripos($title . $content, 'ChatGPT') !== false) $tags[] = 'ChatGPT';
+            if (stripos($title . $content, 'OpenAI') !== false) $tags[] = 'OpenAI';
+            if (stripos($title . $content, 'Google') !== false) $tags[] = 'Google';
+            if (stripos($title . $content, 'アウトドア') !== false) $tags[] = 'アウトドア';
+            if (stripos($title . $content, 'キャンプ') !== false) $tags[] = 'キャンプ';
+            if (stripos($title . $content, 'ハイキング') !== false) $tags[] = 'ハイキング';
+            if (stripos($title . $content, 'クライミング') !== false) $tags[] = 'クライミング';
+            if (stripos($title . $content, 'ギア') !== false) $tags[] = 'ギア';
+            
+            return array(
+                'title' => $title,
+                'content' => trim($content),
+                'tags' => array_filter($tags)
+            );
+        }
+        
+        // 旧形式のフォールバック処理
+        $this->log('debug', 'parse_simple_response: 旧形式で処理');
+        
         // マークダウンの見出しを除去
         $response = preg_replace('/^#{1,6}\s+/', '', $response, 1);
         $response = preg_replace('/^#{1,6}\s+/m', '', $response);
@@ -2278,6 +2334,11 @@ class AINewsAutoPoster {
         if (stripos($title . $content, 'ChatGPT') !== false) $tags[] = 'ChatGPT';
         if (stripos($title . $content, 'OpenAI') !== false) $tags[] = 'OpenAI';
         if (stripos($title . $content, 'Google') !== false) $tags[] = 'Google';
+        if (stripos($title . $content, 'アウトドア') !== false) $tags[] = 'アウトドア';
+        if (stripos($title . $content, 'キャンプ') !== false) $tags[] = 'キャンプ';
+        if (stripos($title . $content, 'ハイキング') !== false) $tags[] = 'ハイキング';
+        if (stripos($title . $content, 'クライミング') !== false) $tags[] = 'クライミング';
+        if (stripos($title . $content, 'ギア') !== false) $tags[] = 'ギア';
         
         // タイトルが空の場合はデフォルトを設定
         $title = $title ?: '最新AIニュース: ' . date('Y年m月d日');
@@ -2290,9 +2351,40 @@ class AINewsAutoPoster {
     }
     
     /**
+     * 構造化されたコンテンツを解析
+     */
+    private function parse_structured_content($response) {
+        $this->log('debug', 'parse_structured_content: 構造化コンテンツの解析開始');
+        
+        // タイトル行を除去してコンテンツ部分を取得
+        $content = preg_replace('/^タイトル:\s*.+$/m', '', $response, 1);
+        $content = trim($content);
+        
+        // 各セクションを抽出
+        $sections = array();
+        
+        // ニュース一覧部分は記事に含めない（削除）
+        
+        // 新しいシンプル形式に対応（Markdownヘッダーなし）
+        // タイトル行の後の全コンテンツを取得
+        if (preg_match('/^タイトル:\s*.+?\n\n(.+)/s', $response, $matches)) {
+            $main_content = trim($matches[1]);
+            $this->log('debug', 'parse_structured_content: シンプル形式のコンテンツを抽出: ' . mb_strlen($main_content) . '文字');
+            return $main_content;
+        }
+        
+        // フォールバック：元のコンテンツを使用
+        $this->log('debug', 'parse_structured_content: パターンマッチ失敗、元のコンテンツを使用');
+        return $content;
+    }
+    
+    /**
      * タイトルをクリーンアップ
      */
     private function clean_title($title) {
+        // 「タイトル: 」の重複を除去
+        $title = preg_replace('/^タイトル:\s*/', '', $title);
+        
         // マークダウン記法を除去
         $title = preg_replace('/^#{1,6}\s+/', '', $title);
         $title = preg_replace('/\*\*(.+?)\*\*/', '$1', $title);
@@ -2321,6 +2413,13 @@ class AINewsAutoPoster {
             // 基本的なクリーニングのみ
             return str_replace(array("\r\n", "\r"), "\n", trim($content));
         }
+        
+        // Markdownヘッダーを完全に削除
+        $content = preg_replace('/^#{1,6}\s+.*$/m', '', $content);
+        // **太字**記法も削除
+        $content = preg_replace('/\*\*(.+?)\*\*/', '$1', $content);
+        // 日付ヘッダー（##2025年7月7日など）も削除
+        $content = preg_replace('/^#{1,6}\s*\d{4}年\d{1,2}月\d{1,2}日.*$/m', '', $content);
         
         // 余分な空行を除去（UTF-8フラグ追加）
         $content = preg_replace('/\n\s*\n\s*\n/u', "\n\n", $content);
@@ -2461,6 +2560,69 @@ class AINewsAutoPoster {
     }
     
     /**
+     * グラウンディングソースを記事末尾に追加（本文は保持）
+     */
+    private function append_grounding_sources($article_data, $grounding_sources, $keyword = '') {
+        if (empty($grounding_sources)) {
+            return $article_data;
+        }
+        
+        $this->log('info', 'グラウンディングソースを記事末尾に追加開始');
+        
+        // 記事本文は完全に保持
+        $content = $article_data['content'];
+        
+        // 参考情報源リストを生成
+        $sources_list = "\n\n**参考情報源：**\n\n";
+        $valid_sources = 0;
+        
+        // 最大10件に制限してパフォーマンス向上
+        $limited_sources = array_slice($grounding_sources, 0, 10);
+        
+        foreach ($limited_sources as $index => $source) {
+            $raw_title = $source['title'] ?? '';
+            $url = $source['url'] ?? '';
+            
+            if (!empty($raw_title) && !empty($url)) {
+                // タイトルクリーンアップ（外部アクセスなし）
+                $title = strip_tags($raw_title);
+                $title = preg_replace('/\s+/', ' ', trim($title));
+                $title = mb_substr($title, 0, 80); // 80文字に制限
+                
+                // URLの基本クリーンアップ（外部アクセスなし）
+                $clean_url = $url;
+                
+                // Googleリダイレクトの場合のみ簡易処理
+                if (strpos($url, 'vertexaisearch.cloud.google.com') !== false) {
+                    // ドメイン名をタイトルに追加
+                    if (preg_match('/grounding-api-redirect\/[^\/]+$/', $url)) {
+                        $domain_info = ' (Googleソース)';
+                    } else {
+                        $domain_info = '';
+                    }
+                    $title .= $domain_info;
+                }
+                
+                if (!empty($title) && !empty($clean_url)) {
+                    $sources_list .= "- [" . $title . "](" . $clean_url . ")\n";
+                    $valid_sources++;
+                }
+            }
+        }
+        
+        // 参考情報源が有効な場合のみ追加
+        if ($valid_sources > 0) {
+            $content .= $sources_list;
+            $this->log('info', $valid_sources . '件の参考情報源を記事末尾に追加しました');
+        } else {
+            $this->log('warning', '有効な参考情報源がありませんでした');
+        }
+        
+        $article_data['content'] = $content;
+        return $article_data;
+    }
+    
+    /**
      * グラウンディングソースを記事に統合
      */
     private function integrate_grounding_sources($article_data, $grounding_sources, $keyword = '') {
@@ -2532,9 +2694,9 @@ class AINewsAutoPoster {
                 // 有効なソースのみ追加
                 if (!empty($title) && !preg_match('/^[a-z0-9.-]+\.(com|net|jp|co\.jp|org)$/i', $title)) {
                     $sources_section .= sprintf(
-                        "- [%s](%s)\n",
-                        $title,
-                        $actual_url
+                        "- <a href=\"%s\" target=\"_blank\">%s</a>\n",
+                        $actual_url,
+                        $title
                     );
                     $valid_sources++;
                 }
@@ -2930,11 +3092,14 @@ class AINewsAutoPoster {
         
         $this->log('info', 'Gemini API呼び出しを開始します。モデル: ' . $model);
         
-        // プロンプト検証
+        // プロンプト検証とクリーニング
         if (empty($prompt) || !is_string($prompt)) {
             $this->log('error', 'Gemini API: 無効なプロンプトです。型: ' . gettype($prompt));
             return new WP_Error('invalid_prompt', 'プロンプトが無効です');
         }
+        
+        // プロンプトをUTF-8クリーニング（JSONエンコードエラー対策）
+        $prompt = $this->clean_text_for_database($prompt);
         
         // プロンプト内容をログに出力（デバッグ用）
         $this->log('info', '=== Gemini APIプロンプト内容 ===');
@@ -3801,15 +3966,10 @@ class AINewsAutoPoster {
         $prompt .= "1. 最新のニュース情報を必ず検索して参考にする\n";
         $prompt .= "2. タイトル、導入、本文（複数段落）、まとめの構成にする\n";
         $prompt .= "3. 読者にとって価値のある内容にする\n";
-        $prompt .= "4. 記事の最後に「## 参考情報源」セクションを設け、参考にしたニュースソースのリンクを含める\n";
-        $prompt .= "5. リンクは必ず [タイトル](URL) の形式で記載する\n";
-        $prompt .= "6. 記事は完結した内容にし、途中で終わらないようにする\n\n";
+        $prompt .= "4. 記事は完結した内容にし、途中で終わらないようにする\n\n";
         $prompt .= "出力形式：\n";
         $prompt .= "タイトル: [記事タイトル]\n\n";
         $prompt .= "[記事本文（複数段落で構成）]\n\n";
-        $prompt .= "## 参考情報源\n";
-        $prompt .= "- [ニュースタイトル1](URL1)\n";
-        $prompt .= "- [ニュースタイトル2](URL2)\n";
         $prompt .= "\n記事を最後まで完成させてください。";
         
         $this->log('info', 'Geminiニュース検索プロンプト生成完了');
@@ -3825,16 +3985,29 @@ class AINewsAutoPoster {
         
         // カスタムプロンプトがあればそれを使用（第1段階も対応）
         $custom_prompt = $settings['custom_prompt'] ?? '';
+        $this->log('info', '第1段階カスタムプロンプト確認: 長さ=' . mb_strlen($custom_prompt) . ', 第一段階存在=' . (strpos($custom_prompt, '第一段階') !== false ? 'YES' : 'NO'));
         if (!empty($custom_prompt) && strpos($custom_prompt, '第一段階') !== false) {
-            $this->log('info', 'カスタムプロンプト（第1段階）を使用します');
+            $this->log('info', '✅ カスタムプロンプト（第1段階）を使用します');
             // 第一段階部分のみ抽出
             if (preg_match('/第一段階[：:](.+?)(?:第二段階|$)/s', $custom_prompt, $matches)) {
                 $first_stage_prompt = trim($matches[1]);
                 if (!empty($first_stage_prompt)) {
-                    return $this->build_custom_prompt($first_stage_prompt, $settings);
+                    $built_prompt = $this->build_custom_prompt($first_stage_prompt, $settings);
+                    if (!empty($built_prompt)) {
+                        $this->log('info', '第1段階カスタムプロンプト構築成功: ' . mb_strlen($built_prompt) . '文字');
+                        return $built_prompt;
+                    } else {
+                        $this->log('error', '第1段階カスタムプロンプト構築後に空になりました');
+                    }
+                } else {
+                    $this->log('error', '第1段階プロンプト抽出結果が空です');
                 }
+            } else {
+                $this->log('error', '第1段階正規表現マッチに失敗');
             }
             $this->log('warning', '第一段階のプロンプト抽出に失敗、デフォルトを使用');
+        } else {
+            $this->log('info', '❌ カスタムプロンプト（第1段階）の条件不一致、デフォルトを使用');
         }
         
         // ニュース収集言語を文字列に変換
@@ -3862,7 +4035,7 @@ class AINewsAutoPoster {
         $prompt .= "3. [タイトル3](URL3)\n\n";
         $prompt .= "条件: 過去1週間以内、重複除く、実アクセス可能URL\n";
         
-        $this->log('info', 'Gemini第1段階ニュース検索プロンプト生成完了');
+        $this->log('info', '📝 Gemini第1段階デフォルトプロンプト生成完了: ' . mb_strlen($prompt) . '文字');
         return $prompt;
     }
     
@@ -3877,29 +4050,48 @@ class AINewsAutoPoster {
         
         // カスタムプロンプトがあればそれを使用（第2段階も対応）
         $custom_prompt = $settings['custom_prompt'] ?? '';
+        $this->log('info', '第2段階カスタムプロンプト確認: 長さ=' . mb_strlen($custom_prompt) . ', 第二段階存在=' . (strpos($custom_prompt, '第二段階') !== false ? 'YES' : 'NO'));
         if (!empty($custom_prompt) && strpos($custom_prompt, '第二段階') !== false) {
-            $this->log('info', 'カスタムプロンプト（第2段階）を使用します');
-            // 第二段階部分を抽出
-            if (preg_match('/第二段階[：:](.+?)(?:その上で|$)/s', $custom_prompt, $matches)) {
+            $this->log('info', '✅ カスタムプロンプト（第2段階）を使用します');
+            // 第二段階部分を抽出（より柔軟な正規表現）
+            if (preg_match('/第二段階[：:\s]*(.+?)(?=その上で|$)/s', $custom_prompt, $matches)) {
                 $second_stage = trim($matches[1]);
+                
+                // 分析要素を強化（より強力な指示）
+                $analysis_requirements = "\n\n**【絶対必須】記事構成要件:**\n";
+                $analysis_requirements .= "記事には以下の要素を必ず含めてください：\n\n";
+                $analysis_requirements .= "1. **背景・文脈分析セクション**: \"背景として\" または \"文脈として\" で始まる段落を作成し、なぜ今このニュースが重要なのか業界の背景を説明\n";
+                $analysis_requirements .= "2. **影響・考察セクション**: \"影響として\" または \"考察すると\" で始まる段落を作成し、このニュースが今後どのような影響を与えるか専門的な考察を記述\n";
+                $analysis_requirements .= "3. **推察セクション**: \"推察として\" または \"今後の展開として\" で始まる段落を作成し、根拠のある推察を述べる\n";
+                $analysis_requirements .= "4. **具体的データの引用**: 数値、日付、企業名、統計データを記事全体に散りばめて引用\n\n";
+                $analysis_requirements .= "**重要**: 上記の「背景・文脈」「影響・考察」「推察」の言葉を記事内で必ず使用してください。\n\n";
+                
                 // タイトル生成部分も含める
+                $title_instruction = "";
                 if (preg_match('/その上で(.+)/s', $custom_prompt, $title_matches)) {
-                    $second_stage .= "\n\n" . trim($title_matches[1]);
+                    $title_instruction = "\n\n**タイトル要件:**\n" . trim($title_matches[1]);
                 }
+                
                 // ニュースソース情報を追加
-                $news_info = "\n\n取得したニュース情報:\n";
+                $news_info = "\n\n**取得したニュース情報:**\n";
                 foreach ($grounding_sources as $index => $source) {
                     $news_info .= ($index + 1) . ". {$source['title']} ({$source['url']})\n";
                 }
-                $final_prompt = $second_stage . $news_info;
+                
+                // 構造化された最終プロンプトを作成
+                $final_prompt = $second_stage . $analysis_requirements . $title_instruction . $news_info;
+                $final_prompt .= "\n\n**【最重要指示】**: 記事内で「背景」「文脈」「影響」「考察」「推察」の言葉を必ず使用し、それぞれを独立した段落または文章で表現してください。これらの要素が含まれていない記事は不完全とみなされます。";
+                
                 if (!empty($final_prompt)) {
                     return $this->build_custom_prompt($final_prompt, $settings);
                 }
             }
             $this->log('warning', '第二段階のプロンプト抽出に失敗、デフォルトを使用');
+        } else {
+            $this->log('info', '❌ カスタムプロンプト（第2段階）の条件不一致、デフォルトを使用');
         }
         
-        $this->log('info', 'Gemini第2段階記事生成プロンプト生成開始: ' . count($grounding_sources) . '件のソース');
+        $this->log('info', '📝 Gemini第2段階デフォルトプロンプト生成開始: ' . count($grounding_sources) . '件のソース');
         
         // Google NewsやRSSのURLをクリーンアップしてプロンプトサイズを削減
         $cleaned_sources = array();
@@ -3932,10 +4124,6 @@ class AINewsAutoPoster {
         $prompt .= "[ここに本文段落2を記述: 関連企業・団体の具体的な取り組み内容]\n\n";
         $prompt .= "[ここに本文段落3を記述: 業界や社会への具体的な影響分析]\n\n";
         $prompt .= "[ここに結論段落を記述: 今後の展望と簡潔なまとめ]\n\n";
-        $prompt .= "## 参考情報源\n\n";
-        foreach ($cleaned_sources as $index => $source) {
-            $prompt .= ($index + 1) . ". [{$source['title']}]({$source['url']})\n";
-        }
         $prompt .= "```\n\n";
         $prompt .= "**文字数管理**: 各段落の文字数を調整し、全体で{$article_word_count}文字以内に収めてください。\n\n";
         
@@ -3951,7 +4139,7 @@ class AINewsAutoPoster {
         $prompt .= "- 業界や社会に与える具体的な影響を、ニュースソースの情報を基に分析してください\n";
         $prompt .= "- **絶対条件**: 記事は{$article_word_count}文字以内で完全に完成させてください\n";
         $prompt .= "- **必須**: 上記の記事構成テンプレートに完全に従ってください\n";
-        $prompt .= "- **重要**: 「今日の{$search_keywords}関連のニュース」と「参考情報源」セクションは絶対に省略しないでください\n";
+        $prompt .= "- **重要**: 「今日の{$search_keywords}関連のニュース」セクションは絶対に省略しないでください\n";
         $prompt .= "- **絶対必須**: 記事は必ずタイトルの後に「## 今日の{$search_keywords}関連のニュース」セクションを含めてください\n";
         $prompt .= "- **絶対必須**: 「今日の{$search_keywords}関連のニュース」セクションの直後に記事構成テンプレート内のニュースソースリストを表示してください\n";
         $prompt .= "- **重要**: 記事構成テンプレート内で指定されているニュースソースのタイトルとURLを正確に使用してください\n";
@@ -3959,6 +4147,116 @@ class AINewsAutoPoster {
         $prompt .= "- 推測や一般論ではなく、ニュースソースから得られる具体的事実に基づいて記述してください\n";
         
         $this->log('info', 'Gemini第2段階記事生成プロンプト生成完了');
+        return $prompt;
+    }
+    
+    /**
+     * Gemini用シンプル1段階プロンプトテンプレート（プレースホルダー版）
+     */
+    private function build_gemini_simple_prompt_template() {
+        $this->log('info', 'Geminiシンプルプロンプトテンプレート生成開始');
+        
+        // シンプルな1段階プロンプト（プレースホルダー版）
+        $prompt = "【{検索キーワード}】に関する【{ニュース収集言語}】のニュース記事を検索し、以下の構成で記事を【{出力言語}】で作成してください。\n\n";
+        
+        $prompt .= "**必須の記事構成:**\n";
+        $prompt .= "1. タイトル（20文字程度）\n";
+        $prompt .= "2. 簡潔なリード文\n";
+        $prompt .= "3. 背景・文脈\n";
+        $prompt .= "4. 影響・考察\n";
+        $prompt .= "5. 推察・今後の展望\n";
+        $prompt .= "6. まとめ\n\n";
+        
+        $prompt .= "**出力形式:**\n";
+        $prompt .= "```\n";
+        $prompt .= "タイトル: [20文字程度のタイトル]\n\n";
+        $prompt .= "[簡潔なリード文：なぜこのニュースが重要なのか]\n\n";
+        $prompt .= "[なぜ今これが起こっているのか、業界背景を説明]\n\n";
+        $prompt .= "[今後どのような影響があるか、専門的考察]\n\n";
+        $prompt .= "[根拠のある今後の展開予測]\n\n";
+        $prompt .= "[総論的なまとめ]\n";
+        $prompt .= "```\n\n";
+        
+        $prompt .= "**重要:**\n";
+        $prompt .= "- 【{検索キーワード}】関連のニュースのみ検索\n";
+        $prompt .= "- 文体：{文体}風\n";
+        $prompt .= "- 全体で{文字数}文字程度に収める\n";
+        $prompt .= "- シンプルな文章のみで、Markdownや特殊記号は一切使用しない\n";
+        $prompt .= "- 各段落は空行で区切る\n";
+        $prompt .= "- 各セクションは均等に配分し、簡潔にまとめる\n";
+        
+        $this->log('info', 'Geminiシンプルプロンプトテンプレート生成完了: ' . mb_strlen($prompt) . '文字');
+        return $prompt;
+    }
+    
+    /**
+     * Gemini用シンプル1段階プロンプト構築（Google Search Grounding使用）
+     */
+    private function build_gemini_simple_prompt($settings) {
+        $search_keywords = $settings['search_keywords'] ?? 'アウトドアギア, キャンプ用品, 登山用品, ハイキング用品, テント, 寝袋, バックパック';
+        $news_languages = $settings['news_languages'] ?? array('japanese', 'english');
+        $output_language = $settings['output_language'] ?? 'japanese';
+        $article_word_count = $settings['article_word_count'] ?? 1500;
+        $writing_style = $settings['writing_style'] ?? '新聞記事';
+        
+        // カスタムプロンプトがあればそれを使用
+        $custom_prompt = $settings['custom_prompt'] ?? '';
+        if (!empty($custom_prompt)) {
+            $this->log('info', '✅ カスタムプロンプトを使用します');
+            $built_prompt = $this->build_custom_prompt($custom_prompt, $settings);
+            if (!empty($built_prompt)) {
+                $this->log('info', 'カスタムプロンプト構築成功: ' . mb_strlen($built_prompt) . '文字');
+                return $built_prompt;
+            }
+        }
+        
+        // 言語設定を文字列に変換
+        $language_map = array(
+            'japanese' => '日本語',
+            'english' => '英語',
+            'chinese' => '中国語'
+        );
+        $language_names = array();
+        foreach ($news_languages as $lang) {
+            if (isset($language_map[$lang])) {
+                $language_names[] = $language_map[$lang];
+            }
+        }
+        $news_collection_language = implode('と', $language_names);
+        $output_language_name = $language_map[$output_language] ?? '日本語';
+        
+        $this->log('info', 'Geminiシンプル1段階プロンプト生成開始');
+        
+        // シンプルな1段階プロンプト
+        $prompt = "【{$search_keywords}】に関する【{$news_collection_language}】のニュース記事を検索し、以下の構成で{$article_word_count}文字程度の記事を【{$output_language_name}】で作成してください。\n\n";
+        
+        $prompt .= "**必須の記事構成:**\n";
+        $prompt .= "1. タイトル（20文字程度）\n";
+        $prompt .= "2. 簡潔なリード文\n";
+        $prompt .= "3. 背景・文脈\n";
+        $prompt .= "4. 影響・考察\n";
+        $prompt .= "5. 推察・今後の展望\n";
+        $prompt .= "6. まとめ\n\n";
+        
+        $prompt .= "**出力形式:**\n";
+        $prompt .= "```\n";
+        $prompt .= "タイトル: [20文字程度のタイトル]\n\n";
+        $prompt .= "[簡潔なリード文：なぜこのニュースが重要なのか]\n\n";
+        $prompt .= "[なぜ今これが起こっているのか、業界背景を説明]\n\n";
+        $prompt .= "[今後どのような影響があるか、専門的考察]\n\n";
+        $prompt .= "[根拠のある今後の展開予測]\n\n";
+        $prompt .= "[総論的なまとめ]\n";
+        $prompt .= "```\n\n";
+        
+        $prompt .= "**重要:**\n";
+        $prompt .= "- 【{$search_keywords}】関連のニュースのみ検索\n";
+        $prompt .= "- 文体：{$writing_style}風\n";
+        $prompt .= "- 全体で{$article_word_count}文字程度に収める\n";
+        $prompt .= "- シンプルな文章のみで、Markdownや特殊記号は一切使用しない\n";
+        $prompt .= "- 各段落は空行で区切る\n";
+        $prompt .= "- 各セクションは均等に配分し、簡潔にまとめる\n";
+        
+        $this->log('info', 'Geminiシンプル1段階プロンプト生成完了: ' . mb_strlen($prompt) . '文字');
         return $prompt;
     }
     
@@ -4077,8 +4375,6 @@ class AINewsAutoPoster {
             $prompt .= "フォーマット:\n";
             $prompt .= "タイトル: [記事タイトル]\n\n";
             $prompt .= "[記事本文（必ず最後まで完成）]\n\n";
-            $prompt .= "## 参考情報源\n";
-            $prompt .= implode("\n", $citation_sources);
         } else {
             // Claude用プロンプト
             $prompt = "あなたは{$writing_style}として、以下の最新ニュース情報を参考に、読みやすく情報価値の高い記事を作成してください。\n\n";
@@ -4089,13 +4385,11 @@ class AINewsAutoPoster {
             $prompt .= "- キーワード: {$keywords}\n";
             $prompt .= "- 構成: タイトル、導入、本文（複数段落）、まとめ\n";
             $prompt .= "- 読者に価値を提供する内容にする\n";
-            $prompt .= "- 記事の最後に「## 参考情報源」セクションを追加し、リンクを含める\n";
+            // 参考情報源セクションの指示を削除（修正により削除）
             $prompt .= "- 記事は必ず最後まで完成させる\n\n";
             $prompt .= "出力形式:\n";
             $prompt .= "タイトル: [記事タイトル]\n\n";
             $prompt .= "[記事本文（必ず最後まで完成）]\n\n";
-            $prompt .= "## 参考情報源\n";
-            $prompt .= implode("\n", $citation_sources);
         }
         
         $this->log('info', 'ニュースベースプロンプト生成完了 (ニュース件数: ' . count($news_data) . ')');
@@ -4452,11 +4746,16 @@ class AINewsAutoPoster {
         // NULL文字のみ除去（データベースエラーの最大要因）
         $text = str_replace("\x00", '', $text);
         
-        // 問題となる全角文字を半角に変換
+        // 問題となる全角文字を半角に変換（データベースエラー対策）
         $text = str_replace(['＋', '－', '｜'], ['+', '-', '|'], $text);
         $text = str_replace(['【', '】'], ['[', ']'], $text);
         $text = str_replace(['（', '）'], ['(', ')'], $text);
         $text = str_replace('＆', '&', $text);
+        
+        // データベース特有の問題文字を除去
+        $text = str_replace(['＃', '％', '＠'], ['#', '%', '@'], $text);
+        // 問題のある正規表現を削除 - 英語タイトルが削除される原因を修正
+        // $text = preg_replace('/[^\x00-\x7F\x80-\xFF\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/u', '', $text);
         
         // 制御文字を除去（改行・タブ以外）
         $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $text);
@@ -4470,9 +4769,40 @@ class AINewsAutoPoster {
         }
         
         // MySQLで問題となる可能性のある文字をサニタイズ
-        $text = wp_kses_post($text); // WordPress標準のHTMLサニタイゼーション
+        // タイトルに対してはHTMLサニタイゼーションを避ける（テキストが削除される原因）
+        // $text = wp_kses_post($text); // WordPress標準のHTMLサニタイゼーション
         
         return $text;
+    }
+    
+    /**
+     * タイトル専用のクリーニング関数（英語テキストを削除しない）
+     */
+    private function clean_title_for_database($title) {
+        // nullチェック
+        if (empty($title)) {
+            return $title;
+        }
+        
+        // 最小限の処理のみ実行
+        // バイト順マーク（BOM）除去
+        $title = str_replace("\xEF\xBB\xBF", '', $title);
+        
+        // NULL文字除去
+        $title = str_replace("\x00", '', $title);
+        
+        // 制御文字を除去（改行・タブ以外）
+        $title = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $title);
+        
+        // 4バイトUTF-8文字（絵文字等）をエンコード
+        if (function_exists('wp_encode_emoji')) {
+            $title = wp_encode_emoji($title);
+        }
+        
+        // 先頭と末尾の空白を除去
+        $title = trim($title);
+        
+        return $title;
     }
     
     /**
@@ -4554,22 +4884,21 @@ class AINewsAutoPoster {
         $content = $post->post_content;
         $original_length = mb_strlen($content);
         
-        // 参考情報源セクションを追加
-        if (!empty($grounding_sources)) {
-            $this->log('info', count($grounding_sources) . '件の参考情報源を追加中...');
+        // 参考情報源がMarkdownリンクとして含まれている場合、HTMLリンクに変換
+        if (!empty($grounding_sources) && strpos($content, '**参考情報源：**') !== false) {
+            // Markdownリンクを見つけてHTMLに変換
+            $content = preg_replace_callback('/\[([^\]]+)\]\(([^)]+)\)/', function($matches) {
+                $title = $matches[1];
+                $url = $matches[2];
+                return '<a href="' . esc_url($url) . '" target="_blank">' . esc_html($title) . '</a>';
+            }, $content);
             
-            $reference_section = "\n\n<h2>参考情報源</h2>\n<ol>\n";
-            foreach ($grounding_sources as $index => $source) {
-                $title = $source['title'] ?? ('ニュース記事' . ($index + 1));
-                $url = $source['url'] ?? '#';
-                $reference_section .= '<li><a href="' . esc_url($url) . '" target="_blank">' . esc_html($title) . '</a></li>' . "\n";
-            }
-            $reference_section .= "</ol>";
+            // **太字**をHTMLに変換
+            $content = preg_replace('/\*\*([^*]+)\*\*/', '<strong>$1</strong>', $content);
             
-            $content .= $reference_section;
-            $this->log('info', '参考情報源セクションを追加しました');
+            $this->log('info', 'Markdownリンクを' . count($grounding_sources) . '件HTMLに変換しました');
         } else {
-            $this->log('info', '参考情報源がないためスキップします');
+            $this->log('info', '参考情報源セクションが見つかりません');
         }
         
         // 免責事項を追加
