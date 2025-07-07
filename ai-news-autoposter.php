@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。Claude/Gemini API対応、RSSベース実ニュース検索、スケジューリング機能、SEO最適化機能付き。最新版は GitHub からダウンロードしてください。
- * Version: 1.2.53
+ * Version: 1.2.54
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.53');
+define('AI_NEWS_AUTOPOSTER_VERSION', '1.2.54');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -4929,28 +4929,68 @@ class AINewsAutoPoster {
             }
             // プレーンテキストの参考情報源をリンクに変換
             else if (strpos($content, '参考情報源:') !== false) {
-                // 参考情報源セクションのリストアイテムをHTMLリンクに変換
-                $content = preg_replace_callback('/(<li>)([^<]+?)\s*\((https?:\/\/[^)]+)\)([^<]*)(<\/li>)/', function($matches) {
+                // より柔軟な正規表現でHTTPSURLを検出してリンクに変換
+                $content = preg_replace_callback('/(<li>)([^<]+?)\s*\((https?:\/\/[^)]*)\)([^<]*)(<\/li>)/', function($matches) {
                     $title = trim($matches[2]);
                     $url = trim($matches[3]);
                     $additional_text = trim($matches[4]);
                     
-                    return $matches[1] . '<a href="' . esc_url($url) . '" target="_blank">' . esc_html($title) . '</a>' . $additional_text . $matches[5];
-                }, $content);
-                
-                // [参考リンク]のような場合も処理
-                $content = preg_replace_callback('/(<li>)([^<]+?)\s*\(([^)]+)\)([^<]*)(<\/li>)/', function($matches) {
-                    $title = trim($matches[2]);
-                    $link_text = trim($matches[3]);
-                    $additional_text = trim($matches[4]);
-                    
-                    // URLでない場合はリンクにしない
-                    if (preg_match('/^https?:\/\//', $link_text)) {
-                        return $matches[1] . '<a href="' . esc_url($link_text) . '" target="_blank">' . esc_html($title) . '</a>' . $additional_text . $matches[5];
+                    // URLが有効かチェック
+                    if (filter_var($url, FILTER_VALIDATE_URL)) {
+                        return $matches[1] . '<a href="' . esc_url($url) . '" target="_blank">' . esc_html($title) . '</a>' . $additional_text . $matches[5];
                     } else {
-                        return $matches[0]; // URLでない場合は元のまま
+                        return $matches[0]; // 無効なURLの場合は元のまま
                     }
                 }, $content);
+                
+                // grounding_sourcesがある場合、マッチングでリンクを追加
+                if (!empty($grounding_sources)) {
+                    // grounding_sourcesからタイトルとURLのマッピングを作成
+                    $source_map = array();
+                    foreach ($grounding_sources as $source) {
+                        if (isset($source['title']) && isset($source['link'])) {
+                            $clean_title = trim(strip_tags($source['title']));
+                            $source_map[$clean_title] = $source['link'];
+                        }
+                    }
+                    
+                    // [参考リンク]やURLが無いアイテムをgrounding_sourcesとマッチング
+                    $content = preg_replace_callback('/(<li>)([^<]+?)\s*\(([^)]*)\)([^<]*)(<\/li>)/', function($matches) use ($source_map) {
+                        $title = trim($matches[2]);
+                        $link_text = trim($matches[3]);
+                        $additional_text = trim($matches[4]);
+                        
+                        // 既にHTTPSリンクが設定されている場合はスキップ
+                        if (strpos($matches[0], '<a href=') !== false) {
+                            return $matches[0];
+                        }
+                        
+                        // URLでない場合はgrounding_sourcesから検索
+                        if (!preg_match('/^https?:\/\//', $link_text)) {
+                            $url = null;
+                            foreach ($source_map as $source_title => $source_url) {
+                                // タイトルの部分一致でURLを検索
+                                if (strpos($title, $source_title) !== false || strpos($source_title, $title) !== false) {
+                                    $url = $source_url;
+                                    break;
+                                }
+                                // より緩い条件：最初の5文字が一致
+                                if (mb_strlen($title) >= 5 && mb_strlen($source_title) >= 5) {
+                                    if (mb_substr($title, 0, 5) === mb_substr($source_title, 0, 5)) {
+                                        $url = $source_url;
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            if ($url) {
+                                return $matches[1] . '<a href="' . esc_url($url) . '" target="_blank">' . esc_html($title) . '</a>' . $additional_text . $matches[5];
+                            }
+                        }
+                        
+                        return $matches[0]; // マッチしない場合は元のまま
+                    }, $content);
+                }
                 
                 $this->log('info', 'プレーンテキストの参考情報源をHTMLリンクに変換しました');
             } else {
