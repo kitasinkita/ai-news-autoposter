@@ -85,6 +85,7 @@ class AINewsAutoPoster {
                 'article_word_count' => 500,
                 'enable_disclaimer' => true,
                 'disclaimer_text' => '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。',
+                'enable_excerpt' => true,
                 'custom_prompt' => '',
                 'sources_section_title' => '{date}の{keyword}関連のニュース',
                 'image_generation_type' => 'placeholder', // placeholder, dalle, unsplash
@@ -321,6 +322,7 @@ class AINewsAutoPoster {
                     'output_language' => sanitize_text_field($_POST['output_language']),
                     'article_word_count' => intval($_POST['article_word_count']),
                     'enable_disclaimer' => isset($_POST['enable_disclaimer']),
+                    'enable_excerpt' => isset($_POST['enable_excerpt']),
                     'disclaimer_text' => sanitize_textarea_field($_POST['disclaimer_text']),
                     'sources_section_title' => sanitize_text_field($_POST['sources_section_title']),
                     'image_generation_type' => sanitize_text_field($_POST['image_generation_type']),
@@ -530,6 +532,17 @@ class AINewsAutoPoster {
                                 <textarea name="disclaimer_text" rows="3" class="large-text"><?php echo esc_textarea($settings['disclaimer_text'] ?? '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。'); ?></textarea>
                                 <p class="ai-news-form-description">記事末尾に表示する免責事項の文言を設定してください。</p>
                             </div>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">抜粋自動生成</th>
+                        <td>
+                            <label>
+                                <input type="checkbox" name="enable_excerpt" <?php checked($settings['enable_excerpt'] ?? true); ?> />
+                                投稿の抜粋を自動生成する（20文字程度の簡潔な要約）
+                            </label>
+                            <p class="ai-news-form-description">記事タイトルから簡潔な抜粋を自動生成します。無効にすると抜粋は空になります。</p>
                         </td>
                     </tr>
                     
@@ -1504,10 +1517,25 @@ class AINewsAutoPoster {
         $this->log('info', 'wp_insert_post実行直前のタイトル: "' . mb_substr($post_data['post_title'], 0, 50) . '"');
         $this->log('info', 'wp_insert_post実行直前のコンテンツ先頭100文字: "' . mb_substr($post_data['post_content'], 0, 100) . '"');
         
+        // 抜粋の自動生成
+        $settings = get_option('ai_news_autoposter_settings', array());
+        if ($settings['enable_excerpt'] ?? true) {
+            $post_data['post_excerpt'] = $this->generate_post_excerpt($post_data['post_title']);
+            $this->log('info', '抜粋を自動生成しました: "' . $post_data['post_excerpt'] . '"');
+        } else {
+            $post_data['post_excerpt'] = '';
+            $this->log('info', '抜粋生成は無効に設定されています');
+        }
+        
         // 最終的な文字クリーニング（データベースエラー防止）
         $post_data['post_title'] = $this->clean_text_for_database($post_data['post_title']);
         $content_before_clean = $post_data['post_content'];
         $post_data['post_content'] = $this->clean_text_for_database($post_data['post_content']);
+        
+        // 抜粋も同様にクリーニング
+        if (isset($post_data['post_excerpt'])) {
+            $post_data['post_excerpt'] = $this->clean_text_for_database($post_data['post_excerpt']);
+        }
         
         // 免責事項チェック
         $has_disclaimer_before = strpos($content_before_clean, '注：この記事は') !== false;
@@ -1533,11 +1561,18 @@ class AINewsAutoPoster {
         
         try {
             $this->log('info', 'wp_insert_post直前のMySQL接続確認: ' . ($wpdb->check_connection() ? '正常' : '異常'));
+            
+            // データベースの文字セットを確認
+            $charset = $wpdb->get_var("SELECT @@character_set_database");
+            $collation = $wpdb->get_var("SELECT @@collation_database");
+            $this->log('info', 'データベース文字セット: ' . $charset . ', 照合順序: ' . $collation);
+            
             $post_id = wp_insert_post($post_data, true); // true: より詳細なエラー情報
             
             // MySQL エラーを即座にチェック
             if ($wpdb->last_error) {
                 $this->log('error', 'MySQL直接エラー: ' . $wpdb->last_error);
+                $this->log('error', 'データベース文字セット問題の可能性があります。charset=' . $charset);
             }
             
             $this->log('info', 'wp_insert_post実行完了。結果: ' . (is_wp_error($post_id) ? 'WP_Error' : (is_numeric($post_id) ? 'ID=' . $post_id : '0')));
@@ -4262,6 +4297,26 @@ class AINewsAutoPoster {
         // NULL文字のみ除去（データベースエラーの最大要因）
         $text = str_replace("\x00", '', $text);
         
+        // 問題となる全角文字を半角に変換
+        $text = str_replace(['＋', '－', '｜'], ['+', '-', '|'], $text);
+        $text = str_replace(['【', '】'], ['[', ']'], $text);
+        $text = str_replace(['（', '）'], ['(', ')'], $text);
+        $text = str_replace('＆', '&', $text);
+        
+        // 制御文字を除去（改行・タブ以外）
+        $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $text);
+        
+        // 4バイトUTF-8文字（絵文字等）をエンコード
+        if (function_exists('wp_encode_emoji')) {
+            $text = wp_encode_emoji($text);
+        } else {
+            // 4バイトUTF-8文字を手動で除去（フォールバック）
+            $text = preg_replace('/[\x{1F600}-\x{1F64F}]|[\x{1F300}-\x{1F5FF}]|[\x{1F680}-\x{1F6FF}]|[\x{1F1E0}-\x{1F1FF}]|[\x{2600}-\x{26FF}]|[\x{2700}-\x{27BF}]/u', '', $text);
+        }
+        
+        // MySQLで問題となる可能性のある文字をサニタイズ
+        $text = wp_kses_post($text); // WordPress標準のHTMLサニタイゼーション
+        
         return $text;
     }
     
@@ -4288,6 +4343,44 @@ class AINewsAutoPoster {
         }
         
         return $host;
+    }
+    
+    /**
+     * 投稿の抜粋を自動生成
+     */
+    private function generate_post_excerpt($title) {
+        // タイトルから20文字程度の簡潔な抜粋を生成
+        $title = strip_tags($title); // HTMLタグを除去
+        $title = trim($title);
+        
+        // タイトルが短い場合はそのまま使用
+        if (mb_strlen($title) <= 25) {
+            return $title;
+        }
+        
+        // タイトルから重要な部分を抽出して短縮
+        $patterns = array(
+            '/^(.{0,20}[^、。！？]*)[、。！？].*$/u', // 句読点で区切る
+            '/^(.{0,20}[^：]*)[：].*$/u',          // コロンで区切る
+            '/^(.{0,20}[^「『]*)[「『].*$/u',       // 括弧で区切る
+            '/^(.{0,20}[^\s]*)\s.*$/u',           // スペースで区切る
+        );
+        
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $title, $matches) && mb_strlen($matches[1]) >= 10) {
+                return trim($matches[1]);
+            }
+        }
+        
+        // パターンが見つからない場合は単純に切り取り
+        $excerpt = mb_substr($title, 0, 20);
+        
+        // 文字が途中で切れている場合は最後の文字を「...」にする
+        if (mb_strlen($title) > 20) {
+            $excerpt = mb_substr($excerpt, 0, 18) . '…';
+        }
+        
+        return $excerpt;
     }
 }
 
