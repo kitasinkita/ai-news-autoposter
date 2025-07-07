@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。v2.0：プロンプト結果に任せる方式で高品質記事生成。Claude/Gemini API対応、文字数制限なし、自然なレイアウト。最新版は GitHub からダウンロードしてください。
- * Version: 2.0.0
+ * Version: 2.0.1
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.0.0');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.0.1');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1315,7 +1315,7 @@ class AINewsAutoPoster {
             'post_category' => array($category),
             'post_type' => 'post',
             'post_author' => get_current_user_id() ?: 1,
-            'post_excerpt' => '', // 明示的に空の抜粋を設定
+            'post_excerpt' => $this->generate_excerpt($clean_content), // 記事内容から20文字程度の抜粋を生成
             'comment_status' => 'open', // コメントステータスを明示的に設定
             'ping_status' => 'open', // ピングステータスを明示的に設定
             'post_date' => current_time('mysql'), // 現在時刻を明示的に設定
@@ -2118,7 +2118,7 @@ class AINewsAutoPoster {
         $this->log('info', '📝 プロンプト結果に任せる方式: 生回答を最小限処理で使用');
         
         $lines = explode("\n", trim($response));
-        $title = '最新ニュース: ' . date('Y年m月d日H時i分');
+        $title = '最新ニュース: ' . date('Y年m月d日');
         
         // 自然なタイトルを抽出（Geminiが生成した可能性の高い行）
         foreach ($lines as $line) {
@@ -2180,6 +2180,38 @@ class AINewsAutoPoster {
         }
         
         return $result ? $result . '...' : mb_substr($title, 0, $max_length - 3) . '...';
+    }
+    
+    /**
+     * 記事内容から20文字程度の抜粋を生成
+     */
+    private function generate_excerpt($content) {
+        // HTMLタグを除去してプレーンテキストに
+        $text = strip_tags($content);
+        
+        // 改行や余分な空白を除去
+        $text = preg_replace('/\s+/', ' ', trim($text));
+        
+        // 参考情報源などの不要な部分を除去
+        $text = preg_replace('/^(参考|出典|ソース|URL|https?:\/\/)[^\n]*/m', '', $text);
+        $text = trim($text);
+        
+        // 20文字程度で切り詰め
+        if (mb_strlen($text) <= 20) {
+            return $text;
+        }
+        
+        // 句読点で自然に切る
+        $punctuation = array('。', '！', '？', '、');
+        for ($i = 15; $i <= 25; $i++) {
+            $char = mb_substr($text, $i, 1);
+            if (in_array($char, $punctuation)) {
+                return mb_substr($text, 0, $i + 1);
+            }
+        }
+        
+        // 句読点がない場合は20文字で切り詰め
+        return mb_substr($text, 0, 20);
     }
     
     /**
