@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。v2.0：プロンプト結果に任せる方式で高品質記事生成。Claude/Gemini API対応、文字数制限なし、自然なレイアウト。最新版は GitHub からダウンロードしてください。
- * Version: 2.5.8
+ * Version: 2.5.9
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.8');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.9');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1168,12 +1168,25 @@ class AINewsAutoPoster {
                     }
                     
                     if (isset($article_response['text'])) {
+                        $article_text = $article_response['text'];
+                        $article_char_count = mb_strlen($article_text);
+                        
+                        $this->log('info', "記事 {$i} の生成文字数: {$article_char_count}文字");
+                        
+                        // 最小文字数チェック（H2タグがあるかも確認）
+                        $has_h2_tag = preg_match('/<h2[^>]*>/', $article_text);
+                        
+                        if ($article_char_count < 500 || !$has_h2_tag) {
+                            $this->log('error', "記事 {$i} の生成が不完全です。文字数: {$article_char_count}文字、H2タグ: " . ($has_h2_tag ? 'あり' : 'なし'));
+                            $this->log('warning', "記事 {$i} をスキップします");
+                            continue;
+                        }
+                        
                         if ($i === 1) {
                             // 最初の記事はリード文も含む
-                            $combined_content = $article_response['text'];
+                            $combined_content = $article_text;
                         } else {
                             // 2記事目以降はH2タグ以降のみを追加し、番号を修正
-                            $article_text = $article_response['text'];
                             if (preg_match('/<h2.*?<\/h2>.*$/s', $article_text, $matches)) {
                                 $article_content = $matches[0];
                                 
@@ -4450,7 +4463,7 @@ class AINewsAutoPoster {
         $prompt .= "【出力構成】\n";
         
         // 最初の記事の場合のみリード文を含める
-        if (!isset($article_number) || $article_number === 1) {
+        if ($article_number === 1) {
             $prompt .= "1. まず最初に、{$search_keywords}について簡潔なリード文（2-3文）を書いてください\n";
             $prompt .= "2. その後、以下のHTMLタグ形式で1つの記事を完全に書いてください\n\n";
             $prompt .= "リード文の例：「{$search_keywords}の活用は、ビジネスや日常生活のさまざまな場面で注目を集めています。以下に、{$search_keywords}に関する最新のニュース記事を{$article_count}本ご紹介します。」\n\n";
