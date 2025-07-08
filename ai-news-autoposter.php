@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。v2.0：プロンプト結果に任せる方式で高品質記事生成。Claude/Gemini API対応、文字数制限なし、自然なレイアウト。最新版は GitHub からダウンロードしてください。
- * Version: 2.0.3
+ * Version: 2.1.0
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.0.3');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.1.0');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1225,6 +1225,9 @@ class AINewsAutoPoster {
         // AIレスポンスを解析
         $this->log('info', 'AIレスポンスを解析中...');
         
+        // Grounding Sourcesを初期化
+        $grounding_sources = array();
+        
         // Gemini APIからの構造化レスポンス処理
         if ($is_gemini && is_array($ai_response) && isset($ai_response['text'])) {
             $this->log('info', 'Gemini API構造化レスポンスを処理中...');
@@ -1653,6 +1656,12 @@ class AINewsAutoPoster {
         // タグを追加
         if ($settings['enable_tags'] && !empty($article_data['tags'])) {
             wp_set_post_tags($post_id, $article_data['tags']);
+        }
+        
+        // Grounding Sourcesの追加（Gemini APIで取得した場合のみ）
+        if (isset($grounding_sources) && !empty($grounding_sources)) {
+            $this->log('info', 'Grounding Sources セクションを記事末尾に追加します: ' . count($grounding_sources) . '件');
+            $this->add_grounding_sources_list($post_id, $grounding_sources, $settings);
         }
         
         // アイキャッチ画像を生成（画像生成方式が「なし」以外の場合）
@@ -2118,25 +2127,18 @@ class AINewsAutoPoster {
         $this->log('info', '📝 プロンプト結果に任せる方式: 生回答を最小限処理で使用');
         
         $lines = explode("\n", trim($response));
-        $title = '最新ニュース: ' . date('Y年m月d日');
         $content = trim($response);
         
-        // 最初の行をタイトルとして抽出（プロンプトで指定した20文字以内のタイトル）
-        if (!empty($lines)) {
-            $first_line = trim($lines[0]);
-            $clean_first_line = strip_tags($first_line);
-            
-            // 最初の行が20文字以内で、記事内容っぽい場合はタイトルとして採用
-            if (mb_strlen($clean_first_line) >= 5 && mb_strlen($clean_first_line) <= 25) {
-                // 明らかに不適切でない場合はタイトルとして使用
-                if (!preg_match('/^(まず|その後|以下|1本目|2本目|3本目|http|www)/u', $clean_first_line)) {
-                    $title = $clean_first_line;
-                    // タイトル行を除いたコンテンツを作成
-                    $content_lines = array_slice($lines, 1);
-                    $content = trim(implode("\n", $content_lines));
-                    $this->log('info', '最初の行をタイトルとして抽出: ' . $title);
-                }
-            }
+        // より良いタイトル抽出を実装
+        $title = $this->extract_better_title($response, $lines);
+        
+        // 抽出したタイトルがコンテンツの最初にある場合は除去
+        if (!empty($title) && $title !== '最新ニュース: ' . date('Y年m月d日')) {
+            // タイトル行を除いたコンテンツを作成
+            $title_pattern = preg_quote($title, '/');
+            $content = preg_replace('/^' . $title_pattern . '\s*\n?/u', '', $content, 1);
+            $content = trim($content);
+            $this->log('info', 'タイトル抽出成功: ' . $title);
         }
         
         // コンテンツが空になった場合は元の回答を使用
@@ -2149,6 +2151,51 @@ class AINewsAutoPoster {
             'content' => $content, // Geminiの判断に任せて生回答を使用（タイトルのみ除去）
             'tags' => array('アウトドア', 'ニュース', 'AI生成')
         );
+    }
+    
+    /**
+     * コンテンツからより良いタイトルを抽出
+     */
+    private function extract_better_title($response, $lines) {
+        $default_title = '最新ニュース: ' . date('Y年m月d日');
+        
+        // 1. 最初の行をチェック
+        if (!empty($lines)) {
+            $first_line = trim($lines[0]);
+            $clean_first_line = strip_tags($first_line);
+            
+            // 最初の行が適切なタイトルかチェック
+            if (mb_strlen($clean_first_line) >= 8 && mb_strlen($clean_first_line) <= 50) {
+                // 不適切なパターンを除外
+                if (!preg_match('/^(アウトドアギア|各記事|以下|まず|その後|1本目|2本目|3本目|http|www|タイトル:|URL:|概要)/u', $clean_first_line)) {
+                    return $clean_first_line;
+                }
+            }
+        }
+        
+        // 2. "タイトル:" パターンを探す
+        if (preg_match('/^タイトル:\s*(.+)$/m', $response, $matches)) {
+            $title_candidate = trim($matches[1]);
+            if (mb_strlen($title_candidate) >= 8 && mb_strlen($title_candidate) <= 50) {
+                return $title_candidate;
+            }
+        }
+        
+        // 3. 1本目の記事のタイトルを探す
+        if (preg_match('/1本目の記事.*?タイトル:\s*(.+?)$/m', $response, $matches)) {
+            $title_candidate = trim($matches[1]);
+            if (mb_strlen($title_candidate) >= 8 && mb_strlen($title_candidate) <= 50) {
+                return $title_candidate . ' 他2本';
+            }
+        }
+        
+        // 4. 検索キーワードから生成
+        $settings = get_option('ai_news_autoposter_settings', array());
+        $search_keywords = $settings['search_keywords'] ?? 'アウトドア';
+        $keywords = explode(',', $search_keywords);
+        $first_keyword = trim($keywords[0]);
+        
+        return $first_keyword . '最新ニュース' . date('m月d日');
     }
     
     /**
@@ -4260,14 +4307,28 @@ class AINewsAutoPoster {
         
         // 日付付きタイトル生成を含む明確な3記事指定プロンプト
         $today = date('Y年m月d日');
-        $prompt = "まず、{$search_keywords}に関する今日（{$today}）のニュースを要約した20文字以内の簡潔なタイトルを1行目に書いてください。\n\n";
-        $prompt .= "その後、{$search_keywords}に関する{$news_collection_language}のニュースを正確に3本選んで紹介してください。\n\n";
-        $prompt .= "**重要**: すべてのURLは必ずクリッカブルなHTMLリンク形式で記載してください。例：<a href=\"https://example.com\" target=\"_blank\">記事タイトル</a>\n\n";
+        // v2.0.0の正しいプロンプト（プロンプト結果に任せる方式）
+        $prompt = "{$search_keywords}に関する{$news_collection_language}のニュースを正確に3本選んで紹介してください。各記事にはURLを含めてください。\n\n";
         $prompt .= "以下の形式で3つの記事すべてを完全に書いてください：\n\n";
-        $prompt .= "1本目の記事：\n- タイトル\n- <a href=\"URL\" target=\"_blank\">リンクテキスト</a>の形式でクリッカブルリンク\n- 概要と要約\n- 背景・文脈\n- 今後の影響（500文字程度の考察）\n\n";
-        $prompt .= "2本目の記事：\n- タイトル\n- <a href=\"URL\" target=\"_blank\">リンクテキスト</a>の形式でクリッカブルリンク\n- 概要と要約\n- 背景・文脈\n- 今後の影響（500文字程度の考察）\n\n";
-        $prompt .= "3本目の記事：\n- タイトル\n- <a href=\"URL\" target=\"_blank\">リンクテキスト</a>の形式でクリッカブルリンク\n- 概要と要約\n- 背景・文脈\n- 今後の影響（500文字程度の考察）\n\n";
-        $prompt .= "必ず最初にタイトル（20文字以内）を書き、その後3つの記事すべてを最後まで完全に書いてください。すべてのURLはHTMLリンク形式で記載してください。";
+        $prompt .= "1本目の記事：\n";
+        $prompt .= "- タイトル\n";
+        $prompt .= "- URL\n";
+        $prompt .= "- 概要と要約\n";
+        $prompt .= "- 背景・文脈\n";
+        $prompt .= "- 今後の影響（500文字程度の考察）\n\n";
+        $prompt .= "2本目の記事：\n";
+        $prompt .= "- タイトル\n";
+        $prompt .= "- URL\n";
+        $prompt .= "- 概要と要約\n";
+        $prompt .= "- 背景・文脈\n";
+        $prompt .= "- 今後の影響（500文字程度の考察）\n\n";
+        $prompt .= "3本目の記事：\n";
+        $prompt .= "- タイトル\n";
+        $prompt .= "- URL\n";
+        $prompt .= "- 概要と要約\n";
+        $prompt .= "- 背景・文脈\n";
+        $prompt .= "- 今後の影響（500文字程度の考察）\n\n";
+        $prompt .= "必ず3つの記事すべてを最後まで完全に書いてください。";
         
         // プレースホルダーを実際の値に置換
         $prompt = str_replace('{文字数}', $per_paragraph_chars, $prompt);
@@ -5173,7 +5234,7 @@ class AINewsAutoPoster {
             $this->log('info', 'Grounding Sources: ' . count($grounding_sources) . '件');
             
             // Grounding URLリストを作成
-            $grounding_list = "\n\n<hr>\n\n<h3>🔗 検索で使用された実際のソース（Grounding API URL）</h3>\n<ul>\n";
+            $grounding_list = "\n\n<hr>\n\n<h3>🔗 参考情報源</h3>\n<p><em>この記事は以下のニュースソースを参考に作成されました：</em></p>\n<ul>\n";
             
             foreach ($grounding_sources as $index => $source) {
                 // 'link'または'url'キーをチェック（Geminiの構造に対応）
