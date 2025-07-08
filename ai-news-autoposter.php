@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。v2.0：プロンプト結果に任せる方式で高品質記事生成。Claude/Gemini API対応、文字数制限なし、自然なレイアウト。最新版は GitHub からダウンロードしてください。
- * Version: 2.5.9
+ * Version: 2.5.10
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.9');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.10');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -4459,7 +4459,8 @@ class AINewsAutoPoster {
         $today = date('Y年m月d日');
         // 複数記事対応：1記事ずつ順次生成
         $prompt = "{$search_keywords}に関する{$news_collection_language}のニュースを1本選んで紹介してください。\n\n";
-        $prompt .= "【重要】記事本文中にはURLアドレスやURLラベルを一切含めないでください。\n\n";
+        $prompt .= "【重要1】記事は必ず{$output_language_name}で作成してください。\n";
+        $prompt .= "【重要2】記事本文中にはURLアドレスやURLラベルを一切含めないでください。\n\n";
         $prompt .= "【出力構成】\n";
         
         // 最初の記事の場合のみリード文を含める
@@ -4484,7 +4485,7 @@ class AINewsAutoPoster {
         $prompt .= "<h3>今後の影響</h3>\n";
         $prompt .= "<p>【今後への影響を500文字以上で】</p>\n\n";
         
-        $prompt .= "重要：上記のH2タグ記事を1本完全に書いてください。途中で止めないでください。";
+        $prompt .= "重要：上記のH2タグ記事を1本完全に{$output_language_name}で書いてください。途中で止めないでください。";
         
         // プレースホルダーを実際の値に置換
         $prompt = str_replace('{文字数}', $per_paragraph_chars, $prompt);
