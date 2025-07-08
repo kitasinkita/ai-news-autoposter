@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。v2.0：プロンプト結果に任せる方式で高品質記事生成。Claude/Gemini API対応、文字数制限なし、自然なレイアウト。最新版は GitHub からダウンロードしてください。
- * Version: 2.4.0
+ * Version: 2.5.6
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.4.0');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.6');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -83,7 +83,7 @@ class AINewsAutoPoster {
                 'writing_style' => '夏目漱石',
                 'news_languages' => array('japanese', 'english'), // english, japanese, chinese
                 'output_language' => 'japanese', // japanese, english, chinese
-                'article_word_count' => 1500,
+                'article_word_count' => 3000,
                 'article_count' => 3,
                 'impact_analysis_length' => 500,
                 'enable_disclaimer' => true,
@@ -323,7 +323,7 @@ class AINewsAutoPoster {
                     'writing_style' => sanitize_text_field($_POST['writing_style']),
                     'news_languages' => isset($_POST['news_languages']) ? array_map('sanitize_text_field', $_POST['news_languages']) : array(),
                     'output_language' => sanitize_text_field($_POST['output_language']),
-                    'article_word_count' => intval($_POST['article_word_count']),
+                    'article_word_count' => max(100, min(5000, intval($_POST['article_word_count']))),
                     'enable_disclaimer' => isset($_POST['enable_disclaimer']),
                     'enable_excerpt' => isset($_POST['enable_excerpt']),
                     'disclaimer_text' => sanitize_textarea_field($_POST['disclaimer_text']),
@@ -497,9 +497,9 @@ class AINewsAutoPoster {
                     <tr>
                         <th scope="row">記事文字数</th>
                         <td>
-                            <input type="number" name="article_word_count" value="<?php echo esc_attr($settings['article_word_count'] ?? 500); ?>" min="100" max="3000" step="50" class="small-text" />
+                            <input type="number" name="article_word_count" value="<?php echo esc_attr($settings['article_word_count'] ?? 3000); ?>" min="100" max="5000" step="50" class="small-text" />
                             <span>文字程度</span>
-                            <p class="ai-news-form-description">生成する記事の目安文字数を設定してください（100〜3000文字）。</p>
+                            <p class="ai-news-form-description">生成する記事の目安文字数を設定してください（100〜5000文字）。</p>
                         </td>
                     </tr>
                     
@@ -1146,11 +1146,72 @@ class AINewsAutoPoster {
         if ($is_gemini) {
             $this->log('info', 'Gemini APIを呼び出します...');
             
-            // Gemini 2.0/2.5でGoogle Search Groundingを使用（シンプル1段階プロセス）
+            // Gemini 2.0/2.5でGoogle Search Groundingを使用（複数記事順次生成）
             if ($model === 'gemini-2.5-flash' || $model === 'gemini-2.0-flash-exp') {
-                $this->log('info', $model . ' - Google Search Groundingでシンプル1段階記事生成開始');
-                $gemini_prompt = $this->build_gemini_simple_prompt($settings);
-                $ai_response = $this->call_gemini_api($gemini_prompt, $settings['gemini_api_key'] ?? '', $model);
+                $this->log('info', $model . ' - Google Search Groundingで複数記事順次生成開始');
+                
+                // 記事数を取得
+                $article_count = $settings['article_count'] ?? 3;
+                $combined_content = '';
+                $combined_sources = array();
+                
+                // 記事を1つずつ順次生成
+                for ($i = 1; $i <= $article_count; $i++) {
+                    $this->log('info', "記事 {$i}/{$article_count} を生成中...");
+                    
+                    $gemini_prompt = $this->build_gemini_simple_prompt($settings, $i);
+                    $article_response = $this->call_gemini_api($gemini_prompt, $settings['gemini_api_key'] ?? '', $model);
+                    
+                    if (is_wp_error($article_response)) {
+                        $this->log('error', "記事 {$i} の生成に失敗: " . $article_response->get_error_message());
+                        continue;
+                    }
+                    
+                    if (isset($article_response['text'])) {
+                        if ($i === 1) {
+                            // 最初の記事はリード文も含む
+                            $combined_content = $article_response['text'];
+                        } else {
+                            // 2記事目以降はH2タグ以降のみを追加し、番号を修正
+                            $article_text = $article_response['text'];
+                            if (preg_match('/<h2.*?<\/h2>.*$/s', $article_text, $matches)) {
+                                $article_content = $matches[0];
+                                
+                                // H2タグの番号を正しい記事番号に修正
+                                // 既に番号付きの場合
+                                $article_content = preg_replace(
+                                    '/<h2([^>]*)>1\.\s*([^<]+)<\/h2>/',
+                                    '<h2$1>' . $i . '. $2</h2>',
+                                    $article_content
+                                );
+                                
+                                // 番号なしの場合も対応
+                                $article_content = preg_replace(
+                                    '/<h2([^>]*)>(?!\d+\.)([^<]+)<\/h2>/',
+                                    '<h2$1>' . $i . '. $2</h2>',
+                                    $article_content
+                                );
+                                
+                                $combined_content .= "\n\n" . $article_content;
+                            } else {
+                                $combined_content .= "\n\n" . $article_text;
+                            }
+                        }
+                        
+                        // Grounding sourcesを統合
+                        if (isset($article_response['grounding_sources'])) {
+                            $combined_sources = array_merge($combined_sources, $article_response['grounding_sources']);
+                        }
+                    }
+                }
+                
+                // 統合されたレスポンスを作成
+                $ai_response = array(
+                    'text' => $combined_content,
+                    'grounding_sources' => $combined_sources
+                );
+                
+                $this->log('info', "{$article_count}記事の順次生成完了。合計文字数: " . mb_strlen($combined_content));
             } else {
                 // 他のGeminiモデルはRSSベース
                 if (!empty($news_data)) {
@@ -3262,13 +3323,13 @@ class AINewsAutoPoster {
                 $this->log('info', $model . '第1段階用にmaxOutputTokensを' . $max_tokens . 'に設定（入力トークン概算: ' . $input_tokens . '）');
             } else {
                 // 第2段階: 記事生成用（3記事完全生成のため大幅増加）
-                $article_tokens = intval($expected_chars / 0.5); // 1トークン≈0.5文字として計算
-                $max_tokens = min($article_tokens * 3, 20000); // 3記事分の余裕を持った設定
+                $article_tokens = intval($expected_chars / 0.3); // より多くのトークンを確保
+                $max_tokens = min($article_tokens * 5, 50000); // 大幅にトークン数を増加
                 $this->log('info', $model . '第2段階用にmaxOutputTokensを' . $max_tokens . 'に設定（入力トークン概算: ' . $input_tokens . '）');
             }
             
             // 最低限の出力を保証
-            $max_tokens = max($max_tokens, strpos($prompt, '最新ニュース') !== false ? 800 : 2000);
+            $max_tokens = max($max_tokens, strpos($prompt, '最新ニュース') !== false ? 800 : 15000);
         } else {
             // 文字数をトークン数に変換（1トークン ≈ 0.7文字として計算）
             $expected_tokens = intval($expected_chars / 0.5); // より余裕を持った計算
@@ -3304,7 +3365,7 @@ class AINewsAutoPoster {
             )
         );
         
-        // Google Search Grounding - Gemini 2.0/2.5対応（エラー時はRSSフォールバック）
+        // Google Search Groundingを再有効化
         if ($model === 'gemini-2.5-flash' || $model === 'gemini-2.0-flash-exp') {
             $body['tools'] = array(
                 array(
@@ -3313,7 +3374,7 @@ class AINewsAutoPoster {
             );
             $this->log('info', $model . 'でGoogle Search Grounding有効化（エラー時はRSSフォールバック）');
         } else {
-            $this->log('info', 'Google Search Grounding非対応モデル、RSSベースニュース検索を使用');
+            $this->log('info', 'Google Search Grounding対象外モデル');
         }
         
         $this->log('info', 'Google Search Grounding設定: ' . json_encode($body['tools'] ?? null));
@@ -4297,9 +4358,9 @@ class AINewsAutoPoster {
         $prompt = "{検索キーワード}に関する{ニュース収集言語}のニュースを正確に{記事数}本選んで紹介してください。\n\n";
         $prompt .= "【重要】記事本文中にはURLアドレスやURLラベルを一切含めないでください。タイトルのみ記載してください。\n\n";
         $prompt .= "以下のHTMLタグ形式で{記事数}つの記事すべてを完全に書いてください：\n\n";
-        $prompt .= "1本目の記事：\n<h2>タイトル（URLアドレスは記載しない）</h2>\n<h3>概要と要約</h3>\n本文\n<h3>背景・文脈</h3>\n本文\n<h3>今後の影響</h3>\n本文（{影響分析文字数}文字程度の考察）\n\n";
-        $prompt .= "2本目の記事：\n<h2>タイトル（URLアドレスは記載しない）</h2>\n<h3>概要と要約</h3>\n本文\n<h3>背景・文脈</h3>\n本文\n<h3>今後の影響</h3>\n本文（{影響分析文字数}文字程度の考察）\n\n";
-        $prompt .= "3本目の記事：\n<h2>タイトル（URLアドレスは記載しない）</h2>\n<h3>概要と要約</h3>\n本文\n<h3>背景・文脈</h3>\n本文\n<h3>今後の影響</h3>\n本文（{影響分析文字数}文字程度の考察）\n\n";
+        $prompt .= "1本目の記事：\n<h2>1. 記事全体の内容から20-30文字程度で要約したタイトル（URLアドレスは記載しない）</h2>\n<h3>概要と要約</h3>\n本文\n<h3>背景・文脈</h3>\n本文\n<h3>今後の影響</h3>\n本文（{影響分析文字数}文字程度の考察）\n\n";
+        $prompt .= "2本目の記事：\n<h2>2. 記事全体の内容から20-30文字程度で要約したタイトル（URLアドレスは記載しない）</h2>\n<h3>概要と要約</h3>\n本文\n<h3>背景・文脈</h3>\n本文\n<h3>今後の影響</h3>\n本文（{影響分析文字数}文字程度の考察）\n\n";
+        $prompt .= "3本目の記事：\n<h2>3. 記事全体の内容から20-30文字程度で要約したタイトル（URLアドレスは記載しない）</h2>\n<h3>概要と要約</h3>\n本文\n<h3>背景・文脈</h3>\n本文\n<h3>今後の影響</h3>\n本文（{影響分析文字数}文字程度の考察）\n\n";
         $prompt .= "必ず{記事数}つの記事すべてを最後まで完全に書いてください。URLアドレスは一切記載しないでください。\n\n";
         
         $prompt .= "【プロンプト結果に任せる方式について】\n";
@@ -4326,7 +4387,7 @@ class AINewsAutoPoster {
     /**
      * Gemini用シンプル1段階プロンプト構築（Google Search Grounding使用）
      */
-    private function build_gemini_simple_prompt($settings) {
+    private function build_gemini_simple_prompt($settings, $article_number = 1) {
         $search_keywords = $settings['search_keywords'] ?? 'アウトドアギア, キャンプ用品, 登山用品, ハイキング用品, テント, 寝袋, バックパック';
         $news_languages = $settings['news_languages'] ?? array('japanese', 'english');
         $output_language = $settings['output_language'] ?? 'japanese';
@@ -4376,27 +4437,34 @@ class AINewsAutoPoster {
         
         // 日付付きタイトル生成を含む明確な3記事指定プロンプト
         $today = date('Y年m月d日');
-        // v2.0.0の正しいプロンプト（プロンプト結果に任せる方式、URL除外）
-        $prompt = "{$search_keywords}に関する{$news_collection_language}のニュースを正確に{$article_count}本選んで紹介してください。\n\n";
-        $prompt .= "【重要】記事本文中にはURLアドレスやURLラベルを一切含めないでください。タイトルのみ記載してください。\n\n";
+        // 複数記事対応：1記事ずつ順次生成
+        $prompt = "{$search_keywords}に関する{$news_collection_language}のニュースを1本選んで紹介してください。\n\n";
+        $prompt .= "【重要】記事本文中にはURLアドレスやURLラベルを一切含めないでください。\n\n";
         $prompt .= "【出力構成】\n";
-        $prompt .= "1. まず最初に、{$search_keywords}について簡潔なリード文（2-3文）を書いてください\n";
-        $prompt .= "2. その後、以下のHTMLタグ形式で{$article_count}つの記事すべてを完全に書いてください\n\n";
-        $prompt .= "リード文の例：「{$search_keywords}の活用は、ビジネスや日常生活のさまざまな場面で注目を集めています。以下に、{$search_keywords}に関する最新のニュース記事を{$article_count}本ご紹介します。」\n\n";
         
-        // 動的に記事数分の指示を生成
-        for ($i = 1; $i <= $article_count; $i++) {
-            $prompt .= "{$i}本目の記事：\n";
-            $prompt .= "<h2>タイトル（URLアドレスは記載しない）</h2>\n";
-            $prompt .= "<h3>概要と要約</h3>\n";
-            $prompt .= "本文\n";
-            $prompt .= "<h3>背景・文脈</h3>\n";
-            $prompt .= "本文\n";
-            $prompt .= "<h3>今後の影響</h3>\n";
-            $prompt .= "本文（{$impact_length}文字程度の考察）\n\n";
+        // 最初の記事の場合のみリード文を含める
+        if (!isset($article_number) || $article_number === 1) {
+            $prompt .= "1. まず最初に、{$search_keywords}について簡潔なリード文（2-3文）を書いてください\n";
+            $prompt .= "2. その後、以下のHTMLタグ形式で1つの記事を完全に書いてください\n\n";
+            $prompt .= "リード文の例：「{$search_keywords}の活用は、ビジネスや日常生活のさまざまな場面で注目を集めています。以下に、{$search_keywords}に関する最新のニュース記事を{$article_count}本ご紹介します。」\n\n";
+        } else {
+            $prompt .= "以下のHTMLタグ形式で1つの記事を完全に書いてください（リード文は不要）\n\n";
         }
         
-        $prompt .= "必ず{$article_count}つの記事すべてを最後まで完全に書いてください。URLアドレスは一切記載しないでください。";
+        // 記事番号を動的に設定
+        $current_article_num = isset($article_number) ? $article_number : 1;
+        
+        // 1記事のみのシンプルなプロンプト構成
+        $prompt .= "記事：\n";
+        $prompt .= "<h2>{$current_article_num}. 【実際のニュースタイトル20-30文字】</h2>\n";
+        $prompt .= "<h3>概要と要約</h3>\n";
+        $prompt .= "<p>【実際のニュース内容を300文字以上で詳しく】</p>\n";
+        $prompt .= "<h3>背景・文脈</h3>\n";
+        $prompt .= "<p>【このニュースの背景を300文字以上で】</p>\n";
+        $prompt .= "<h3>今後の影響</h3>\n";
+        $prompt .= "<p>【今後への影響を300文字以上で】</p>\n\n";
+        
+        $prompt .= "重要：上記のH2タグ記事を1本完全に書いてください。途中で止めないでください。";
         
         // プレースホルダーを実際の値に置換
         $prompt = str_replace('{文字数}', $per_paragraph_chars, $prompt);
