@@ -1,41 +1,42 @@
 # AI News AutoPoster
 
-🤖 **Claude Sonnet 4とGemini 2.5を使用して任意キーワードニュースを自動生成・投稿するWordPressプラグイン**
+🤖 **Claude Sonnet 4とGemini 2.5を使用してAIニュースを自動生成・投稿するWordPressプラグイン**
 
 [![WordPress](https://img.shields.io/badge/WordPress-5.0+-blue.svg)](https://wordpress.org)
 [![PHP](https://img.shields.io/badge/PHP-7.4+-purple.svg)](https://php.net)
 [![License](https://img.shields.io/badge/License-GPL%20v2-green.svg)](LICENSE)
 [![Claude AI](https://img.shields.io/badge/AI-Claude%20Sonnet%204-orange.svg)](https://anthropic.com)
-[![Version](https://img.shields.io/badge/Version-2.0.3-green.svg)](https://github.com/kitasinkita/ai-news-autoposter/releases)
+[![Version](https://img.shields.io/badge/Version-2.5.8-green.svg)](https://github.com/kitasinkita/ai-news-autoposter/releases)
 
 ## 📖 概要
 
-AI News AutoPosterは、**Claude Sonnet 4**と**Gemini 2.5 Flash**を活用して**任意のキーワード**に関するニュースを自動生成・投稿するWordPressプラグインです。**v2.0**では「プロンプト結果に任せる方式」を採用し、文字数制限や複雑な後処理を排除してAIの自然な判断を最大限活用。Google Search Grounding機能により最新情報を取り込み、高品質で自然な記事を生成します。
+AI News AutoPosterは、**Claude Sonnet 4**と**Gemini 2.5 Flash**を活用して**AIニュース**に関する記事を自動生成・投稿するWordPressプラグインです。**v2.5**では「順次生成方式」を採用し、1記事ずつ確実に生成して高品質な記事を保証。Google Search Grounding機能により最新情報を取り込み、完全な3記事構成で情報提供源付きの記事を生成します。
 
-## 🆕 v2.0の新機能
+## 🆕 v2.5の最新機能
 
-### 🎯 プロンプト結果に任せる方式
-- **文字数制限なし** - AIが適切な長さを自動判断
-- **構造強制変更なし** - 生成された内容をそのまま使用
-- **複雑な後処理排除** - URL修正などの人為的な加工を無効化
-- **3記事完全構造** - 明確な指定で3本の記事を確実に生成
-- **自然なレイアウト** - HTMLタグの適切な開閉で美しい表示
+### 🎯 順次生成方式（Sequential Generation）
+- **1記事ずつ確実生成** - 記事を順次生成して品質を保証
+- **自動番号付けタイトル** - 1. 2. 3. の正しい番号を自動生成
+- **完全な記事構造** - 3記事×3セクション（概要・背景・影響）を完備
+- **Google Grounding Sources** - 記事末尾に参考情報源を自動追加
+- **適切な文字数制御** - 5000-8000文字の理想的な記事生成
 
 ### 📈 大幅な品質向上
-- **maxOutputTokens増加** - 3記事分の十分な生成容量（最大20,000トークン）
-- **記事完全性100%** - 途中で切れない完全な記事生成
-- **自然な終了** - 句点で正しく終わる文章構造
+- **文字数最適化** - デフォルト5000文字、最大10000文字まで対応
+- **500文字/セクション** - 各セクションの十分な文字数を保証
+- **完全性100%** - 途中で切れない完全な記事生成
+- **情報提供源完備** - クリック可能な外部リンク付き
 
 ## ✨ 主な機能
 
 ### 🤖 AI記事自動生成
 - **AIモデル選択** - Claude (Haiku/Sonnet 3.5/Sonnet 4) / Gemini (1.5 Flash/2.0 Flash/2.5 Flash)
-- **任意キーワード対応** - アウトドア、テクノロジー、ビジネス、スポーツなど自由設定
+- **AIニュース特化** - AI・人工知能関連の最新ニュースに特化
 - **Google Search Grounding** - 最新ニュース情報の自動取り込み
 - **多言語対応** (日本語・英語・中国語)
 - **ハイブリッド検索システム** - Google Search Grounding + RSSフォールバック
-- **カスタムプロンプト** 対応
-- **クリック可能な参考リンク** - 自動HTML変換、target="_blank"対応、3〜5個のソース表示
+- **カスタムプロンプト** 対応（順次生成方式に対応）
+- **豊富な参考リンク** - 自動HTML変換、target="_blank"対応、10+個のソース表示
 
 ### ⏰ 完全自動スケジューリング
 - **1時間間隔** 自動投稿システム
@@ -44,10 +45,11 @@ AI News AutoPosterは、**Claude Sonnet 4**と**Gemini 2.5 Flash**を活用し�
 - **手動実行・テスト** 機能完備
 
 ### 🚀 SEO・コンテンツ最適化
-- **カスタマイズ可能な文字数** (デフォルト500文字)
+- **最適化された文字数** (デフォルト5000文字、最大10000文字)
 - **カテゴリ・タグ** 自動設定
 - **Yoast SEO / RankMath** 対応
 - **プレースホルダー画像** 自動生成
+- **構造化記事** - H2/H3タグによる明確な階層構造
 - **免責事項** 自動追加機能
 
 ### 📊 包括的な管理機能
@@ -100,8 +102,8 @@ WordPress管理画面の「プラグイン」でAI News AutoPosterを有効化
 ✅ ニュース収集言語: 日本語・英語
 ✅ 出力言語: 日本語
 ✅ 文体: 夏目漱石風
-✅ 記事文字数: 500文字
-✅ キーワード: あなたの専門分野（例：アウトドア、キャンプ、テント、ギア）
+✅ 記事文字数: 5000文字
+✅ キーワード: AIニュース（AI・人工知能関連の最新ニュース）
 ```
 
 ### 5. 動作確認
@@ -390,7 +392,7 @@ ai-news-autoposter/
 - **Unsplash画像機能強化**:
   - 記事内容から動的キーワード抽出（12カテゴリー対応）
   - 画像選択にランダム性を追加（毎回異なる画像）
-  - アウトドア、AI、ビジネスなど内容に応じた適切な画像選定
+  - AI、テクノロジー、ビジネスなど内容に応じた適切な画像選定
 - **バグ修正**:
   - Claude APIフォールバック時のモデル指定エラー修正
   - Gemini APIトークン制限エラーの動的調整
@@ -417,7 +419,7 @@ ai-news-autoposter/
 - ✅ **任意キーワード完全対応** - ハードコーディングされたAIキーワード削除
 - ✅ **RSSベース実ニュース検索** - Google News、朝日新聞、NHK、Yahoo!ニュース統合
 - ✅ **キーワード非依存フィルタリング** - AI偏重から汎用的な関連性判定へ
-- ✅ **アウトドア・ライフスタイル対応** - テクノロジー以外のジャンル完全サポート
+- ✅ **AI・テクノロジー特化** - AI・人工知能関連ニュースに特化した高品質記事生成
 - ✅ **エラー処理改善** - 正規表現・配列アクセス問題修正
 
 ### v1.2.25

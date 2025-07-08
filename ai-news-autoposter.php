@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。v2.0：プロンプト結果に任せる方式で高品質記事生成。Claude/Gemini API対応、文字数制限なし、自然なレイアウト。最新版は GitHub からダウンロードしてください。
- * Version: 2.5.7
+ * Version: 2.5.8
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.7');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.8');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -79,11 +79,11 @@ class AINewsAutoPoster {
                 'meta_description_template' => '最新の業界ニュースをお届けします。{title}について詳しく解説いたします。',
                 'post_status' => 'draft',
                 'enable_tags' => true,
-                'search_keywords' => 'アウトドアギア, キャンプ用品, 登山用品, ハイキング用品, テント, 寝袋, バックパック',
+                'search_keywords' => 'AIニュース',
                 'writing_style' => '夏目漱石',
                 'news_languages' => array('japanese', 'english'), // english, japanese, chinese
                 'output_language' => 'japanese', // japanese, english, chinese
-                'article_word_count' => 7000,
+                'article_word_count' => 5000,
                 'article_count' => 3,
                 'impact_analysis_length' => 500,
                 'enable_disclaimer' => true,
@@ -497,7 +497,7 @@ class AINewsAutoPoster {
                     <tr>
                         <th scope="row">記事文字数</th>
                         <td>
-                            <input type="number" name="article_word_count" value="<?php echo esc_attr($settings['article_word_count'] ?? 7000); ?>" min="100" max="10000" step="100" class="small-text" />
+                            <input type="number" name="article_word_count" value="<?php echo esc_attr($settings['article_word_count'] ?? 5000); ?>" min="100" max="10000" step="100" class="small-text" />
                             <span>文字程度</span>
                             <p class="ai-news-form-description">生成する記事の目安文字数を設定してください（100〜10000文字）。推奨: 7000-8000文字</p>
                         </td>
@@ -4354,31 +4354,38 @@ class AINewsAutoPoster {
     private function build_gemini_simple_prompt_template() {
         $this->log('info', 'プロンプト結果に任せる方式のテンプレート生成開始');
         
-        // プロンプト結果に任せる方式（v2.0）- 明確な記事構造指定（URL除外）
-        $prompt = "{検索キーワード}に関する{ニュース収集言語}のニュースを正確に{記事数}本選んで紹介してください。\n\n";
-        $prompt .= "【重要】記事本文中にはURLアドレスやURLラベルを一切含めないでください。タイトルのみ記載してください。\n\n";
-        $prompt .= "以下のHTMLタグ形式で{記事数}つの記事すべてを完全に書いてください：\n\n";
-        $prompt .= "1本目の記事：\n<h2>1. 記事全体の内容から20-30文字程度で要約したタイトル（URLアドレスは記載しない）</h2>\n<h3>概要と要約</h3>\n本文\n<h3>背景・文脈</h3>\n本文\n<h3>今後の影響</h3>\n本文（{影響分析文字数}文字程度の考察）\n\n";
-        $prompt .= "2本目の記事：\n<h2>2. 記事全体の内容から20-30文字程度で要約したタイトル（URLアドレスは記載しない）</h2>\n<h3>概要と要約</h3>\n本文\n<h3>背景・文脈</h3>\n本文\n<h3>今後の影響</h3>\n本文（{影響分析文字数}文字程度の考察）\n\n";
-        $prompt .= "3本目の記事：\n<h2>3. 記事全体の内容から20-30文字程度で要約したタイトル（URLアドレスは記載しない）</h2>\n<h3>概要と要約</h3>\n本文\n<h3>背景・文脈</h3>\n本文\n<h3>今後の影響</h3>\n本文（{影響分析文字数}文字程度の考察）\n\n";
-        $prompt .= "必ず{記事数}つの記事すべてを最後まで完全に書いてください。URLアドレスは一切記載しないでください。\n\n";
+        // 順次生成方式（v2.5）- 1記事ずつ確実に生成（Google Search Grounding対応）
+        $prompt = "{検索キーワード}に関する{ニュース収集言語}のニュースを1本選んで紹介してください。\n\n";
+        $prompt .= "【重要】記事本文中にはURLアドレスやURLラベルを一切含めないでください。\n\n";
+        $prompt .= "【出力構成】\n";
+        $prompt .= "1. まず最初に、{検索キーワード}について簡潔なリード文（2-3文）を書いてください（1記事目のみ）\n";
+        $prompt .= "2. その後、以下のHTMLタグ形式で1つの記事を完全に書いてください\n\n";
+        $prompt .= "記事構成：\n";
+        $prompt .= "<h2>{記事番号}. 【実際のニュースタイトル20-30文字】</h2>\n";
+        $prompt .= "<h3>概要と要約</h3>\n";
+        $prompt .= "<p>【実際のニュース内容を500文字以上で詳しく】</p>\n";
+        $prompt .= "<h3>背景・文脈</h3>\n";
+        $prompt .= "<p>【このニュースの背景を500文字以上で】</p>\n";
+        $prompt .= "<h3>今後の影響</h3>\n";
+        $prompt .= "<p>【今後への影響を500文字以上で】</p>\n\n";
+        $prompt .= "重要：上記のH2タグ記事を1本完全に書いてください。途中で止めないでください。\n\n";
         
-        $prompt .= "【プロンプト結果に任せる方式について】\n";
-        $prompt .= "このプロンプトは、Geminiの自然な判断に任せて高品質な記事を生成する方式です。\n";
-        $prompt .= "- 文字数制限なし（Geminiが適切な長さを判断）\n";
-        $prompt .= "- 構造の強制変更なし（生成された内容をそのまま使用）\n";
-        $prompt .= "- URL修正などの複雑な後処理なし\n\n";
+        $prompt .= "【順次生成方式について】\n";
+        $prompt .= "このプロンプトは、記事を1つずつ順次生成して最終的に複数記事を組み合わせる方式です。\n";
+        $prompt .= "- Google Search Grounding機能により最新のニュース情報を取得\n";
+        $prompt .= "- 1記事ずつ確実に生成することで品質と文字数を保証\n";
+        $prompt .= "- 自動的に番号付きタイトル（1. 2. 3.）を生成\n";
+        $prompt .= "- 記事末尾に参考情報源（Google Grounding Sources）を自動追加\n\n";
         
         $prompt .= "【利用可能なプレースホルダー】\n";
-        $prompt .= "{検索キーワード} - 記事のテーマとなるキーワード\n";
+        $prompt .= "{検索キーワード} - 記事のテーマとなるキーワード（例：AIニュース）\n";
         $prompt .= "{ニュース収集言語} - 検索対象の言語（日本語と英語など）\n";
-        $prompt .= "{出力言語} - 記事の出力言語\n";
-        $prompt .= "{文体} - 記事の文体スタイル\n";
-        $prompt .= "{記事数} - 生成する記事の数\n";
+        $prompt .= "{記事番号} - 記事の番号（1, 2, 3）\n";
+        $prompt .= "{記事数} - 最終的に生成する記事の総数（通常3記事）\n";
         $prompt .= "{影響分析文字数} - 今後の影響セクションの文字数\n\n";
         
-        $prompt .= "※このプロンプトはv2.0方式（プロンプト結果に任せる）を採用しており、\n";
-        $prompt .= "　従来の複雑な後処理を排除してGeminiの自然な判断を最大限活用します。";
+        $prompt .= "※このプロンプトはv2.5方式（順次生成）を採用しており、\n";
+        $prompt .= "　Google Search Groundingと組み合わせて確実に高品質な記事を生成します。";
         
         $this->log('info', 'プロンプト結果に任せる方式テンプレート生成完了: ' . mb_strlen($prompt) . '文字');
         return $prompt;
