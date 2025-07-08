@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。v2.0：プロンプト結果に任せる方式で高品質記事生成。Claude/Gemini API対応、文字数制限なし、自然なレイアウト。最新版は GitHub からダウンロードしてください。
- * Version: 2.1.0
+ * Version: 2.2.0
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.1.0');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.2.0');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1625,10 +1625,7 @@ class AINewsAutoPoster {
         
         $this->log('info', '投稿作成成功。投稿ID: ' . $post_id);
         
-        // 後処理は最小限に（免責事項のみ、構造変更なし）
-        if ($settings['enable_disclaimer'] ?? true) {
-            $this->add_minimal_disclaimer($post_id, $settings);
-        }
+        // 後処理は最小限に（免責事項はGrounding Sourcesと一緒に追加されるため、ここでは無効化）
         $this->log('info', '📝 プロンプト結果に任せる方式: 最小限の後処理のみ実行');
         
         // メタデータを個別に追加（投稿作成後に安全に処理）
@@ -1658,10 +1655,14 @@ class AINewsAutoPoster {
             wp_set_post_tags($post_id, $article_data['tags']);
         }
         
-        // Grounding Sourcesの追加（Gemini APIで取得した場合のみ）
+        // Grounding Sourcesの追加と免責事項（常に免責事項は追加）
         if (isset($grounding_sources) && !empty($grounding_sources)) {
             $this->log('info', 'Grounding Sources セクションを記事末尾に追加します: ' . count($grounding_sources) . '件');
             $this->add_grounding_sources_list($post_id, $grounding_sources, $settings);
+        } else {
+            // Grounding Sourcesがない場合でも免責事項のみ追加
+            $this->log('info', 'Grounding Sourcesなし。免責事項のみ追加します');
+            $this->add_minimal_disclaimer($post_id, $settings);
         }
         
         // アイキャッチ画像を生成（画像生成方式が「なし」以外の場合）
@@ -1825,27 +1826,31 @@ class AINewsAutoPoster {
         $prompt = "現在は{$current_date}（{$current_year}年）です。\n\n";
         $prompt .= "【重要】: 2024年以前の古い情報ではなく、{$current_year}年の最新情報のみを使用してください。\n\n";
         $prompt .= "【{$language_text}】のニュースから、【{$search_keywords}】に関する{$current_year}年の最新ニュース（特に直近数ヶ月の新しい情報）を送ってください。5本ぐらいが理想です。\n";
-        $prompt .= "ニュースの背景や文脈を簡単にまとめ、かつ、上記の最新ニュースのリンク先を参考情報元として記事のタイトルとリンクを記載し、なぜ今、これが起こっているのか、という背景情報を踏まえて、今後どのような影響をあたえるのか、推察もしてください。\n";
+        $prompt .= "ニュースの背景や文脈を簡単にまとめ、なぜ今、これが起こっているのか、という背景情報を踏まえて、今後どのような影響をあたえるのか、推察もしてください。\n";
+        $prompt .= "\n【重要な注意事項】\n";
+        $prompt .= "- 記事本文中にはURLアドレスを一切含めないでください\n";
+        $prompt .= "- 「URL:」「URL」などのURLラベルも記載しないでください\n";
+        $prompt .= "- ニュースタイトルのみを記載し、そのURLアドレスは省略してください\n";
+        $prompt .= "- 参考情報は記事の末尾にGoogle Search Groundingが自動で追加するので不要です\n";
         $prompt .= "全部で【{$word_count}文字以内】に必ずまとめてください。この文字数制限は厳守してください。充実した内容で。\n";
         if ($writing_style !== '標準') {
             $prompt .= "文体は{$writing_style}風でお願いします。\n";
         }
         $prompt .= "\n";
         
-        $prompt .= "構成は以下のようなイメージです。見出しは【３】個ぐらいにしてください\n";
+        $prompt .= "構成は以下のようなイメージです。適切なHTMLタグを使用してください\n";
         $prompt .= "---------------------------------\n";
         $prompt .= "記事タイトル\n";
         $prompt .= "リード文\n";
-        $prompt .= "見出しH2\n";
+        $prompt .= "各ニュース記事ごとに：\n";
+        $prompt .= "<h2>ニュースタイトル</h2>\n";
+        $prompt .= "<h3>概要と要約</h3>\n";
+        $prompt .= "本文（URLアドレスは一切含めない）\n";
+        $prompt .= "<h3>背景・文脈</h3>\n";
         $prompt .= "本文\n";
-        $prompt .= "見出しH2\n";
+        $prompt .= "<h3>今後の影響</h3>\n";
         $prompt .= "本文\n";
-        $prompt .= "・・・\n";
-        $prompt .= "---------------------------------\n";
-        $prompt .= "適時、参照元リンクを本文中にいれてください。\n\n";
-        
-        // 参考情報源セクションの指示を削除（修正により削除）
-        $prompt .= "- 例: [Google AI、{$current_year}年最新技術開発]({$current_year}年のURL)\n\n";
+        $prompt .= "---------------------------------\n\n";
         
         return $prompt;
     }
@@ -2146,11 +2151,62 @@ class AINewsAutoPoster {
             $content = trim($response);
         }
         
+        // 記事本文中の非クリッカブルURLを削除（末尾に完璧な参考情報源があるため）
+        $content = $this->remove_plain_urls_from_content($content);
+        
         return array(
             'title' => $title,
-            'content' => $content, // Geminiの判断に任せて生回答を使用（タイトルのみ除去）
+            'content' => $content, // Geminiの判断に任せて生回答を使用（タイトルとURLを除去）
             'tags' => array('アウトドア', 'ニュース', 'AI生成')
         );
+    }
+    
+    /**
+     * 記事本文中の非クリッカブルURLを削除
+     */
+    private function remove_plain_urls_from_content($content) {
+        $this->log('info', 'URL削除処理を開始します');
+        
+        // まず、<a>タグ内のURLを一時的に保護
+        $protected_urls = array();
+        $protection_counter = 0;
+        
+        $content = preg_replace_callback('/<a[^>]+href=["\']([^"\']+)["\'][^>]*>.*?<\/a>/i', function($matches) use (&$protected_urls, &$protection_counter) {
+            $placeholder = "{{PROTECTED_URL_" . $protection_counter . "}}";
+            $protected_urls[$placeholder] = $matches[0];
+            $protection_counter++;
+            return $placeholder;
+        }, $content);
+        
+        // 1. "URL:" のバリエーションを削除
+        // - "URL: https://..." の形式
+        $content = preg_replace('/^\s*URL:\s*https?:\/\/[^\s]+\s*$/m', '', $content);
+        
+        // - すべてのURL関連パターンを包括的に削除
+        // <li>タグ内のURL関連パターン（あらゆるバリエーション対応）
+        $content = preg_replace('/<li[^>]*>.*?URL.*?<\/li>/i', '', $content);
+        
+        // 単体のURL関連要素
+        $content = preg_replace('/^\s*-\s*URL.*$/m', '', $content);
+        $content = preg_replace('/^\s*\*\s*URL.*$/m', '', $content);
+        $content = preg_replace('/^\s*URL.*$/m', '', $content);
+        $content = preg_replace('/<strong[^>]*>.*?URL.*?<\/strong>/i', '', $content);
+        
+        // 2. プレーンテキストのHTTP/HTTPSフルURLを削除
+        $content = preg_replace('/https?:\/\/[^\s<>"\')，]+/i', '', $content);
+        
+        // 3. 保護されたURLを復元
+        foreach ($protected_urls as $placeholder => $original) {
+            $content = str_replace($placeholder, $original, $content);
+        }
+        
+        // 4. 空のリストアイテムや空行を整理
+        $content = preg_replace('/<li>\s*<\/li>/i', '', $content);
+        $content = preg_replace('/\n\s*\n\s*\n/', "\n\n", $content);
+        $content = trim($content);
+        
+        $this->log('info', 'URL削除処理が完了しました');
+        return $content;
     }
     
     /**
@@ -4229,13 +4285,14 @@ class AINewsAutoPoster {
     private function build_gemini_simple_prompt_template() {
         $this->log('info', 'プロンプト結果に任せる方式のテンプレート生成開始');
         
-        // プロンプト結果に任せる方式（v2.0）- 明確な3記事構造指定
-        $prompt = "{検索キーワード}に関する{ニュース収集言語}のニュースを正確に3本選んで紹介してください。各記事にはURLを含めてください。\n\n";
-        $prompt .= "以下の形式で3つの記事すべてを完全に書いてください：\n\n";
-        $prompt .= "1本目の記事：\n- タイトル\n- URL\n- 概要と要約\n- 背景・文脈\n- 今後の影響（500文字程度の考察）\n\n";
-        $prompt .= "2本目の記事：\n- タイトル\n- URL\n- 概要と要約\n- 背景・文脈\n- 今後の影響（500文字程度の考察）\n\n";
-        $prompt .= "3本目の記事：\n- タイトル\n- URL\n- 概要と要約\n- 背景・文脈\n- 今後の影響（500文字程度の考察）\n\n";
-        $prompt .= "必ず3つの記事すべてを最後まで完全に書いてください。\n\n";
+        // プロンプト結果に任せる方式（v2.0）- 明確な3記事構造指定（URL除外）
+        $prompt = "{検索キーワード}に関する{ニュース収集言語}のニュースを正確に3本選んで紹介してください。\n\n";
+        $prompt .= "【重要】記事本文中にはURLアドレスやURLラベルを一切含めないでください。タイトルのみ記載してください。\n\n";
+        $prompt .= "以下のHTMLタグ形式で3つの記事すべてを完全に書いてください：\n\n";
+        $prompt .= "1本目の記事：\n<h2>タイトル（URLアドレスは記載しない）</h2>\n<h3>概要と要約</h3>\n本文\n<h3>背景・文脈</h3>\n本文\n<h3>今後の影響</h3>\n本文（500文字程度の考察）\n\n";
+        $prompt .= "2本目の記事：\n<h2>タイトル（URLアドレスは記載しない）</h2>\n<h3>概要と要約</h3>\n本文\n<h3>背景・文脈</h3>\n本文\n<h3>今後の影響</h3>\n本文（500文字程度の考察）\n\n";
+        $prompt .= "3本目の記事：\n<h2>タイトル（URLアドレスは記載しない）</h2>\n<h3>概要と要約</h3>\n本文\n<h3>背景・文脈</h3>\n本文\n<h3>今後の影響</h3>\n本文（500文字程度の考察）\n\n";
+        $prompt .= "必ず3つの記事すべてを最後まで完全に書いてください。URLアドレスは一切記載しないでください。\n\n";
         
         $prompt .= "【プロンプト結果に任せる方式について】\n";
         $prompt .= "このプロンプトは、Geminiの自然な判断に任せて高品質な記事を生成する方式です。\n";
@@ -4307,28 +4364,35 @@ class AINewsAutoPoster {
         
         // 日付付きタイトル生成を含む明確な3記事指定プロンプト
         $today = date('Y年m月d日');
-        // v2.0.0の正しいプロンプト（プロンプト結果に任せる方式）
-        $prompt = "{$search_keywords}に関する{$news_collection_language}のニュースを正確に3本選んで紹介してください。各記事にはURLを含めてください。\n\n";
-        $prompt .= "以下の形式で3つの記事すべてを完全に書いてください：\n\n";
+        // v2.0.0の正しいプロンプト（プロンプト結果に任せる方式、URL除外）
+        $prompt = "{$search_keywords}に関する{$news_collection_language}のニュースを正確に3本選んで紹介してください。\n\n";
+        $prompt .= "【重要】記事本文中にはURLアドレスやURLラベルを一切含めないでください。タイトルのみ記載してください。\n\n";
+        $prompt .= "以下のHTMLタグ形式で3つの記事すべてを完全に書いてください：\n\n";
         $prompt .= "1本目の記事：\n";
-        $prompt .= "- タイトル\n";
-        $prompt .= "- URL\n";
-        $prompt .= "- 概要と要約\n";
-        $prompt .= "- 背景・文脈\n";
-        $prompt .= "- 今後の影響（500文字程度の考察）\n\n";
+        $prompt .= "<h2>タイトル（URLアドレスは記載しない）</h2>\n";
+        $prompt .= "<h3>概要と要約</h3>\n";
+        $prompt .= "本文\n";
+        $prompt .= "<h3>背景・文脈</h3>\n";
+        $prompt .= "本文\n";
+        $prompt .= "<h3>今後の影響</h3>\n";
+        $prompt .= "本文（500文字程度の考察）\n\n";
         $prompt .= "2本目の記事：\n";
-        $prompt .= "- タイトル\n";
-        $prompt .= "- URL\n";
-        $prompt .= "- 概要と要約\n";
-        $prompt .= "- 背景・文脈\n";
-        $prompt .= "- 今後の影響（500文字程度の考察）\n\n";
+        $prompt .= "<h2>タイトル（URLアドレスは記載しない）</h2>\n";
+        $prompt .= "<h3>概要と要約</h3>\n";
+        $prompt .= "本文\n";
+        $prompt .= "<h3>背景・文脈</h3>\n";
+        $prompt .= "本文\n";
+        $prompt .= "<h3>今後の影響</h3>\n";
+        $prompt .= "本文（500文字程度の考察）\n\n";
         $prompt .= "3本目の記事：\n";
-        $prompt .= "- タイトル\n";
-        $prompt .= "- URL\n";
-        $prompt .= "- 概要と要約\n";
-        $prompt .= "- 背景・文脈\n";
-        $prompt .= "- 今後の影響（500文字程度の考察）\n\n";
-        $prompt .= "必ず3つの記事すべてを最後まで完全に書いてください。";
+        $prompt .= "<h2>タイトル（URLアドレスは記載しない）</h2>\n";
+        $prompt .= "<h3>概要と要約</h3>\n";
+        $prompt .= "本文\n";
+        $prompt .= "<h3>背景・文脈</h3>\n";
+        $prompt .= "本文\n";
+        $prompt .= "<h3>今後の影響</h3>\n";
+        $prompt .= "本文（500文字程度の考察）\n\n";
+        $prompt .= "必ず3つの記事すべてを最後まで完全に書いてください。URLアドレスは一切記載しないでください。";
         
         // プレースホルダーを実際の値に置換
         $prompt = str_replace('{文字数}', $per_paragraph_chars, $prompt);
