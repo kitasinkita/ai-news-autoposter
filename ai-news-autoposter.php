@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。v2.0：プロンプト結果に任せる方式で高品質記事生成。Claude/Gemini API対応、文字数制限なし、自然なレイアウト。最新版は GitHub からダウンロードしてください。
- * Version: 2.5.11
+ * Version: 2.5.12
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.11');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.12');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1131,7 +1131,11 @@ class AINewsAutoPoster {
         
         // まず最新ニュースを検索
         $this->log('info', '最新ニュース検索を開始します...');
-        $search_keywords = $settings['search_keywords'] ?? 'AI ニュース';
+        // キーワード取得（フォールバック: seo_focus_keyword → デフォルト）
+        $search_keywords = $settings['search_keywords'] ?? '';
+        if (empty($search_keywords)) {
+            $search_keywords = $settings['seo_focus_keyword'] ?? 'AI ニュース';
+        }
         $news_data = $this->search_latest_news($search_keywords, 5);
         
         // AI APIを呼び出し
@@ -2011,7 +2015,11 @@ class AINewsAutoPoster {
         
         $this->log('info', 'カスタムプロンプト構築開始: 入力長=' . mb_strlen($custom_prompt) . '文字');
         
-        $search_keywords = $settings['search_keywords'] ?? 'AI ニュース';
+        // キーワード取得（フォールバック: seo_focus_keyword → デフォルト）
+        $search_keywords = $settings['search_keywords'] ?? '';
+        if (empty($search_keywords)) {
+            $search_keywords = $settings['seo_focus_keyword'] ?? 'AI ニュース';
+        }
         $selected_languages = $settings['news_languages'] ?? array('japanese', 'english');
         $word_count = $settings['article_word_count'] ?? 500;
         $writing_style = $settings['writing_style'] ?? '夏目漱石';
@@ -4426,7 +4434,11 @@ class AINewsAutoPoster {
      * Gemini用シンプル1段階プロンプト構築（Google Search Grounding使用）
      */
     private function build_gemini_simple_prompt($settings, $article_number = 1) {
-        $search_keywords = $settings['search_keywords'] ?? 'アウトドアギア, キャンプ用品, 登山用品, ハイキング用品, テント, 寝袋, バックパック';
+        // キーワード取得（フォールバック: seo_focus_keyword → デフォルト）
+        $search_keywords = $settings['search_keywords'] ?? '';
+        if (empty($search_keywords)) {
+            $search_keywords = $settings['seo_focus_keyword'] ?? 'アウトドアギア, キャンプ用品, 登山用品, ハイキング用品, テント, 寝袋, バックパック';
+        }
         $news_languages = $settings['news_languages'] ?? array('japanese', 'english');
         $output_language = $settings['output_language'] ?? 'japanese';
         $article_word_count = $settings['article_word_count'] ?? 1500;
