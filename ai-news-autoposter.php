@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。v2.0：プロンプト結果に任せる方式で高品質記事生成。Claude/Gemini API対応、文字数制限なし、自然なレイアウト。最新版は GitHub からダウンロードしてください。
- * Version: 2.5.12
+ * Version: 2.5.13
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.12');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.13');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -4395,11 +4395,20 @@ class AINewsAutoPoster {
         
         // 順次生成方式（v2.5）- 1記事ずつ確実に生成（Google Search Grounding対応）
         $prompt = "{検索キーワード}に関する{ニュース収集言語}のニュースを1本選んで紹介してください。\n\n";
-        $prompt .= "【重要】記事本文中にはURLアドレスやURLラベルを一切含めないでください。\n\n";
+        $prompt .= "【重要1】記事は必ず{出力言語}で作成してください。\n";
+        $prompt .= "【重要2】記事本文中にはURLアドレスやURLラベルを一切含めないでください。\n\n";
         $prompt .= "【出力構成】\n";
-        $prompt .= "1. まず最初に、{検索キーワード}について簡潔なリード文（2-3文）を書いてください（1記事目のみ）\n";
-        $prompt .= "2. その後、以下のHTMLタグ形式で1つの記事を完全に書いてください\n\n";
-        $prompt .= "記事構成：\n";
+        
+        // 条件分岐ロジックを表示
+        $prompt .= "■第1記事の場合（記事番号=1）：\n";
+        $prompt .= "1. まず最初に、{検索キーワード}について簡潔なリード文（2-3文）を書いてください\n";
+        $prompt .= "2. その後、以下のHTMLタグ形式で1つの記事を完全に書いてください\n";
+        $prompt .= "リード文の例：「{検索キーワード}の活用は、ビジネスや日常生活のさまざまな場面で注目を集めています。以下に、{検索キーワード}に関する最新のニュース記事を{記事数}本ご紹介します。」\n\n";
+        
+        $prompt .= "■第2記事以降の場合（記事番号=2,3）：\n";
+        $prompt .= "以下のHTMLタグ形式で1つの記事を完全に書いてください（リード文は不要）\n\n";
+        
+        $prompt .= "【記事構成（全記事共通）】\n";
         $prompt .= "<h2>{記事番号}. 【実際のニュースタイトル20-30文字】</h2>\n";
         $prompt .= "<h3>概要と要約</h3>\n";
         $prompt .= "<p>【実際のニュース内容を500文字以上で詳しく】</p>\n";
@@ -4407,24 +4416,33 @@ class AINewsAutoPoster {
         $prompt .= "<p>【このニュースの背景を500文字以上で】</p>\n";
         $prompt .= "<h3>今後の影響</h3>\n";
         $prompt .= "<p>【今後への影響を500文字以上で】</p>\n\n";
-        $prompt .= "重要：上記のH2タグ記事を1本完全に書いてください。途中で止めないでください。\n\n";
+        $prompt .= "重要：上記のH2タグ記事を1本完全に{出力言語}で書いてください。途中で止めないでください。\n\n";
+        
+        $prompt .= "【フォールバック機能】\n";
+        $prompt .= "- search_keywordsが空の場合 → seo_focus_keywordを使用\n";
+        $prompt .= "- カスタムプロンプトが設定されている場合 → カスタムプロンプトを優先\n";
+        $prompt .= "- 記事生成失敗時（300文字未満またはH2タグなし） → 自動再生成\n\n";
         
         $prompt .= "【順次生成方式について】\n";
-        $prompt .= "このプロンプトは、記事を1つずつ順次生成して最終的に複数記事を組み合わせる方式です。\n";
-        $prompt .= "- Google Search Grounding機能により最新のニュース情報を取得\n";
+        $prompt .= "v2.5順次生成方式：記事を1つずつ生成して最終的に3記事を組み合わせ\n";
+        $prompt .= "- Google Search Grounding機能により最新のニュース情報を自動取得\n";
         $prompt .= "- 1記事ずつ確実に生成することで品質と文字数を保証\n";
+        $prompt .= "- 第1記事のみリード文付き、第2記事以降はリード文なし\n";
         $prompt .= "- 自動的に番号付きタイトル（1. 2. 3.）を生成\n";
         $prompt .= "- 記事末尾に参考情報源（Google Grounding Sources）を自動追加\n\n";
         
         $prompt .= "【利用可能なプレースホルダー】\n";
-        $prompt .= "{検索キーワード} - 記事のテーマとなるキーワード（例：AIニュース）\n";
-        $prompt .= "{ニュース収集言語} - 検索対象の言語（日本語と英語など）\n";
-        $prompt .= "{記事番号} - 記事の番号（1, 2, 3）\n";
-        $prompt .= "{記事数} - 最終的に生成する記事の総数（通常3記事）\n";
-        $prompt .= "{影響分析文字数} - 今後の影響セクションの文字数\n\n";
+        $prompt .= "{検索キーワード} - 記事のテーマ（search_keywords or seo_focus_keyword）\n";
+        $prompt .= "{ニュース収集言語} - 検索対象言語（例：日本語と英語）\n";
+        $prompt .= "{出力言語} - 記事の出力言語（例：日本語）\n";
+        $prompt .= "{記事番号} - 現在生成中の記事番号（1, 2, 3）\n";
+        $prompt .= "{記事数} - 総記事数（通常3記事）\n";
+        $prompt .= "{文字数制限} - 1記事あたりの文字数制限\n";
+        $prompt .= "{文体} - 記事の文体（例：新聞記事風）\n\n";
         
-        $prompt .= "※このプロンプトはv2.5方式（順次生成）を採用しており、\n";
-        $prompt .= "　Google Search Groundingと組み合わせて確実に高品質な記事を生成します。";
+        $prompt .= "【実装バージョン】v2.5.12\n";
+        $prompt .= "※このテンプレートは実際のプロンプト生成と同期されており、\n";
+        $prompt .= "　Google Search Groundingと組み合わせて高品質な記事を生成します。";
         
         $this->log('info', 'プロンプト結果に任せる方式テンプレート生成完了: ' . mb_strlen($prompt) . '文字');
         return $prompt;
