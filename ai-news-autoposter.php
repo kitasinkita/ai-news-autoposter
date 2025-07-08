@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。v2.0：プロンプト結果に任せる方式で高品質記事生成。Claude/Gemini API対応、文字数制限なし、自然なレイアウト。最新版は GitHub からダウンロードしてください。
- * Version: 2.5.13
+ * Version: 2.5.14
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.13');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.14');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -4411,11 +4411,11 @@ class AINewsAutoPoster {
         $prompt .= "【記事構成（全記事共通）】\n";
         $prompt .= "<h2>{記事番号}. 【実際のニュースタイトル20-30文字】</h2>\n";
         $prompt .= "<h3>概要と要約</h3>\n";
-        $prompt .= "<p>【実際のニュース内容を500文字以上で詳しく】</p>\n";
+        $prompt .= "<p>【実際のニュース内容を300文字程度で詳しく】</p>\n";
         $prompt .= "<h3>背景・文脈</h3>\n";
-        $prompt .= "<p>【このニュースの背景を500文字以上で】</p>\n";
+        $prompt .= "<p>【このニュースの背景を300文字程度で】</p>\n";
         $prompt .= "<h3>今後の影響</h3>\n";
-        $prompt .= "<p>【今後への影響を500文字以上で】</p>\n\n";
+        $prompt .= "<p>【今後への影響を300文字程度で】</p>\n\n";
         $prompt .= "重要：上記のH2タグ記事を1本完全に{出力言語}で書いてください。途中で止めないでください。\n\n";
         
         $prompt .= "【フォールバック機能】\n";
@@ -4527,11 +4527,11 @@ class AINewsAutoPoster {
         $prompt .= "記事：\n";
         $prompt .= "<h2>{$current_article_num}. 【実際のニュースタイトル20-30文字】</h2>\n";
         $prompt .= "<h3>概要と要約</h3>\n";
-        $prompt .= "<p>【実際のニュース内容を500文字以上で詳しく】</p>\n";
+        $prompt .= "<p>【実際のニュース内容を300文字程度で詳しく】</p>\n";
         $prompt .= "<h3>背景・文脈</h3>\n";
-        $prompt .= "<p>【このニュースの背景を500文字以上で】</p>\n";
+        $prompt .= "<p>【このニュースの背景を300文字程度で】</p>\n";
         $prompt .= "<h3>今後の影響</h3>\n";
-        $prompt .= "<p>【今後への影響を500文字以上で】</p>\n\n";
+        $prompt .= "<p>【今後への影響を300文字程度で】</p>\n\n";
         
         $prompt .= "重要：上記のH2タグ記事を1本完全に{$output_language_name}で書いてください。途中で止めないでください。";
         
