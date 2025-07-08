@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。v2.0：プロンプト結果に任せる方式で高品質記事生成。Claude/Gemini API対応、文字数制限なし、自然なレイアウト。最新版は GitHub からダウンロードしてください。
- * Version: 2.5.6
+ * Version: 2.5.7
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.6');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.7');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -83,7 +83,7 @@ class AINewsAutoPoster {
                 'writing_style' => '夏目漱石',
                 'news_languages' => array('japanese', 'english'), // english, japanese, chinese
                 'output_language' => 'japanese', // japanese, english, chinese
-                'article_word_count' => 3000,
+                'article_word_count' => 7000,
                 'article_count' => 3,
                 'impact_analysis_length' => 500,
                 'enable_disclaimer' => true,
@@ -323,7 +323,7 @@ class AINewsAutoPoster {
                     'writing_style' => sanitize_text_field($_POST['writing_style']),
                     'news_languages' => isset($_POST['news_languages']) ? array_map('sanitize_text_field', $_POST['news_languages']) : array(),
                     'output_language' => sanitize_text_field($_POST['output_language']),
-                    'article_word_count' => max(100, min(5000, intval($_POST['article_word_count']))),
+                    'article_word_count' => max(100, min(10000, intval($_POST['article_word_count']))),
                     'enable_disclaimer' => isset($_POST['enable_disclaimer']),
                     'enable_excerpt' => isset($_POST['enable_excerpt']),
                     'disclaimer_text' => sanitize_textarea_field($_POST['disclaimer_text']),
@@ -497,9 +497,9 @@ class AINewsAutoPoster {
                     <tr>
                         <th scope="row">記事文字数</th>
                         <td>
-                            <input type="number" name="article_word_count" value="<?php echo esc_attr($settings['article_word_count'] ?? 3000); ?>" min="100" max="5000" step="50" class="small-text" />
+                            <input type="number" name="article_word_count" value="<?php echo esc_attr($settings['article_word_count'] ?? 7000); ?>" min="100" max="10000" step="100" class="small-text" />
                             <span>文字程度</span>
-                            <p class="ai-news-form-description">生成する記事の目安文字数を設定してください（100〜5000文字）。</p>
+                            <p class="ai-news-form-description">生成する記事の目安文字数を設定してください（100〜10000文字）。推奨: 7000-8000文字</p>
                         </td>
                     </tr>
                     
@@ -4458,11 +4458,11 @@ class AINewsAutoPoster {
         $prompt .= "記事：\n";
         $prompt .= "<h2>{$current_article_num}. 【実際のニュースタイトル20-30文字】</h2>\n";
         $prompt .= "<h3>概要と要約</h3>\n";
-        $prompt .= "<p>【実際のニュース内容を300文字以上で詳しく】</p>\n";
+        $prompt .= "<p>【実際のニュース内容を500文字以上で詳しく】</p>\n";
         $prompt .= "<h3>背景・文脈</h3>\n";
-        $prompt .= "<p>【このニュースの背景を300文字以上で】</p>\n";
+        $prompt .= "<p>【このニュースの背景を500文字以上で】</p>\n";
         $prompt .= "<h3>今後の影響</h3>\n";
-        $prompt .= "<p>【今後への影響を300文字以上で】</p>\n\n";
+        $prompt .= "<p>【今後への影響を500文字以上で】</p>\n\n";
         
         $prompt .= "重要：上記のH2タグ記事を1本完全に書いてください。途中で止めないでください。";
         
