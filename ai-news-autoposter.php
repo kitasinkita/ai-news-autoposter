@@ -84,6 +84,8 @@ class AINewsAutoPoster {
                 'news_languages' => array('japanese', 'english'), // english, japanese, chinese
                 'output_language' => 'japanese', // japanese, english, chinese
                 'article_word_count' => 1500,
+                'article_count' => 3,
+                'impact_analysis_length' => 500,
                 'enable_disclaimer' => true,
                 'disclaimer_text' => '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。',
                 'enable_excerpt' => true,
@@ -1808,6 +1810,8 @@ class AINewsAutoPoster {
         $selected_languages = $settings['news_languages'] ?? array('japanese', 'english');
         $word_count = $settings['article_word_count'] ?? 500;
         $writing_style = $settings['writing_style'] ?? '夏目漱石';
+        $article_count = $settings['article_count'] ?? 3;
+        $impact_length = $settings['impact_analysis_length'] ?? 500;
         
         // カスタムプロンプトがあればそれを使用
         $custom_prompt = $settings['custom_prompt'] ?? '';
@@ -1825,7 +1829,7 @@ class AINewsAutoPoster {
         // シンプルで効果的なプロンプト
         $prompt = "現在は{$current_date}（{$current_year}年）です。\n\n";
         $prompt .= "【重要】: 2024年以前の古い情報ではなく、{$current_year}年の最新情報のみを使用してください。\n\n";
-        $prompt .= "【{$language_text}】のニュースから、【{$search_keywords}】に関する{$current_year}年の最新ニュース（特に直近数ヶ月の新しい情報）を送ってください。5本ぐらいが理想です。\n";
+        $prompt .= "【{$language_text}】のニュースから、【{$search_keywords}】に関する{$current_year}年の最新ニュース（特に直近数ヶ月の新しい情報）を送ってください。{$article_count}本ぐらいが理想です。\n";
         $prompt .= "ニュースの背景や文脈を簡単にまとめ、なぜ今、これが起こっているのか、という背景情報を踏まえて、今後どのような影響をあたえるのか、推察もしてください。\n";
         $prompt .= "\n【重要な注意事項】\n";
         $prompt .= "- 記事本文中にはURLアドレスを一切含めないでください\n";
@@ -1849,7 +1853,7 @@ class AINewsAutoPoster {
         $prompt .= "<h3>背景・文脈</h3>\n";
         $prompt .= "本文\n";
         $prompt .= "<h3>今後の影響</h3>\n";
-        $prompt .= "本文\n";
+        $prompt .= "本文（{$impact_length}文字程度の考察）\n";
         $prompt .= "---------------------------------\n\n";
         
         return $prompt;
@@ -1919,8 +1923,10 @@ class AINewsAutoPoster {
         $selected_languages = $settings['news_languages'] ?? array('japanese', 'english');
         $word_count = $settings['article_word_count'] ?? 500;
         $writing_style = $settings['writing_style'] ?? '夏目漱石';
+        $article_count = $settings['article_count'] ?? 3;
+        $impact_length = $settings['impact_analysis_length'] ?? 500;
         
-        $this->log('info', 'プレースホルダー値: キーワード=' . $search_keywords . ', 言語=' . implode(',', $selected_languages) . ', 文字数=' . $word_count . ', 文体=' . $writing_style);
+        $this->log('info', 'プレースホルダー値: キーワード=' . $search_keywords . ', 言語=' . implode(',', $selected_languages) . ', 文字数=' . $word_count . ', 文体=' . $writing_style . ', 記事数=' . $article_count . ', 影響分析=' . $impact_length . '文字');
         
         // 言語指定を作成
         $language_names = array_map(array($this, 'get_language_name'), $selected_languages);
@@ -1933,6 +1939,8 @@ class AINewsAutoPoster {
         $prompt = str_replace('{キーワード}', $search_keywords, $prompt);
         $prompt = str_replace('{文字数}', $word_count, $prompt);
         $prompt = str_replace('{文体}', $writing_style, $prompt);
+        $prompt = str_replace('{記事数}', $article_count, $prompt);
+        $prompt = str_replace('{影響分析文字数}', $impact_length, $prompt);
         
         $this->log('info', 'プレースホルダー置換後: 出力長=' . mb_strlen($prompt) . '文字');
         
@@ -4285,14 +4293,14 @@ class AINewsAutoPoster {
     private function build_gemini_simple_prompt_template() {
         $this->log('info', 'プロンプト結果に任せる方式のテンプレート生成開始');
         
-        // プロンプト結果に任せる方式（v2.0）- 明確な3記事構造指定（URL除外）
-        $prompt = "{検索キーワード}に関する{ニュース収集言語}のニュースを正確に3本選んで紹介してください。\n\n";
+        // プロンプト結果に任せる方式（v2.0）- 明確な記事構造指定（URL除外）
+        $prompt = "{検索キーワード}に関する{ニュース収集言語}のニュースを正確に{記事数}本選んで紹介してください。\n\n";
         $prompt .= "【重要】記事本文中にはURLアドレスやURLラベルを一切含めないでください。タイトルのみ記載してください。\n\n";
-        $prompt .= "以下のHTMLタグ形式で3つの記事すべてを完全に書いてください：\n\n";
-        $prompt .= "1本目の記事：\n<h2>タイトル（URLアドレスは記載しない）</h2>\n<h3>概要と要約</h3>\n本文\n<h3>背景・文脈</h3>\n本文\n<h3>今後の影響</h3>\n本文（500文字程度の考察）\n\n";
-        $prompt .= "2本目の記事：\n<h2>タイトル（URLアドレスは記載しない）</h2>\n<h3>概要と要約</h3>\n本文\n<h3>背景・文脈</h3>\n本文\n<h3>今後の影響</h3>\n本文（500文字程度の考察）\n\n";
-        $prompt .= "3本目の記事：\n<h2>タイトル（URLアドレスは記載しない）</h2>\n<h3>概要と要約</h3>\n本文\n<h3>背景・文脈</h3>\n本文\n<h3>今後の影響</h3>\n本文（500文字程度の考察）\n\n";
-        $prompt .= "必ず3つの記事すべてを最後まで完全に書いてください。URLアドレスは一切記載しないでください。\n\n";
+        $prompt .= "以下のHTMLタグ形式で{記事数}つの記事すべてを完全に書いてください：\n\n";
+        $prompt .= "1本目の記事：\n<h2>タイトル（URLアドレスは記載しない）</h2>\n<h3>概要と要約</h3>\n本文\n<h3>背景・文脈</h3>\n本文\n<h3>今後の影響</h3>\n本文（{影響分析文字数}文字程度の考察）\n\n";
+        $prompt .= "2本目の記事：\n<h2>タイトル（URLアドレスは記載しない）</h2>\n<h3>概要と要約</h3>\n本文\n<h3>背景・文脈</h3>\n本文\n<h3>今後の影響</h3>\n本文（{影響分析文字数}文字程度の考察）\n\n";
+        $prompt .= "3本目の記事：\n<h2>タイトル（URLアドレスは記載しない）</h2>\n<h3>概要と要約</h3>\n本文\n<h3>背景・文脈</h3>\n本文\n<h3>今後の影響</h3>\n本文（{影響分析文字数}文字程度の考察）\n\n";
+        $prompt .= "必ず{記事数}つの記事すべてを最後まで完全に書いてください。URLアドレスは一切記載しないでください。\n\n";
         
         $prompt .= "【プロンプト結果に任せる方式について】\n";
         $prompt .= "このプロンプトは、Geminiの自然な判断に任せて高品質な記事を生成する方式です。\n";
@@ -4304,7 +4312,9 @@ class AINewsAutoPoster {
         $prompt .= "{検索キーワード} - 記事のテーマとなるキーワード\n";
         $prompt .= "{ニュース収集言語} - 検索対象の言語（日本語と英語など）\n";
         $prompt .= "{出力言語} - 記事の出力言語\n";
-        $prompt .= "{文体} - 記事の文体スタイル\n\n";
+        $prompt .= "{文体} - 記事の文体スタイル\n";
+        $prompt .= "{記事数} - 生成する記事の数\n";
+        $prompt .= "{影響分析文字数} - 今後の影響セクションの文字数\n\n";
         
         $prompt .= "※このプロンプトはv2.0方式（プロンプト結果に任せる）を採用しており、\n";
         $prompt .= "　従来の複雑な後処理を排除してGeminiの自然な判断を最大限活用します。";
@@ -4322,6 +4332,8 @@ class AINewsAutoPoster {
         $output_language = $settings['output_language'] ?? 'japanese';
         $article_word_count = $settings['article_word_count'] ?? 1500;
         $writing_style = $settings['writing_style'] ?? '新聞記事';
+        $article_count = $settings['article_count'] ?? 3;
+        $impact_length = $settings['impact_analysis_length'] ?? 500;
         
         // カスタムプロンプトがあればそれを使用
         $custom_prompt = $settings['custom_prompt'] ?? '';
@@ -4365,34 +4377,23 @@ class AINewsAutoPoster {
         // 日付付きタイトル生成を含む明確な3記事指定プロンプト
         $today = date('Y年m月d日');
         // v2.0.0の正しいプロンプト（プロンプト結果に任せる方式、URL除外）
-        $prompt = "{$search_keywords}に関する{$news_collection_language}のニュースを正確に3本選んで紹介してください。\n\n";
+        $prompt = "{$search_keywords}に関する{$news_collection_language}のニュースを正確に{$article_count}本選んで紹介してください。\n\n";
         $prompt .= "【重要】記事本文中にはURLアドレスやURLラベルを一切含めないでください。タイトルのみ記載してください。\n\n";
-        $prompt .= "以下のHTMLタグ形式で3つの記事すべてを完全に書いてください：\n\n";
-        $prompt .= "1本目の記事：\n";
-        $prompt .= "<h2>タイトル（URLアドレスは記載しない）</h2>\n";
-        $prompt .= "<h3>概要と要約</h3>\n";
-        $prompt .= "本文\n";
-        $prompt .= "<h3>背景・文脈</h3>\n";
-        $prompt .= "本文\n";
-        $prompt .= "<h3>今後の影響</h3>\n";
-        $prompt .= "本文（500文字程度の考察）\n\n";
-        $prompt .= "2本目の記事：\n";
-        $prompt .= "<h2>タイトル（URLアドレスは記載しない）</h2>\n";
-        $prompt .= "<h3>概要と要約</h3>\n";
-        $prompt .= "本文\n";
-        $prompt .= "<h3>背景・文脈</h3>\n";
-        $prompt .= "本文\n";
-        $prompt .= "<h3>今後の影響</h3>\n";
-        $prompt .= "本文（500文字程度の考察）\n\n";
-        $prompt .= "3本目の記事：\n";
-        $prompt .= "<h2>タイトル（URLアドレスは記載しない）</h2>\n";
-        $prompt .= "<h3>概要と要約</h3>\n";
-        $prompt .= "本文\n";
-        $prompt .= "<h3>背景・文脈</h3>\n";
-        $prompt .= "本文\n";
-        $prompt .= "<h3>今後の影響</h3>\n";
-        $prompt .= "本文（500文字程度の考察）\n\n";
-        $prompt .= "必ず3つの記事すべてを最後まで完全に書いてください。URLアドレスは一切記載しないでください。";
+        $prompt .= "以下のHTMLタグ形式で{$article_count}つの記事すべてを完全に書いてください：\n\n";
+        
+        // 動的に記事数分の指示を生成
+        for ($i = 1; $i <= $article_count; $i++) {
+            $prompt .= "{$i}本目の記事：\n";
+            $prompt .= "<h2>タイトル（URLアドレスは記載しない）</h2>\n";
+            $prompt .= "<h3>概要と要約</h3>\n";
+            $prompt .= "本文\n";
+            $prompt .= "<h3>背景・文脈</h3>\n";
+            $prompt .= "本文\n";
+            $prompt .= "<h3>今後の影響</h3>\n";
+            $prompt .= "本文（{$impact_length}文字程度の考察）\n\n";
+        }
+        
+        $prompt .= "必ず{$article_count}つの記事すべてを最後まで完全に書いてください。URLアドレスは一切記載しないでください。";
         
         // プレースホルダーを実際の値に置換
         $prompt = str_replace('{文字数}', $per_paragraph_chars, $prompt);
@@ -5313,7 +5314,6 @@ class AINewsAutoPoster {
             }
             
             $grounding_list .= "</ul>\n";
-            $grounding_list .= '<p><small><em>注：このリストは記事生成時にGoogle Search Groundingが実際に使用したURLです。本文中のリンクと比較してご確認ください。</em></small></p>';
             
             // 免責事項を追加
             if ($settings['enable_disclaimer'] ?? true) {
