@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。v2.0：プロンプト結果に任せる方式で高品質記事生成。Claude/Gemini API対応、文字数制限なし、自然なレイアウト。最新版は GitHub からダウンロードしてください。
- * Version: 2.5.10
+ * Version: 2.5.11
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.10');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.11');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1176,10 +1176,28 @@ class AINewsAutoPoster {
                         // 最小文字数チェック（H2タグがあるかも確認）
                         $has_h2_tag = preg_match('/<h2[^>]*>/', $article_text);
                         
-                        if ($article_char_count < 500 || !$has_h2_tag) {
+                        if ($article_char_count < 300 || !$has_h2_tag) {
                             $this->log('error', "記事 {$i} の生成が不完全です。文字数: {$article_char_count}文字、H2タグ: " . ($has_h2_tag ? 'あり' : 'なし'));
-                            $this->log('warning', "記事 {$i} をスキップします");
-                            continue;
+                            $this->log('warning', "記事 {$i} を再生成します");
+                            
+                            // 再生成を試行（1回のみ）
+                            $retry_prompt = $this->build_gemini_simple_prompt($settings, $i);
+                            $retry_response = $this->call_gemini_api($retry_prompt, $settings['gemini_api_key'] ?? '', $model);
+                            
+                            if (!is_wp_error($retry_response) && isset($retry_response['text'])) {
+                                $article_text = $retry_response['text'];
+                                $article_char_count = mb_strlen($article_text);
+                                $has_h2_tag = preg_match('/<h2[^>]*>/', $article_text);
+                                $this->log('info', "記事 {$i} 再生成結果: {$article_char_count}文字、H2タグ: " . ($has_h2_tag ? 'あり' : 'なし'));
+                                
+                                if ($article_char_count < 300 || !$has_h2_tag) {
+                                    $this->log('error', "記事 {$i} の再生成も失敗しました。スキップします");
+                                    continue;
+                                }
+                            } else {
+                                $this->log('error', "記事 {$i} の再生成APIエラー。スキップします");
+                                continue;
+                            }
                         }
                         
                         if ($i === 1) {
