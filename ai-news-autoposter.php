@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。v2.0：プロンプト結果に任せる方式で高品質記事生成。Claude/Gemini API対応、文字数制限なし、自然なレイアウト。最新版は GitHub からダウンロードしてください。
- * Version: 2.5.19
+ * Version: 2.5.20
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.19');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.20');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -4624,13 +4624,22 @@ class AINewsAutoPoster {
         // 段落あたり文字数を事前計算
         $per_paragraph_chars = intval($article_word_count / 5); // 5段落で分割
         
+        // 全体の文字数設定を取得（article_word_countは記事全体の設定）
+        $total_word_count = $article_word_count;
+        
+        // 1記事あたりの最小文字数を計算
+        $min_chars_per_article = ceil($total_word_count / $article_count);
+        
+        // 各セクションの最小文字数を計算（3セクションで均等割り）
+        $min_chars_per_section = ceil($min_chars_per_article / 3);
+        
         // 日付付きタイトル生成を含む明確な3記事指定プロンプト
         $today = date('Y年m月d日');
         // 複数記事対応：1記事ずつ順次生成
         $prompt = "{$search_keywords}に関する{$news_collection_language}のニュースを1本選んで紹介してください。\n\n";
         $prompt .= "【重要1】記事は必ず{$output_language_name}で作成してください。\n";
         $prompt .= "【重要2】記事本文中にはURLアドレスやURLラベルを一切含めないでください。\n";
-        $prompt .= "【重要3】この記事は必ず1,700文字以上で書いてください（3記事合計で5,000文字以上にするため）。\n";
+        $prompt .= "【重要3】この記事は必ず{$min_chars_per_article}文字以上で書いてください（{$article_count}記事合計で{$total_word_count}文字以上にするため）。\n";
         $prompt .= "【重要4】今日の日付は{$today}です。記事内容にこの日付を適切に含めてください。\n\n";
         $prompt .= "【出力構成】\n";
         
@@ -4654,16 +4663,16 @@ class AINewsAutoPoster {
         $prompt .= "記事：\n";
         $prompt .= "<h2>{$current_article_num}. 【実際のニュースタイトル20-30文字】</h2>\n";
         $prompt .= "<h3>概要と要約</h3>\n";
-        $prompt .= "<p>【実際のニュース内容を600文字以上で詳しく】</p>\n";
+        $prompt .= "<p>【実際のニュース内容を{$min_chars_per_section}文字以上で詳しく】</p>\n";
         $prompt .= "<h3>背景・文脈</h3>\n";
-        $prompt .= "<p>【このニュースの背景を600文字以上で】</p>\n";
+        $prompt .= "<p>【このニュースの背景を{$min_chars_per_section}文字以上で】</p>\n";
         $prompt .= "<h3>今後の影響</h3>\n";
-        $prompt .= "<p>【今後への影響を600文字以上で】</p>\n\n";
+        $prompt .= "<p>【今後への影響を{$min_chars_per_section}文字以上で】</p>\n\n";
         
         $prompt .= "【重要な指示】\n";
         $prompt .= "1. H2タグは必ず「{$current_article_num}. 」で始めてください（例：「1. AIがプログラミングを変革」）\n";
-        $prompt .= "2. 各セクション（概要、背景、影響）は必ず600文字以上で書いてください\n";
-        $prompt .= "3. 合計で1,700文字以上になるようにしてください\n";
+        $prompt .= "2. 各セクション（概要、背景、影響）は必ず{$min_chars_per_section}文字以上で書いてください\n";
+        $prompt .= "3. 合計で{$min_chars_per_article}文字以上になるようにしてください\n";
         $prompt .= "4. 上記のH2タグ記事を1本完全に{$output_language_name}で書いてください。途中で止めないでください。";
         
         // プレースホルダーを実際の値に置換
