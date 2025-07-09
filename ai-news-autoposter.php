@@ -567,11 +567,13 @@ class AINewsAutoPoster {
                         <td>
                             <textarea name="custom_prompt" rows="8" class="large-text" placeholder="空白の場合はデフォルトプロンプトを使用します"><?php echo esc_textarea($settings['custom_prompt'] ?? ''); ?></textarea>
                             <p class="ai-news-form-description">
-                                Claude AIに送信するカスタムプロンプトを設定できます。以下のプレースホルダーが使用可能です：<br>
+                                AIに送信するカスタムプロンプトを設定できます。以下のプレースホルダーが使用可能です：<br>
                                 <code>{言語}</code> - ニュース収集言語<br>
                                 <code>{キーワード}</code> - 検索キーワード<br>
                                 <code>{文字数}</code> - 記事文字数<br>
-                                <code>{文体}</code> - 文体スタイル<br><br>
+                                <code>{文体}</code> - 文体スタイル<br>
+                                <code>{記事数}</code> - 記事数<br>
+                                <code>{影響分析文字数}</code> - 影響分析文字数<br><br>
                                 <button type="button" id="show-default-prompt" class="button">現在のデフォルトプロンプトを表示</button>
                                 <div id="default-prompt-display" style="display: none; margin-top: 10px; padding: 10px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
                                     <strong>現在のデフォルトプロンプト：</strong><br>
