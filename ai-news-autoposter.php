@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。v2.0：プロンプト結果に任せる方式で高品質記事生成。Claude/Gemini API対応、文字数制限なし、自然なレイアウト。最新版は GitHub からダウンロードしてください。
- * Version: 2.5.15
+ * Version: 2.5.17
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.15');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.17');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -85,7 +85,7 @@ class AINewsAutoPoster {
                 'news_languages' => array('japanese', 'english'), // english, japanese, chinese
                 'output_language' => 'japanese', // japanese, english, chinese
                 'article_word_count' => 5000,
-                'article_count' => 3,
+                'article_count' => 1,
                 'impact_analysis_length' => 500,
                 'enable_disclaimer' => true,
                 'disclaimer_text' => '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。',
@@ -326,6 +326,7 @@ class AINewsAutoPoster {
                     'news_languages' => isset($_POST['news_languages']) ? array_map('sanitize_text_field', $_POST['news_languages']) : array(),
                     'output_language' => sanitize_text_field($_POST['output_language']),
                     'article_word_count' => max(100, min(10000, intval($_POST['article_word_count']))),
+                    'article_count' => max(1, min(5, intval($_POST['article_count']))),
                     'enable_disclaimer' => isset($_POST['enable_disclaimer']),
                     'enable_excerpt' => isset($_POST['enable_excerpt']),
                     'disclaimer_text' => sanitize_textarea_field($_POST['disclaimer_text']),
@@ -502,6 +503,15 @@ class AINewsAutoPoster {
                             <input type="number" name="article_word_count" value="<?php echo esc_attr($settings['article_word_count'] ?? 5000); ?>" min="100" max="10000" step="100" class="small-text" />
                             <span>文字程度</span>
                             <p class="ai-news-form-description">生成する記事の目安文字数を設定してください（100〜10000文字）。推奨: 7000-8000文字</p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row">記事生成数</th>
+                        <td>
+                            <input type="number" name="article_count" value="<?php echo esc_attr($settings['article_count'] ?? 1); ?>" min="1" max="5" step="1" class="small-text" />
+                            <span>記事</span>
+                            <p class="ai-news-form-description">一度に生成する記事の数を設定してください（1〜5記事）。推奨: 1記事（サーバー負荷軽減のため）</p>
                         </td>
                     </tr>
                     
@@ -1230,7 +1240,7 @@ class AINewsAutoPoster {
                 $this->log('info', $model . ' - Google Search Groundingで複数記事順次生成開始');
                 
                 // 記事数を取得
-                $article_count = $settings['article_count'] ?? 3;
+                $article_count = $settings['article_count'] ?? 1;
                 $combined_content = '';
                 $combined_sources = array();
                 
@@ -1981,7 +1991,7 @@ class AINewsAutoPoster {
         $selected_languages = $settings['news_languages'] ?? array('japanese', 'english');
         $word_count = $settings['article_word_count'] ?? 500;
         $writing_style = $settings['writing_style'] ?? '夏目漱石';
-        $article_count = $settings['article_count'] ?? 3;
+        $article_count = $settings['article_count'] ?? 1;
         $impact_length = $settings['impact_analysis_length'] ?? 500;
         
         // カスタムプロンプトがあればそれを使用
@@ -2098,7 +2108,7 @@ class AINewsAutoPoster {
         $selected_languages = $settings['news_languages'] ?? array('japanese', 'english');
         $word_count = $settings['article_word_count'] ?? 500;
         $writing_style = $settings['writing_style'] ?? '夏目漱石';
-        $article_count = $settings['article_count'] ?? 3;
+        $article_count = $settings['article_count'] ?? 1;
         $impact_length = $settings['impact_analysis_length'] ?? 500;
         
         $this->log('info', 'プレースホルダー値: キーワード=' . $search_keywords . ', 言語=' . implode(',', $selected_languages) . ', 文字数=' . $word_count . ', 文体=' . $writing_style . ', 記事数=' . $article_count . ', 影響分析=' . $impact_length . '文字');
@@ -4468,20 +4478,33 @@ class AINewsAutoPoster {
     private function build_gemini_simple_prompt_template() {
         $this->log('info', 'プロンプト結果に任せる方式のテンプレート生成開始');
         
+        // デフォルト記事数を取得（設定から）
+        $settings = get_option('ai_news_autoposter_settings', array());
+        $default_article_count = $settings['article_count'] ?? 1;
+        
         // 順次生成方式（v2.5）- 1記事ずつ確実に生成（Google Search Grounding対応）
         $prompt = "{検索キーワード}に関する{ニュース収集言語}のニュースを1本選んで紹介してください。\n\n";
         $prompt .= "【重要1】記事は必ず{出力言語}で作成してください。\n";
         $prompt .= "【重要2】記事本文中にはURLアドレスやURLラベルを一切含めないでください。\n\n";
         $prompt .= "【出力構成】\n";
         
-        // 条件分岐ロジックを表示
-        $prompt .= "■第1記事の場合（記事番号=1）：\n";
-        $prompt .= "1. まず最初に、{検索キーワード}について簡潔なリード文（2-3文）を書いてください\n";
-        $prompt .= "2. その後、以下のHTMLタグ形式で1つの記事を完全に書いてください\n";
-        $prompt .= "リード文の例：「{検索キーワード}の活用は、ビジネスや日常生活のさまざまな場面で注目を集めています。以下に、{検索キーワード}に関する最新のニュース記事を{記事数}本ご紹介します。」\n\n";
-        
-        $prompt .= "■第2記事以降の場合（記事番号=2,3）：\n";
-        $prompt .= "以下のHTMLタグ形式で1つの記事を完全に書いてください（リード文は不要）\n\n";
+        // 条件分岐ロジックを表示（記事数に応じて動的に変更）
+        if ($default_article_count > 1) {
+            $prompt .= "■第1記事の場合（記事番号=1）：\n";
+            $prompt .= "1. まず最初に、{検索キーワード}について簡潔なリード文（2-3文）を書いてください\n";
+            $prompt .= "2. その後、以下のHTMLタグ形式で1つの記事を完全に書いてください\n";
+            $prompt .= "リード文の例：「{検索キーワード}の活用は、ビジネスや日常生活のさまざまな場面で注目を集めています。以下に、{検索キーワード}に関する最新のニュース記事を{記事数}本ご紹介します。」\n\n";
+            
+            // 記事数に応じて範囲を動的に生成
+            $article_range = implode(',', range(2, $default_article_count));
+            $prompt .= "■第2記事以降の場合（記事番号={$article_range}）：\n";
+            $prompt .= "以下のHTMLタグ形式で1つの記事を完全に書いてください（リード文は不要）\n\n";
+        } else {
+            $prompt .= "■単体記事の場合（記事番号=1）：\n";
+            $prompt .= "1. まず最初に、{検索キーワード}について簡潔なリード文（2-3文）を書いてください\n";
+            $prompt .= "2. その後、以下のHTMLタグ形式で1つの記事を完全に書いてください\n";
+            $prompt .= "リード文の例：「{検索キーワード}の活用は、ビジネスや日常生活のさまざまな場面で注目を集めています。以下に、{検索キーワード}に関する最新のニュース記事をご紹介します。」\n\n";
+        }
         
         $prompt .= "【記事構成（全記事共通）】\n";
         $prompt .= "<h2>{記事番号}. 【実際のニュースタイトル20-30文字】</h2>\n";
@@ -4499,23 +4522,34 @@ class AINewsAutoPoster {
         $prompt .= "- 記事生成失敗時（300文字未満またはH2タグなし） → 自動再生成\n\n";
         
         $prompt .= "【順次生成方式について】\n";
-        $prompt .= "v2.5順次生成方式：記事を1つずつ生成して最終的に3記事を組み合わせ\n";
+        $prompt .= "v2.5順次生成方式：記事を1つずつ生成して最終的に{$default_article_count}記事を組み合わせ\n";
         $prompt .= "- Google Search Grounding機能により最新のニュース情報を自動取得\n";
         $prompt .= "- 1記事ずつ確実に生成することで品質と文字数を保証\n";
-        $prompt .= "- 第1記事のみリード文付き、第2記事以降はリード文なし\n";
-        $prompt .= "- 自動的に番号付きタイトル（1. 2. 3.）を生成\n";
+        if ($default_article_count > 1) {
+            $prompt .= "- 第1記事のみリード文付き、第2記事以降はリード文なし\n";
+            $number_range = implode('. ', range(1, $default_article_count)) . '.';
+            $prompt .= "- 自動的に番号付きタイトル（{$number_range}）を生成\n";
+        } else {
+            $prompt .= "- 単体記事としてリード文付きで生成\n";
+            $prompt .= "- 自動的に番号付きタイトル（1.）を生成\n";
+        }
         $prompt .= "- 記事末尾に参考情報源（Google Grounding Sources）を自動追加\n\n";
         
         $prompt .= "【利用可能なプレースホルダー】\n";
         $prompt .= "{検索キーワード} - 記事のテーマ（search_keywords or seo_focus_keyword）\n";
         $prompt .= "{ニュース収集言語} - 検索対象言語（例：日本語と英語）\n";
         $prompt .= "{出力言語} - 記事の出力言語（例：日本語）\n";
-        $prompt .= "{記事番号} - 現在生成中の記事番号（1, 2, 3）\n";
-        $prompt .= "{記事数} - 総記事数（通常3記事）\n";
+        if ($default_article_count > 1) {
+            $article_number_range = implode(', ', range(1, $default_article_count));
+            $prompt .= "{記事番号} - 現在生成中の記事番号（{$article_number_range}）\n";
+        } else {
+            $prompt .= "{記事番号} - 現在生成中の記事番号（1）\n";
+        }
+        $prompt .= "{記事数} - 総記事数（現在設定：{$default_article_count}記事）\n";
         $prompt .= "{文字数制限} - 1記事あたりの文字数制限\n";
         $prompt .= "{文体} - 記事の文体（例：新聞記事風）\n\n";
         
-        $prompt .= "【実装バージョン】v2.5.12\n";
+        $prompt .= "【実装バージョン】v2.5.16\n";
         $prompt .= "※このテンプレートは実際のプロンプト生成と同期されており、\n";
         $prompt .= "　Google Search Groundingと組み合わせて高品質な記事を生成します。";
         
@@ -4536,7 +4570,7 @@ class AINewsAutoPoster {
         $output_language = $settings['output_language'] ?? 'japanese';
         $article_word_count = $settings['article_word_count'] ?? 1500;
         $writing_style = $settings['writing_style'] ?? '新聞記事';
-        $article_count = $settings['article_count'] ?? 3;
+        $article_count = $settings['article_count'] ?? 1;
         $impact_length = $settings['impact_analysis_length'] ?? 500;
         
         // カスタムプロンプトがあればそれを使用
@@ -4586,11 +4620,15 @@ class AINewsAutoPoster {
         $prompt .= "【重要2】記事本文中にはURLアドレスやURLラベルを一切含めないでください。\n\n";
         $prompt .= "【出力構成】\n";
         
-        // 最初の記事の場合のみリード文を含める
+        // 最初の記事の場合のみリード文を含める（記事数に応じて文言を調整）
         if ($article_number === 1) {
             $prompt .= "1. まず最初に、{$search_keywords}について簡潔なリード文（2-3文）を書いてください\n";
             $prompt .= "2. その後、以下のHTMLタグ形式で1つの記事を完全に書いてください\n\n";
-            $prompt .= "リード文の例：「{$search_keywords}の活用は、ビジネスや日常生活のさまざまな場面で注目を集めています。以下に、{$search_keywords}に関する最新のニュース記事を{$article_count}本ご紹介します。」\n\n";
+            if ($article_count > 1) {
+                $prompt .= "リード文の例：「{$search_keywords}の活用は、ビジネスや日常生活のさまざまな場面で注目を集めています。以下に、{$search_keywords}に関する最新のニュース記事を{$article_count}本ご紹介します。」\n\n";
+            } else {
+                $prompt .= "リード文の例：「{$search_keywords}の活用は、ビジネスや日常生活のさまざまな場面で注目を集めています。以下に、{$search_keywords}に関する最新のニュース記事をご紹介します。」\n\n";
+            }
         } else {
             $prompt .= "以下のHTMLタグ形式で1つの記事を完全に書いてください（リード文は不要）\n\n";
         }
