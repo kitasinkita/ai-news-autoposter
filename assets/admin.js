@@ -35,6 +35,9 @@
             // Cron実行テストボタン
             $(document).on('click', '#test-cron-execution', this.testCronExecution);
             
+            // サーバー情報表示ボタン
+            $(document).on('click', '#show-server-info', this.showServerInfo);
+            
             // 設定保存時の検証
             $(document).on('submit', '#ai-news-settings-form', this.validateSettings);
             
@@ -733,6 +736,95 @@
                            .text(originalText)
                            .removeClass('ai-news-loading')
                            .data('processing', false); // 処理中フラグをクリア
+                }
+            });
+        },
+        
+        showServerInfo: function(e) {
+            e.preventDefault();
+            
+            const $button = $(this);
+            const originalText = $button.text();
+            
+            // ボタン状態変更
+            $button.prop('disabled', true)
+                   .html('<span class="ai-news-spinner"></span> 取得中...')
+                   .addClass('ai-news-loading');
+            
+            // Ajax リクエスト
+            $.ajax({
+                url: ai_news_autoposter_ajax.ajax_url,
+                type: 'POST',
+                dataType: 'json',
+                data: {
+                    action: 'get_server_info',
+                    nonce: ai_news_autoposter_ajax.nonce
+                },
+                timeout: 30000,
+                success: function(response) {
+                    if (response.success) {
+                        const data = response.data;
+                        
+                        // サーバー情報を整理して表示
+                        let infoHtml = '<div class="ai-news-server-info">';
+                        infoHtml += '<h4>PHP・サーバー情報</h4>';
+                        infoHtml += '<table class="ai-news-info-table">';
+                        infoHtml += '<tr><td>PHP Version</td><td>' + data.php_version + '</td></tr>';
+                        infoHtml += '<tr><td>Memory Limit</td><td>' + data.memory_limit + '</td></tr>';
+                        infoHtml += '<tr><td>Max Execution Time</td><td>' + data.max_execution_time + 's</td></tr>';
+                        infoHtml += '<tr><td>Max Input Time</td><td>' + data.max_input_time + 's</td></tr>';
+                        infoHtml += '<tr><td>Post Max Size</td><td>' + data.post_max_size + '</td></tr>';
+                        infoHtml += '<tr><td>Upload Max Filesize</td><td>' + data.upload_max_filesize + '</td></tr>';
+                        infoHtml += '<tr><td>Default Socket Timeout</td><td>' + data.default_socket_timeout + 's</td></tr>';
+                        infoHtml += '<tr><td>現在のメモリ使用量</td><td>' + data.memory_usage + '</td></tr>';
+                        infoHtml += '<tr><td>ピークメモリ使用量</td><td>' + data.memory_peak_usage + '</td></tr>';
+                        infoHtml += '</table>';
+                        
+                        infoHtml += '<h4>環境情報</h4>';
+                        infoHtml += '<table class="ai-news-info-table">';
+                        infoHtml += '<tr><td>Server Software</td><td>' + data.server_software + '</td></tr>';
+                        infoHtml += '<tr><td>PHP SAPI</td><td>' + data.php_sapi + '</td></tr>';
+                        infoHtml += '<tr><td>WordPress Version</td><td>' + data.wordpress_version + '</td></tr>';
+                        infoHtml += '<tr><td>MySQL Version</td><td>' + data.mysql_version + '</td></tr>';
+                        infoHtml += '<tr><td>cURL Version</td><td>' + data.curl_version + '</td></tr>';
+                        infoHtml += '<tr><td>OpenSSL Version</td><td>' + data.openssl_version + '</td></tr>';
+                        infoHtml += '<tr><td>Timezone</td><td>' + data.timezone + '</td></tr>';
+                        infoHtml += '</table>';
+                        
+                        if (data.disk_space && !data.disk_space.error) {
+                            infoHtml += '<h4>ディスク容量</h4>';
+                            infoHtml += '<table class="ai-news-info-table">';
+                            infoHtml += '<tr><td>合計容量</td><td>' + data.disk_space.total + '</td></tr>';
+                            infoHtml += '<tr><td>使用容量</td><td>' + data.disk_space.used + '</td></tr>';
+                            infoHtml += '<tr><td>空き容量</td><td>' + data.disk_space.free + '</td></tr>';
+                            infoHtml += '<tr><td>使用率</td><td>' + data.disk_space.usage_percent + '</td></tr>';
+                            infoHtml += '</table>';
+                        }
+                        
+                        infoHtml += '</div>';
+                        
+                        // 結果を表示
+                        $('#test-results').html(infoHtml).show();
+                        
+                        AINewsAutoPoster.showNotification('success', 'サーバー情報を取得しました。');
+                        
+                    } else {
+                        AINewsAutoPoster.showNotification('error', 'サーバー情報の取得に失敗しました: ' + response.data);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    let errorMessage = 'ネットワークエラーが発生しました。';
+                    if (status === 'timeout') {
+                        errorMessage = '処理がタイムアウトしました。';
+                    }
+                    
+                    AINewsAutoPoster.showNotification('error', errorMessage);
+                },
+                complete: function() {
+                    // ボタン状態復元
+                    $button.prop('disabled', false)
+                           .text(originalText)
+                           .removeClass('ai-news-loading');
                 }
             });
         },

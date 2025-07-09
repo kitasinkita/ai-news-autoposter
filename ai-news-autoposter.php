@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。v2.0：プロンプト結果に任せる方式で高品質記事生成。Claude/Gemini API対応、文字数制限なし、自然なレイアウト。最新版は GitHub からダウンロードしてください。
- * Version: 2.5.14
+ * Version: 2.5.15
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.14');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.15');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -41,6 +41,7 @@ class AINewsAutoPoster {
         add_action('wp_ajax_manual_post_now', array($this, 'manual_post_now'));
         add_action('wp_ajax_test_cron_execution', array($this, 'test_cron_execution'));
         add_action('wp_ajax_get_default_prompt', array($this, 'get_default_prompt'));
+        add_action('wp_ajax_get_server_info', array($this, 'get_server_info'));
         
         // Cronフック
         add_action('ai_news_autoposter_daily_cron', array($this, 'execute_daily_post_generation'));
@@ -266,6 +267,7 @@ class AINewsAutoPoster {
                             <button type="button" class="ai-news-button-primary" id="manual-post-now">今すぐ投稿</button>
                             <button type="button" class="ai-news-button-secondary" id="test-api-connection">API接続テスト</button>
                             <button type="button" class="ai-news-button-secondary" id="test-cron-execution">Cron実行テスト</button>
+                            <button type="button" class="ai-news-button-secondary" id="show-server-info">サーバー情報表示</button>
                         </div>
                         <div id="test-results" style="margin-top: 15px;"></div>
                     </div>
@@ -1059,6 +1061,79 @@ class AINewsAutoPoster {
             
         } catch (Exception $e) {
             wp_send_json_error('デフォルトプロンプトの取得に失敗しました: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * サーバー情報を取得するAJAXハンドラー
+     */
+    public function get_server_info() {
+        if (!wp_verify_nonce($_POST['nonce'], 'ai_news_autoposter_nonce')) {
+            wp_die('Security check failed');
+        }
+        
+        try {
+            // PHP設定値を取得
+            $server_info = array(
+                'php_version' => PHP_VERSION,
+                'memory_limit' => ini_get('memory_limit'),
+                'max_execution_time' => ini_get('max_execution_time'),
+                'max_input_time' => ini_get('max_input_time'),
+                'post_max_size' => ini_get('post_max_size'),
+                'upload_max_filesize' => ini_get('upload_max_filesize'),
+                'max_input_vars' => ini_get('max_input_vars'),
+                'default_socket_timeout' => ini_get('default_socket_timeout'),
+                'memory_usage' => round(memory_get_usage() / 1024 / 1024, 2) . ' MB',
+                'memory_peak_usage' => round(memory_get_peak_usage() / 1024 / 1024, 2) . ' MB',
+                'wordpress_version' => get_bloginfo('version'),
+                'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
+                'php_sapi' => php_sapi_name(),
+                'timezone' => date_default_timezone_get(),
+                'curl_version' => function_exists('curl_version') ? curl_version()['version'] : 'Not available',
+                'openssl_version' => OPENSSL_VERSION_TEXT ?? 'Not available',
+                'mysql_version' => $this->get_mysql_version(),
+                'disk_space' => $this->get_disk_space_info()
+            );
+            
+            wp_send_json_success($server_info);
+            
+        } catch (Exception $e) {
+            wp_send_json_error('サーバー情報の取得に失敗しました: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * MySQL版本を取得
+     */
+    private function get_mysql_version() {
+        global $wpdb;
+        try {
+            $version = $wpdb->get_var("SELECT VERSION()");
+            return $version ?: 'Unknown';
+        } catch (Exception $e) {
+            return 'Error: ' . $e->getMessage();
+        }
+    }
+    
+    /**
+     * ディスク容量情報を取得
+     */
+    private function get_disk_space_info() {
+        try {
+            $total = disk_total_space('.');
+            $free = disk_free_space('.');
+            $used = $total - $free;
+            
+            return array(
+                'total' => round($total / 1024 / 1024 / 1024, 2) . ' GB',
+                'free' => round($free / 1024 / 1024 / 1024, 2) . ' GB',
+                'used' => round($used / 1024 / 1024 / 1024, 2) . ' GB',
+                'usage_percent' => round(($used / $total) * 100, 1) . '%'
+            );
+        } catch (Exception $e) {
+            return array(
+                'error' => $e->getMessage()
+            );
         }
     }
     
