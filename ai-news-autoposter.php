@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。v2.0：プロンプト結果に任せる方式で高品質記事生成。Claude/Gemini API対応、文字数制限なし、自然なレイアウト。最新版は GitHub からダウンロードしてください。
- * Version: 2.5.17
+ * Version: 2.5.18
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.17');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.18');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1243,6 +1243,7 @@ class AINewsAutoPoster {
                 $article_count = $settings['article_count'] ?? 1;
                 $combined_content = '';
                 $combined_sources = array();
+                $actual_article_number = 0; // 実際に生成された記事番号
                 
                 // 記事を1つずつ順次生成
                 for ($i = 1; $i <= $article_count; $i++) {
@@ -1289,26 +1290,35 @@ class AINewsAutoPoster {
                             }
                         }
                         
-                        if ($i === 1) {
-                            // 最初の記事はリード文も含む
+                        // 実際に生成された記事番号をインクリメント
+                        $actual_article_number++;
+                        
+                        if ($actual_article_number === 1) {
+                            // 最初に成功した記事はリード文も含む
                             $combined_content = $article_text;
+                            
+                            // H2タグの番号を1に修正（念のため）
+                            $combined_content = preg_replace(
+                                '/<h2([^>]*)>\d+\.\s*([^<]+)<\/h2>/',
+                                '<h2$1>1. $2</h2>',
+                                $combined_content
+                            );
                         } else {
                             // 2記事目以降はH2タグ以降のみを追加し、番号を修正
                             if (preg_match('/<h2.*?<\/h2>.*$/s', $article_text, $matches)) {
                                 $article_content = $matches[0];
                                 
-                                // H2タグの番号を正しい記事番号に修正
-                                // 既に番号付きの場合
+                                // H2タグの番号を実際の記事番号に修正
                                 $article_content = preg_replace(
-                                    '/<h2([^>]*)>1\.\s*([^<]+)<\/h2>/',
-                                    '<h2$1>' . $i . '. $2</h2>',
+                                    '/<h2([^>]*)>\d+\.\s*([^<]+)<\/h2>/',
+                                    '<h2$1>' . $actual_article_number . '. $2</h2>',
                                     $article_content
                                 );
                                 
                                 // 番号なしの場合も対応
                                 $article_content = preg_replace(
                                     '/<h2([^>]*)>(?!\d+\.)([^<]+)<\/h2>/',
-                                    '<h2$1>' . $i . '. $2</h2>',
+                                    '<h2$1>' . $actual_article_number . '. $2</h2>',
                                     $article_content
                                 );
                                 
@@ -1331,7 +1341,7 @@ class AINewsAutoPoster {
                     'grounding_sources' => $combined_sources
                 );
                 
-                $this->log('info', "{$article_count}記事の順次生成完了。合計文字数: " . mb_strlen($combined_content));
+                $this->log('info', "{$actual_article_number}記事の生成に成功（試行: {$article_count}記事）。合計文字数: " . mb_strlen($combined_content));
             } else {
                 // 他のGeminiモデルはRSSベース
                 if (!empty($news_data)) {
@@ -2009,8 +2019,8 @@ class AINewsAutoPoster {
         
         // シンプルで効果的なプロンプト
         $prompt = "現在は{$current_date}（{$current_year}年）です。\n\n";
-        $prompt .= "【重要】: 2024年以前の古い情報ではなく、{$current_year}年の最新情報のみを使用してください。\n\n";
-        $prompt .= "【{$language_text}】のニュースから、【{$search_keywords}】に関する{$current_year}年の最新ニュース（特に直近数ヶ月の新しい情報）を送ってください。{$article_count}本ぐらいが理想です。\n";
+        $prompt .= "【重要】: 2024年以前の古い情報（2023年、2022年など）は絶対に使用しないでください。{$current_year}年の最新情報のみを使用してください。\n\n";
+        $prompt .= "【{$language_text}】のニュースから、【{$search_keywords}】に関する{$current_year}年の最新ニュース（特に直近1ヶ月以内の新しい情報を優先）を送ってください。{$article_count}本ぐらいが理想です。\n";
         $prompt .= "ニュースの背景や文脈を簡単にまとめ、なぜ今、これが起こっているのか、という背景情報を踏まえて、今後どのような影響をあたえるのか、推察もしてください。\n";
         $prompt .= "\n【重要な注意事項】\n";
         $prompt .= "- 記事本文中にはURLアドレスを一切含めないでください\n";
