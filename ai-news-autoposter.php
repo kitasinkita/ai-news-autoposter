@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。v2.0：プロンプト結果に任せる方式で高品質記事生成。Claude/Gemini API対応、文字数制限なし、自然なレイアウト。最新版は GitHub からダウンロードしてください。
- * Version: 2.5.20
+ * Version: 2.5.21
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.20');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.21');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -41,6 +41,7 @@ class AINewsAutoPoster {
         add_action('wp_ajax_manual_post_now', array($this, 'manual_post_now'));
         add_action('wp_ajax_test_cron_execution', array($this, 'test_cron_execution'));
         add_action('wp_ajax_get_default_prompt', array($this, 'get_default_prompt'));
+        add_action('wp_ajax_get_actual_prompt', array($this, 'get_actual_prompt'));
         add_action('wp_ajax_get_server_info', array($this, 'get_server_info'));
         
         // Cronフック
@@ -567,16 +568,31 @@ class AINewsAutoPoster {
                         <td>
                             <textarea name="custom_prompt" rows="8" class="large-text" placeholder="空白の場合はデフォルトプロンプトを使用します"><?php echo esc_textarea($settings['custom_prompt'] ?? ''); ?></textarea>
                             <p class="ai-news-form-description">
-                                AIに送信するカスタムプロンプトを設定できます。以下のプレースホルダーが使用可能です：<br>
+                                AIに送信するカスタムプロンプトを設定できます。空白の場合は設定に基づいて動的に生成されるデフォルトプロンプトを使用します。<br><br>
+                                <strong>デフォルトプロンプトの特徴：</strong><br>
+                                • 設定された文字数に基づいて記事ごと・セクションごとの文字数を自動計算<br>
+                                • 順次生成方式で1記事ずつ確実に生成（Google Search Grounding対応）<br>
+                                • H2/H3タグによる構造化された記事レイアウト<br>
+                                • 現在の日付を自動挿入<br><br>
+                                <strong>カスタムプロンプトで使用可能なプレースホルダー：</strong><br>
                                 <code>{言語}</code> - ニュース収集言語<br>
                                 <code>{キーワード}</code> - 検索キーワード<br>
                                 <code>{文字数}</code> - 記事文字数<br>
                                 <code>{文体}</code> - 文体スタイル<br>
                                 <code>{記事数}</code> - 記事数<br>
-                                <code>{影響分析文字数}</code> - 影響分析文字数<br><br>
-                                <button type="button" id="show-default-prompt" class="button">現在のデフォルトプロンプトを表示</button>
+                                <code>{影響分析文字数}</code> - 影響分析文字数<br>
+                                <code>{セクション文字数}</code> - セクションごとの最小文字数（動的計算）<br><br>
+                                <button type="button" id="show-actual-prompt" class="button">実際に送信されるプロンプトを表示</button>
+                                <button type="button" id="show-default-prompt" class="button" style="margin-left: 10px;">デフォルトプロンプトテンプレートを表示</button>
+                                
+                                <div id="actual-prompt-display" style="display: none; margin-top: 10px; padding: 10px; background: #e8f5e8; border: 1px solid #4caf50; border-radius: 4px;">
+                                    <strong>実際に送信されるプロンプト（設定値置換後）：</strong><br>
+                                    <div id="actual-prompt-content" style="white-space: pre-wrap; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto; margin-top: 5px;"></div>
+                                    <p><small>文字数: <span id="actual-prompt-length"></span> 文字</small></p>
+                                </div>
+                                
                                 <div id="default-prompt-display" style="display: none; margin-top: 10px; padding: 10px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
-                                    <strong>現在のデフォルトプロンプト：</strong><br>
+                                    <strong>デフォルトプロンプトテンプレート（プレースホルダー付き）：</strong><br>
                                     <div id="default-prompt-content" style="white-space: pre-wrap; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto; margin-top: 5px;"></div>
                                     <p><small>文字数: <span id="default-prompt-length"></span> 文字</small></p>
                                 </div>
@@ -704,14 +720,56 @@ class AINewsAutoPoster {
         
         <script type="text/javascript">
         jQuery(document).ready(function($) {
-            // デフォルトプロンプト表示ボタンのクリックイベント
+            // 実際のプロンプト表示ボタンのクリックイベント
+            $('#show-actual-prompt').click(function() {
+                var button = $(this);
+                var displayDiv = $('#actual-prompt-display');
+                
+                if (displayDiv.is(':visible')) {
+                    displayDiv.hide();
+                    button.text('実際に送信されるプロンプトを表示');
+                    return;
+                }
+                
+                button.text('読み込み中...');
+                button.prop('disabled', true);
+                
+                $.ajax({
+                    url: ai_news_autoposter_ajax.ajax_url,
+                    type: 'POST',
+                    data: {
+                        action: 'get_actual_prompt',
+                        nonce: ai_news_autoposter_ajax.nonce
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            $('#actual-prompt-content').text(response.data.prompt);
+                            $('#actual-prompt-length').text(response.data.length);
+                            displayDiv.show();
+                            button.text('実際のプロンプトを非表示');
+                        } else {
+                            alert('エラー: ' + response.data);
+                            button.text('実際に送信されるプロンプトを表示');
+                        }
+                    },
+                    error: function() {
+                        alert('通信エラーが発生しました。');
+                        button.text('実際に送信されるプロンプトを表示');
+                    },
+                    complete: function() {
+                        button.prop('disabled', false);
+                    }
+                });
+            });
+
+            // デフォルトプロンプトテンプレート表示ボタンのクリックイベント
             $('#show-default-prompt').click(function() {
                 var button = $(this);
                 var displayDiv = $('#default-prompt-display');
                 
                 if (displayDiv.is(':visible')) {
                     displayDiv.hide();
-                    button.text('現在のデフォルトプロンプトを表示');
+                    button.text('デフォルトプロンプトテンプレートを表示');
                     return;
                 }
                 
@@ -730,13 +788,15 @@ class AINewsAutoPoster {
                             $('#default-prompt-content').text(response.data.prompt);
                             $('#default-prompt-length').text(response.data.length);
                             displayDiv.show();
-                            button.text('デフォルトプロンプトを非表示');
+                            button.text('デフォルトプロンプトテンプレートを非表示');
                         } else {
                             alert('エラー: ' + response.data);
+                            button.text('デフォルトプロンプトテンプレートを表示');
                         }
                     },
                     error: function() {
                         alert('通信エラーが発生しました。');
+                        button.text('デフォルトプロンプトテンプレートを表示');
                     },
                     complete: function() {
                         button.prop('disabled', false);
@@ -1074,6 +1134,119 @@ class AINewsAutoPoster {
         } catch (Exception $e) {
             wp_send_json_error('デフォルトプロンプトの取得に失敗しました: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * 実際に送信されるプロンプト（設定値置換後）を取得
+     */
+    public function get_actual_prompt() {
+        if (!wp_verify_nonce($_POST['nonce'], 'ai_news_autoposter_nonce')) {
+            wp_die('Security check failed');
+        }
+        
+        try {
+            $settings = get_option('ai_news_autoposter_settings', array());
+            
+            // 現在の設定値を取得
+            $search_keywords = $settings['search_keywords'] ?? 'AI開発,AIコーディング';
+            $article_word_count = $settings['article_word_count'] ?? 5000;
+            $writing_style = $settings['writing_style'] ?? '夏目漱石';
+            $news_languages = $settings['news_languages'] ?? array('japanese');
+            $output_language = $settings['output_language'] ?? 'japanese';
+            $article_count = $settings['article_count'] ?? 1;
+            $impact_analysis_length = $settings['impact_analysis_length'] ?? 500;
+            $custom_prompt = $settings['custom_prompt'] ?? '';
+            
+            // プロンプト生成（実際の投稿時と同じロジック）
+            if (!empty($custom_prompt)) {
+                $actual_prompt = $custom_prompt;
+            } else {
+                // デフォルトプロンプトロジックを呼び出し
+                $actual_prompt = $this->generate_dynamic_prompt($settings);
+            }
+            
+            wp_send_json_success(array(
+                'prompt' => $actual_prompt,
+                'length' => mb_strlen($actual_prompt)
+            ));
+            
+        } catch (Exception $e) {
+            wp_send_json_error('実際のプロンプトの取得に失敗しました: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * 実際のプロンプト生成ロジック（設定値置換済み）
+     */
+    private function generate_dynamic_prompt($settings) {
+        $search_keywords = $settings['search_keywords'] ?? 'AI開発,AIコーディング';
+        $article_word_count = $settings['article_word_count'] ?? 5000;
+        $writing_style = $settings['writing_style'] ?? '夏目漱石';
+        $news_languages = $settings['news_languages'] ?? array('japanese');
+        $output_language = $settings['output_language'] ?? 'japanese';
+        $article_count = $settings['article_count'] ?? 1;
+        $impact_analysis_length = $settings['impact_analysis_length'] ?? 500;
+        
+        // 言語設定
+        $language_map = array(
+            'japanese' => '日本語',
+            'english' => '英語', 
+            'chinese' => '中国語'
+        );
+        
+        $news_collection_language = is_array($news_languages) ? 
+            implode('・', array_map(function($lang) use ($language_map) {
+                return $language_map[$lang] ?? $lang;
+            }, $news_languages)) : 
+            ($language_map[$news_languages] ?? $news_languages);
+            
+        $output_language_name = $language_map[$output_language] ?? $output_language;
+        
+        // 動的文字数計算
+        $total_word_count = $article_word_count;
+        $min_chars_per_article = ceil($total_word_count / $article_count);
+        $min_chars_per_section = ceil($min_chars_per_article / 3);
+        
+        // 現在の記事番号（順次生成のため1固定）
+        $current_article_num = 1;
+        
+        // 日付付きタイトル生成を含む明確な3記事指定プロンプト
+        $today = date('Y年m月d日');
+        
+        // 複数記事対応：1記事ずつ順次生成
+        $prompt = "{$search_keywords}に関する{$news_collection_language}のニュースを1本選んで紹介してください。\n\n";
+        $prompt .= "【重要1】記事は必ず{$output_language_name}で作成してください。\n";
+        $prompt .= "【重要2】記事本文中にはURLアドレスやURLラベルを一切含めないでください。\n";
+        $prompt .= "【重要3】この記事は必ず{$min_chars_per_article}文字以上で書いてください（{$article_count}記事合計で{$total_word_count}文字以上にするため）。\n";
+        $prompt .= "【重要4】今日の日付は{$today}です。記事内容にこの日付を適切に含めてください。\n\n";
+        $prompt .= "【出力構成】\n";
+        
+        if ($article_count > 1) {
+            $prompt .= "複数記事設定のため、リード文を含めて出力してください：\n";
+            $prompt .= "1. まず、{$search_keywords}について簡潔なリード文（2-3文）\n";
+            $prompt .= "2. その後、以下の記事を完全に出力\n\n";
+        } else {
+            $prompt .= "単体記事設定のため、リード文を含めて出力してください：\n";
+            $prompt .= "1. まず、{$search_keywords}について簡潔なリード文（2-3文）\n";
+            $prompt .= "2. その後、以下の記事を完全に出力\n\n";
+        }
+        
+        $prompt .= "記事：\n";
+        $prompt .= "<h2>{$current_article_num}. 【実際のニュースタイトル20-30文字】</h2>\n";
+        $prompt .= "<h3>概要と要約</h3>\n";
+        $prompt .= "<p>【実際のニュース内容を{$min_chars_per_section}文字以上で詳しく】</p>\n";
+        $prompt .= "<h3>背景・文脈</h3>\n";
+        $prompt .= "<p>【このニュースの背景を{$min_chars_per_section}文字以上で】</p>\n";
+        $prompt .= "<h3>今後の影響</h3>\n";
+        $prompt .= "<p>【今後への影響を{$min_chars_per_section}文字以上で】</p>\n\n";
+        
+        $prompt .= "【重要な指示】\n";
+        $prompt .= "1. H2タグは必ず「{$current_article_num}. 」で始めてください（例：「1. AIがプログラミングを変革」）\n";
+        $prompt .= "2. 各セクション（概要、背景、影響）は必ず{$min_chars_per_section}文字以上で書いてください\n";
+        $prompt .= "3. 合計で{$min_chars_per_article}文字以上になるようにしてください\n";
+        $prompt .= "4. 上記のH2タグ記事を1本完全に{$output_language_name}で書いてください。途中で止めないでください。";
+        
+        return $prompt;
     }
     
     /**
@@ -4521,11 +4694,11 @@ class AINewsAutoPoster {
         $prompt .= "【記事構成（全記事共通）】\n";
         $prompt .= "<h2>{記事番号}. 【実際のニュースタイトル20-30文字】</h2>\n";
         $prompt .= "<h3>概要と要約</h3>\n";
-        $prompt .= "<p>【実際のニュース内容を300文字程度で詳しく】</p>\n";
+        $prompt .= "<p>【実際のニュース内容を{セクション文字数}文字以上で詳しく】</p>\n";
         $prompt .= "<h3>背景・文脈</h3>\n";
-        $prompt .= "<p>【このニュースの背景を300文字程度で】</p>\n";
+        $prompt .= "<p>【このニュースの背景を{セクション文字数}文字以上で】</p>\n";
         $prompt .= "<h3>今後の影響</h3>\n";
-        $prompt .= "<p>【今後への影響を300文字程度で】</p>\n\n";
+        $prompt .= "<p>【今後への影響を{セクション文字数}文字以上で】</p>\n\n";
         $prompt .= "重要：上記のH2タグ記事を1本完全に{出力言語}で書いてください。途中で止めないでください。\n\n";
         
         $prompt .= "【フォールバック機能】\n";
