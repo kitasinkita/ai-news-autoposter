@@ -57,6 +57,11 @@
             // 画像生成方式の変更
             $(document).on('change', 'select[name="image_generation_type"]', this.toggleImageSettings);
             
+            // タブ切り替え
+            $(document).on('click', '.ai-news-tab-button', this.switchTab);
+            
+            // プロンプトモード切り替え
+            $(document).on('change', 'input[name="prompt_mode"]', this.togglePromptMode);
             
             // リアルタイム統計更新
             setInterval(this.updateStats, 30000); // 30秒ごと
@@ -82,6 +87,11 @@
             // ダッシュボード統計更新
             this.updateDashboardStats();
             
+            // タブの初期化
+            this.initializeTabs();
+            
+            // プロンプトモードの初期化
+            this.initializePromptMode();
         },
         
         createNotificationContainer: function() {
@@ -882,6 +892,66 @@
                 console.error('Error:', error);
                 alert('ネットワークエラーが発生しました。');
             });
+        },
+        
+        switchTab: function(e) {
+            e.preventDefault();
+            
+            const $button = $(this);
+            const tabId = $button.data('tab');
+            
+            // アクティブクラスの切り替え
+            $('.ai-news-tab-button').removeClass('active');
+            $button.addClass('active');
+            
+            // タブコンテンツの切り替え
+            $('.ai-news-tab-content').removeClass('active');
+            $('#' + tabId).addClass('active');
+            
+            // タブの状態を保存（オプション）
+            if (typeof(Storage) !== "undefined") {
+                localStorage.setItem('ai_news_active_tab', tabId);
+            }
+        },
+        
+        togglePromptMode: function() {
+            const mode = $('input[name="prompt_mode"]:checked').val();
+            
+            if (mode === 'free') {
+                // フリープロンプトモードの場合、通常の設定を非表示
+                $('.ai-news-normal-settings').hide();
+                $('.ai-news-free-prompt-container').show();
+            } else {
+                // 通常モードの場合
+                $('.ai-news-normal-settings').show();
+                $('.ai-news-free-prompt-container').hide();
+            }
+        },
+        
+        initializeTabs: function() {
+            // 保存されたタブの状態を復元
+            if (typeof(Storage) !== "undefined") {
+                const savedTab = localStorage.getItem('ai_news_active_tab');
+                if (savedTab && $('#' + savedTab).length) {
+                    $('.ai-news-tab-button[data-tab="' + savedTab + '"]').click();
+                } else {
+                    // デフォルトで最初のタブをアクティブに
+                    $('.ai-news-tab-button:first').addClass('active');
+                    $('.ai-news-tab-content:first').addClass('active');
+                }
+            } else {
+                // LocalStorageが使えない場合
+                $('.ai-news-tab-button:first').addClass('active');
+                $('.ai-news-tab-content:first').addClass('active');
+            }
+        },
+        
+        initializePromptMode: function() {
+            // 初期状態でプロンプトモードの表示を設定
+            const mode = $('input[name="prompt_mode"]:checked').val();
+            if (mode) {
+                this.togglePromptMode();
+            }
         },
         
     };

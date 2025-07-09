@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。v2.0：プロンプト結果に任せる方式で高品質記事生成。Claude/Gemini API対応、文字数制限なし、自然なレイアウト。最新版は GitHub からダウンロードしてください。
- * Version: 2.5.21
+ * Version: 2.6.0
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.5.21');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.6.0');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -336,7 +336,9 @@ class AINewsAutoPoster {
                     'dalle_api_key' => sanitize_text_field($_POST['dalle_api_key']),
                     'unsplash_access_key' => sanitize_text_field($_POST['unsplash_access_key']),
                     'news_sources' => $this->parse_news_sources($_POST),
-                    'custom_prompt' => sanitize_textarea_field($_POST['custom_prompt'] ?? '')
+                    'custom_prompt' => sanitize_textarea_field($_POST['custom_prompt'] ?? ''),
+                    'prompt_mode' => sanitize_text_field($_POST['prompt_mode'] ?? 'normal'),
+                    'free_prompt' => sanitize_textarea_field($_POST['free_prompt'] ?? '')
                 );
                 
                 // 開始時刻から1時間おきのスケジュールを自動生成
@@ -382,11 +384,33 @@ class AINewsAutoPoster {
         <div class="wrap">
             <h1>AI News AutoPoster 設定 <span style="font-size: 14px; color: #666; margin-left: 10px;">v<?php echo AI_NEWS_AUTOPOSTER_VERSION; ?></span></h1>
             
+            <!-- タブナビゲーション -->
+            <div class="ai-news-tabs-nav">
+                <button type="button" class="ai-news-tab-button active" data-tab="tab-normal-settings">通常設定</button>
+                <button type="button" class="ai-news-tab-button" data-tab="tab-free-prompt">フリープロンプト設定</button>
+            </div>
+            
             <form method="post" action="" id="ai-news-settings-form">
                 <?php wp_nonce_field('ai_news_autoposter_settings', 'ai_news_autoposter_nonce'); ?>
                 
-                <!-- ===== AI・モデル設定 ===== -->
-                <h2 class="ai-news-section-title">🤖 AI・モデル設定</h2>
+                <!-- モード選択 -->
+                <div class="ai-news-mode-selector">
+                    <h3>プロンプトモード選択</h3>
+                    <div class="ai-news-mode-option">
+                        <input type="radio" id="prompt_mode_normal" name="prompt_mode" value="normal" <?php checked($settings['prompt_mode'] ?? 'normal', 'normal'); ?> />
+                        <label for="prompt_mode_normal">通常モード（設定値を使用してプロンプトを自動生成）</label>
+                    </div>
+                    <div class="ai-news-mode-option">
+                        <input type="radio" id="prompt_mode_free" name="prompt_mode" value="free" <?php checked($settings['prompt_mode'] ?? 'normal', 'free'); ?> />
+                        <label for="prompt_mode_free">フリープロンプトモード（完全にカスタマイズしたプロンプトを使用）</label>
+                    </div>
+                </div>
+                
+                <!-- 通常設定タブ -->
+                <div id="tab-normal-settings" class="ai-news-tab-content active">
+                    <div class="ai-news-normal-settings">
+                        <!-- ===== AI・モデル設定 ===== -->
+                        <h2 class="ai-news-section-title">🤖 AI・モデル設定</h2>
                 <table class="ai-news-form-table">
                     <tr>
                         <th scope="row">AIモデル</th>
@@ -713,6 +737,26 @@ class AINewsAutoPoster {
                         </td>
                     </tr>
                 </table>
+                    </div><!-- .ai-news-normal-settings -->
+                </div><!-- #tab-normal-settings -->
+                
+                <!-- フリープロンプト設定タブ -->
+                <div id="tab-free-prompt" class="ai-news-tab-content">
+                    <div class="ai-news-free-prompt-container">
+                        <h4>フリープロンプト設定</h4>
+                        <p class="ai-news-form-description">
+                            このモードでは、設定値に関係なく、以下のプロンプトをそのままAIに送信します。<br>
+                            記事本文として生成したい内容を自由に記述してください。
+                        </p>
+                        <textarea name="free_prompt" class="ai-news-free-prompt-textarea" placeholder="例：最新のAI技術についての詳細な解説記事を書いてください。以下の要素を含めてください：&#10;1. 最新のトレンド&#10;2. 実用例&#10;3. 将来の展望&#10;&#10;文字数は3000文字程度で、読みやすい構成にしてください。"><?php echo esc_textarea($settings['free_prompt'] ?? ''); ?></textarea>
+                        <p class="ai-news-form-description">
+                            <strong>注意事項：</strong><br>
+                            • フリープロンプトモードでは、タイトルや抜粋も含めて生成するようプロンプトに記載してください<br>
+                            • HTML形式で出力させたい場合は、プロンプトに明記してください<br>
+                            • 画像生成設定は通常通り動作します
+                        </p>
+                    </div>
+                </div><!-- #tab-free-prompt -->
                 
                 <?php submit_button('設定を保存', 'primary', 'submit', true, array('class' => 'ai-news-button-primary')); ?>
             </form>
@@ -1147,22 +1191,34 @@ class AINewsAutoPoster {
         try {
             $settings = get_option('ai_news_autoposter_settings', array());
             
-            // 現在の設定値を取得
-            $search_keywords = $settings['search_keywords'] ?? 'AI開発,AIコーディング';
-            $article_word_count = $settings['article_word_count'] ?? 5000;
-            $writing_style = $settings['writing_style'] ?? '夏目漱石';
-            $news_languages = $settings['news_languages'] ?? array('japanese');
-            $output_language = $settings['output_language'] ?? 'japanese';
-            $article_count = $settings['article_count'] ?? 1;
-            $impact_analysis_length = $settings['impact_analysis_length'] ?? 500;
-            $custom_prompt = $settings['custom_prompt'] ?? '';
+            // プロンプトモードを確認
+            $prompt_mode = $settings['prompt_mode'] ?? 'normal';
             
-            // プロンプト生成（実際の投稿時と同じロジック）
-            if (!empty($custom_prompt)) {
-                $actual_prompt = $custom_prompt;
+            if ($prompt_mode === 'free') {
+                // フリープロンプトモードの場合
+                $actual_prompt = $settings['free_prompt'] ?? '';
+                if (empty($actual_prompt)) {
+                    $actual_prompt = 'フリープロンプトが設定されていません。';
+                }
             } else {
-                // デフォルトプロンプトロジックを呼び出し
-                $actual_prompt = $this->generate_dynamic_prompt($settings);
+                // 通常モードの場合
+                // 現在の設定値を取得
+                $search_keywords = $settings['search_keywords'] ?? 'AI開発,AIコーディング';
+                $article_word_count = $settings['article_word_count'] ?? 5000;
+                $writing_style = $settings['writing_style'] ?? '夏目漱石';
+                $news_languages = $settings['news_languages'] ?? array('japanese');
+                $output_language = $settings['output_language'] ?? 'japanese';
+                $article_count = $settings['article_count'] ?? 1;
+                $impact_analysis_length = $settings['impact_analysis_length'] ?? 500;
+                $custom_prompt = $settings['custom_prompt'] ?? '';
+                
+                // プロンプト生成（実際の投稿時と同じロジック）
+                if (!empty($custom_prompt)) {
+                    $actual_prompt = $custom_prompt;
+                } else {
+                    // デフォルトプロンプトロジックを呼び出し
+                    $actual_prompt = $this->generate_dynamic_prompt($settings);
+                }
             }
             
             wp_send_json_success(array(
@@ -1389,6 +1445,69 @@ class AINewsAutoPoster {
             }
         }
         
+        // フリープロンプトモードの場合
+        if (($settings['prompt_mode'] ?? 'normal') === 'free') {
+            $this->log('info', 'フリープロンプトモードで記事を生成します');
+            
+            $free_prompt = $settings['free_prompt'] ?? '';
+            if (empty($free_prompt)) {
+                return new WP_Error('no_free_prompt', 'フリープロンプトが設定されていません。');
+            }
+            
+            // フリープロンプトで生成
+            if ($is_gemini) {
+                $response = $this->call_gemini_api($free_prompt, $api_key, $model);
+            } else {
+                $response = $this->call_claude_api($free_prompt, $api_key, $settings);
+            }
+            
+            if (is_wp_error($response)) {
+                return $response;
+            }
+            
+            // フリープロンプトの場合はそのまま記事として使用
+            // Gemini APIの場合は配列レスポンスからテキストを抽出
+            if (is_array($response) && isset($response['text'])) {
+                $article_content = $response['text'];
+            } else {
+                $article_content = $response;
+            }
+            
+            // タイトルを抽出（最初のH1タグまたは最初の行）
+            $title = '';
+            if (preg_match('/<h1[^>]*>(.*?)<\/h1>/s', $article_content, $matches)) {
+                $title = strip_tags($matches[1]);
+                // タイトルをコンテンツから削除
+                $article_content = str_replace($matches[0], '', $article_content);
+            } else {
+                // H1タグがない場合は最初の行をタイトルとする
+                $lines = explode("\n", strip_tags($article_content));
+                $title = trim($lines[0]);
+                if (mb_strlen($title) > 50) {
+                    $title = mb_substr($title, 0, 47) . '...';
+                }
+            }
+            
+            if (empty($title)) {
+                $title = date('Y年m月d日') . 'の記事';
+            }
+            
+            // 記事データを準備
+            $article_data = array(
+                'title' => $title,
+                'content' => $article_content,
+                'sources' => array(),
+                'search_grounding_sources' => array()
+            );
+            
+            // 記事を公開（通常モードと同じ関数を使用）
+            $this->log('info', 'フリープロンプトモードで記事を公開します');
+            
+            // この後の通常モードの処理と同じ形式で記事を公開するため、ジャンプ
+            goto publish_article;
+        }
+        
+        // 通常モードの処理
         // まず最新ニュースを検索
         $this->log('info', '最新ニュース検索を開始します...');
         // キーワード取得（フォールバック: seo_focus_keyword → デフォルト）
@@ -1614,6 +1733,9 @@ class AINewsAutoPoster {
         }
         
         $this->log('info', '記事データ解析完了。タイトル: ' . $article_data['title']);
+        
+        // 記事公開の共通処理
+        publish_article:
         
         // 最終的なコンテンツ処理（文字数制限のみ、参考情報源・免責事項は後で追加）
         $this->log('info', '最終コンテンツ処理を実行中...');
