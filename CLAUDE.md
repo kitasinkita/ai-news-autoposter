@@ -74,6 +74,75 @@ WordPress用のAIニュース自動投稿プラグインの開発・改良
 - ✅ フリープロンプトモードの実装
 - ✅ タブ切り替え機能の実装
 
+## 開発ログ・やりとり記録
+
+### 2025年07月09日 - フリープロンプトモード実装
+
+**ユーザー要求:**
+> いまは設定画面に設定値をいれると、プロンプトに対して操作をするようにしてくれていますが、まったく設定をいれずにフリーでプロンプトを入力すると、そのプロンプトの結果を記事本文にいれるようにするモードを追加できますか。設定画面がタブで別れて、設定１と設定２みたいな感じでどっちを優先するか、選択できるといいんだけど。
+
+**実装内容:**
+1. **設定画面のタブ化** - 「通常設定」と「フリープロンプト設定」の2タブ
+2. **プロンプトモード選択** - ラジオボタンでモード切り替え
+3. **フリープロンプト機能** - 設定値を無視して自由なプロンプトで記事生成
+4. **自動タイトル抽出** - H1タグまたは最初の行からタイトルを抽出
+5. **UI/UX改善** - タブ切り替えとモード切り替えのJavaScript実装
+
+**発生した問題と解決:**
+- **問題**: Gemini APIが配列レスポンスを返すのに文字列として処理してエラー
+- **解決**: レスポンス形式を判定して適切にテキストを抽出する処理を追加
+
+**テスト結果:**
+- 3回のテスト投稿すべて成功
+- 投稿ID 1258, 1263, 1268で記事生成確認
+- ページ表示も正常動作確認
+
+**ファイル変更:**
+- `ai-news-autoposter.php`: メイン機能実装（+142行）
+- `assets/admin.css`: タブUI追加（+119行）
+- `assets/admin.js`: タブ切り替え機能（+70行）
+- `CLAUDE.md`: ドキュメント作成
+
+**Git操作:**
+```bash
+git add .
+git commit -m "Add free prompt mode with tab-based settings interface (v2.6.0)"
+git push
+```
+
+### 技術的詳細
+
+**タブ切り替え実装:**
+```javascript
+switchTab: function(e) {
+    const $button = $(this);
+    const tabId = $button.data('tab');
+    
+    $('.ai-news-tab-button').removeClass('active');
+    $button.addClass('active');
+    
+    $('.ai-news-tab-content').removeClass('active');
+    $('#' + tabId).addClass('active');
+}
+```
+
+**フリープロンプトモード処理:**
+```php
+if (($settings['prompt_mode'] ?? 'normal') === 'free') {
+    // Gemini APIの場合は配列レスポンスからテキストを抽出
+    if (is_array($response) && isset($response['text'])) {
+        $article_content = $response['text'];
+    } else {
+        $article_content = $response;
+    }
+    
+    // タイトル自動抽出
+    if (preg_match('/<h1[^>]*>(.*?)<\/h1>/s', $article_content, $matches)) {
+        $title = strip_tags($matches[1]);
+    }
+}
+```
+
 ## 次回作業時の参考
 
 ### 再開手順
@@ -88,6 +157,18 @@ docker exec wp-local-wordpress-1 php /var/www/html/test_post_with_debug.php
 
 # 記事確認
 docker exec wp-local-wordpress-1 php /var/www/html/check_generated_articles.php
+
+# フリープロンプトモードテスト
+docker exec wp-local-wordpress-1 php -r "
+require_once('/var/www/html/wp-config.php');
+require_once('/var/www/html/wp-content/plugins/ai-news-autoposter/ai-news-autoposter.php');
+\$plugin = new AINewsAutoPoster();
+\$reflection = new ReflectionClass(\$plugin);
+\$method = \$reflection->getMethod('generate_and_publish_article');
+\$method->setAccessible(true);
+\$result = \$method->invoke(\$plugin, true, 'test');
+echo 'Result: ' . (\$result instanceof WP_Error ? \$result->get_error_message() : \$result) . PHP_EOL;
+"
 ```
 
 ### Git操作
