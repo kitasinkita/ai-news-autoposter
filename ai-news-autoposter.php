@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。v2.0：プロンプト結果に任せる方式で高品質記事生成。Claude/Gemini API対応、文字数制限なし、自然なレイアウト。最新版は GitHub からダウンロードしてください。
- * Version: 2.6.0
+ * Version: 2.6.1
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.6.0');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.6.1');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -386,7 +386,8 @@ class AINewsAutoPoster {
             
             <!-- タブナビゲーション -->
             <div class="ai-news-tabs-nav">
-                <button type="button" class="ai-news-tab-button active" data-tab="tab-normal-settings">通常設定</button>
+                <button type="button" class="ai-news-tab-button active" data-tab="tab-common-settings">共通設定</button>
+                <button type="button" class="ai-news-tab-button" data-tab="tab-normal-settings">定型プロンプト設定</button>
                 <button type="button" class="ai-news-tab-button" data-tab="tab-free-prompt">フリープロンプト設定</button>
             </div>
             
@@ -398,7 +399,7 @@ class AINewsAutoPoster {
                     <h3>プロンプトモード選択</h3>
                     <div class="ai-news-mode-option">
                         <input type="radio" id="prompt_mode_normal" name="prompt_mode" value="normal" <?php checked($settings['prompt_mode'] ?? 'normal', 'normal'); ?> />
-                        <label for="prompt_mode_normal">通常モード（設定値を使用してプロンプトを自動生成）</label>
+                        <label for="prompt_mode_normal">定型プロンプトモード（設定値を使用してプロンプトを自動生成）</label>
                     </div>
                     <div class="ai-news-mode-option">
                         <input type="radio" id="prompt_mode_free" name="prompt_mode" value="free" <?php checked($settings['prompt_mode'] ?? 'normal', 'free'); ?> />
@@ -406,9 +407,9 @@ class AINewsAutoPoster {
                     </div>
                 </div>
                 
-                <!-- 通常設定タブ -->
-                <div id="tab-normal-settings" class="ai-news-tab-content active">
-                    <div class="ai-news-normal-settings">
+                <!-- 共通設定タブ -->
+                <div id="tab-common-settings" class="ai-news-tab-content active">
+                    <div class="ai-news-common-settings">
                         <!-- ===== AI・モデル設定 ===== -->
                         <h2 class="ai-news-section-title">🤖 AI・モデル設定</h2>
                 <table class="ai-news-form-table">
@@ -473,270 +474,240 @@ class AINewsAutoPoster {
                     </tr>
                 </table>
                 
-                <!-- ===== キーワード・SEO設定 ===== -->
-                <h2 class="ai-news-section-title">🎯 キーワード・SEO設定</h2>
-                <table class="ai-news-form-table">
-                    <tr>
-                        <th scope="row">検索キーワード</th>
-                        <td>
-                            <input type="text" name="search_keywords" value="<?php echo esc_attr($settings['search_keywords'] ?? 'AI ニュース, 人工知能, 機械学習, ChatGPT, OpenAI'); ?>" class="large-text ai-news-autosave" />
-                            <p class="ai-news-form-description">記事生成時に検索するキーワードをカンマ区切りで入力してください。</p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">SEO フォーカスキーワード</th>
-                        <td>
-                            <input type="text" name="seo_focus_keyword" value="<?php echo esc_attr($settings['seo_focus_keyword'] ?? 'AI ニュース'); ?>" class="regular-text ai-news-autosave" />
-                            <p class="ai-news-form-description">記事のSEO対策で重要視するキーワードを設定してください。</p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">メタディスクリプションテンプレート</th>
-                        <td>
-                            <textarea name="meta_description_template" rows="3" class="large-text ai-news-autosave"><?php echo esc_textarea($settings['meta_description_template'] ?? ''); ?></textarea>
-                            <p class="ai-news-form-description">{title} はタイトルに置換されます。</p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">タグ自動生成</th>
-                        <td>
-                            <label>
-                                <input type="checkbox" name="enable_tags" <?php checked($settings['enable_tags'] ?? true); ?> />
-                                AIが関連タグを自動生成する
-                            </label>
-                        </td>
-                    </tr>
-                </table>
+                        
+                        <!-- ===== スケジュール・投稿設定 ===== -->
+                        <h2 class="ai-news-section-title">⏰ スケジュール・投稿設定</h2>
+                        <table class="ai-news-form-table">
+                            <tr>
+                                <th scope="row">自動投稿</th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" id="auto-publish-toggle" name="auto_publish" <?php checked($settings['auto_publish'] ?? false); ?> />
+                                        自動投稿を有効にする
+                                    </label>
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <th scope="row">投稿開始時刻</th>
+                                <td>
+                                    <input type="time" id="schedule_time" name="schedule_time" value="<?php echo esc_attr($settings['schedule_time'] ?? '06:00'); ?>" />
+                                    <p class="ai-news-form-description">
+                                        <strong>自動投稿の仕組み：</strong><br>
+                                        開始時刻から1時間おきに投稿されます。<br>
+                                        例：開始時刻06:00、最大投稿数3の場合 → 06:00、07:00、08:00に投稿
+                                    </p>
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <th scope="row">1日の最大投稿数</th>
+                                <td>
+                                    <input type="number" id="max_posts_per_day" name="max_posts_per_day" value="<?php echo esc_attr($settings['max_posts_per_day'] ?? 1); ?>" min="1" max="5" />
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <th scope="row">投稿カテゴリ</th>
+                                <td>
+                                    <select name="post_category">
+                                        <?php foreach ($categories as $category): ?>
+                                            <option value="<?php echo $category->term_id; ?>" <?php selected($settings['post_category'] ?? '', $category->term_id); ?>>
+                                                <?php echo esc_html($category->name); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <th scope="row">投稿ステータス</th>
+                                <td>
+                                    <select name="post_status">
+                                        <option value="publish" <?php selected($settings['post_status'] ?? 'publish', 'publish'); ?>>公開</option>
+                                        <option value="draft" <?php selected($settings['post_status'] ?? 'publish', 'draft'); ?>>下書き</option>
+                                        <option value="pending" <?php selected($settings['post_status'] ?? 'publish', 'pending'); ?>>承認待ち</option>
+                                    </select>
+                                </td>
+                            </tr>
+                        </table>
+                        
+                        <!-- ===== その他の共通設定 ===== -->
+                        <h2 class="ai-news-section-title">⚙️ その他の共通設定</h2>
+                        <table class="ai-news-form-table">
+                            <tr>
+                                <th scope="row">タグ自動生成</th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" name="enable_tags" <?php checked($settings['enable_tags'] ?? true); ?> />
+                                        AIが関連タグを自動生成する
+                                    </label>
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <th scope="row">免責事項</th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" name="enable_disclaimer" <?php checked($settings['enable_disclaimer'] ?? true); ?> />
+                                        記事末尾に免責事項を表示する
+                                    </label>
+                                    <div style="margin-top: 10px;">
+                                        <textarea name="disclaimer_text" rows="3" class="large-text"><?php echo esc_textarea($settings['disclaimer_text'] ?? '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。'); ?></textarea>
+                                        <p class="ai-news-form-description">記事末尾に表示する免責事項の文言を設定してください。</p>
+                                    </div>
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <th scope="row">抜粋自動生成</th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" name="enable_excerpt" <?php checked($settings['enable_excerpt'] ?? true); ?> />
+                                        投稿の抜粋を自動生成する（20文字程度の簡潔な要約）
+                                    </label>
+                                    <p class="ai-news-form-description">記事タイトルから簡潔な抜粋を自動生成します。無効にすると抜粋は空になります。</p>
+                                </td>
+                            </tr>
+                        </table>
+                    </div><!-- .ai-news-common-settings -->
+                </div><!-- #tab-common-settings -->
                 
-                <!-- ===== 記事生成設定 ===== -->
-                <h2 class="ai-news-section-title">📝 記事生成設定</h2>
-                <table class="ai-news-form-table">
-                    <tr>
-                        <th scope="row">文体スタイル</th>
-                        <td>
-                            <input type="text" name="writing_style" value="<?php echo esc_attr($settings['writing_style'] ?? '夏目漱石'); ?>" class="regular-text ai-news-autosave" />
-                            <p class="ai-news-form-description">記事の文体スタイルを指定してください（例：夏目漱石、森鴎外、新聞記事風など）。</p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">記事文字数</th>
-                        <td>
-                            <input type="number" name="article_word_count" value="<?php echo esc_attr($settings['article_word_count'] ?? 5000); ?>" min="100" max="10000" step="100" class="small-text" />
-                            <span>文字程度</span>
-                            <p class="ai-news-form-description">生成する記事の目安文字数を設定してください（100〜10000文字）。推奨: 7000-8000文字</p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">記事生成数</th>
-                        <td>
-                            <input type="number" name="article_count" value="<?php echo esc_attr($settings['article_count'] ?? 1); ?>" min="1" max="5" step="1" class="small-text" />
-                            <span>記事</span>
-                            <p class="ai-news-form-description">一度に生成する記事の数を設定してください（1〜5記事）。推奨: 1記事（サーバー負荷軽減のため）</p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">ニュース収集言語</th>
-                        <td>
-                            <label><input type="checkbox" name="news_languages[]" value="japanese" <?php checked(in_array('japanese', $settings['news_languages'] ?? array())); ?> /> 日本語</label><br>
-                            <label><input type="checkbox" name="news_languages[]" value="english" <?php checked(in_array('english', $settings['news_languages'] ?? array())); ?> /> 英語</label><br>
-                            <label><input type="checkbox" name="news_languages[]" value="chinese" <?php checked(in_array('chinese', $settings['news_languages'] ?? array())); ?> /> 中国語</label>
-                            <p class="ai-news-form-description">収集するニュースの言語を選択してください。複数選択可能です。</p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">記事出力言語</th>
-                        <td>
-                            <select name="output_language">
-                                <option value="japanese" <?php selected($settings['output_language'] ?? 'japanese', 'japanese'); ?>>日本語</option>
-                                <option value="english" <?php selected($settings['output_language'] ?? 'japanese', 'english'); ?>>英語</option>
-                                <option value="chinese" <?php selected($settings['output_language'] ?? 'japanese', 'chinese'); ?>>中国語</option>
-                            </select>
-                            <p class="ai-news-form-description">生成される記事の言語を選択してください。</p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">免責事項</th>
-                        <td>
-                            <label>
-                                <input type="checkbox" name="enable_disclaimer" <?php checked($settings['enable_disclaimer'] ?? true); ?> />
-                                記事末尾に免責事項を表示する
-                            </label>
-                            <div style="margin-top: 10px;">
-                                <textarea name="disclaimer_text" rows="3" class="large-text"><?php echo esc_textarea($settings['disclaimer_text'] ?? '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。'); ?></textarea>
-                                <p class="ai-news-form-description">記事末尾に表示する免責事項の文言を設定してください。</p>
-                            </div>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">抜粋自動生成</th>
-                        <td>
-                            <label>
-                                <input type="checkbox" name="enable_excerpt" <?php checked($settings['enable_excerpt'] ?? true); ?> />
-                                投稿の抜粋を自動生成する（20文字程度の簡潔な要約）
-                            </label>
-                            <p class="ai-news-form-description">記事タイトルから簡潔な抜粋を自動生成します。無効にすると抜粋は空になります。</p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">カスタムプロンプト</th>
-                        <td>
-                            <textarea name="custom_prompt" rows="8" class="large-text" placeholder="空白の場合はデフォルトプロンプトを使用します"><?php echo esc_textarea($settings['custom_prompt'] ?? ''); ?></textarea>
-                            <p class="ai-news-form-description">
-                                AIに送信するカスタムプロンプトを設定できます。空白の場合は設定に基づいて動的に生成されるデフォルトプロンプトを使用します。<br><br>
-                                <strong>デフォルトプロンプトの特徴：</strong><br>
-                                • 設定された文字数に基づいて記事ごと・セクションごとの文字数を自動計算<br>
-                                • 順次生成方式で1記事ずつ確実に生成（Google Search Grounding対応）<br>
-                                • H2/H3タグによる構造化された記事レイアウト<br>
-                                • 現在の日付を自動挿入<br><br>
-                                <strong>カスタムプロンプトで使用可能なプレースホルダー：</strong><br>
-                                <code>{言語}</code> - ニュース収集言語<br>
-                                <code>{キーワード}</code> - 検索キーワード<br>
-                                <code>{文字数}</code> - 記事文字数<br>
-                                <code>{文体}</code> - 文体スタイル<br>
-                                <code>{記事数}</code> - 記事数<br>
-                                <code>{影響分析文字数}</code> - 影響分析文字数<br>
-                                <code>{セクション文字数}</code> - セクションごとの最小文字数（動的計算）<br><br>
-                                <button type="button" id="show-actual-prompt" class="button">実際に送信されるプロンプトを表示</button>
-                                <button type="button" id="show-default-prompt" class="button" style="margin-left: 10px;">デフォルトプロンプトテンプレートを表示</button>
-                                
-                                <div id="actual-prompt-display" style="display: none; margin-top: 10px; padding: 10px; background: #e8f5e8; border: 1px solid #4caf50; border-radius: 4px;">
-                                    <strong>実際に送信されるプロンプト（設定値置換後）：</strong><br>
-                                    <div id="actual-prompt-content" style="white-space: pre-wrap; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto; margin-top: 5px;"></div>
-                                    <p><small>文字数: <span id="actual-prompt-length"></span> 文字</small></p>
-                                </div>
-                                
-                                <div id="default-prompt-display" style="display: none; margin-top: 10px; padding: 10px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
-                                    <strong>デフォルトプロンプトテンプレート（プレースホルダー付き）：</strong><br>
-                                    <div id="default-prompt-content" style="white-space: pre-wrap; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto; margin-top: 5px;"></div>
-                                    <p><small>文字数: <span id="default-prompt-length"></span> 文字</small></p>
-                                </div>
-                            </p>
-                        </td>
-                    </tr>
-                    
-                    <!-- 参考情報源セクションタイトル設定は削除（修正により不要）
-                    <tr>
-                        <th scope="row">参考情報源セクションタイトル</th>
-                        <td>
-                            <input type="text" name="sources_section_title" value="<?php echo esc_attr($settings['sources_section_title'] ?? '{date}の{keyword}関連のニュース'); ?>" class="regular-text ai-news-autosave" />
-                            <p class="ai-news-form-description">
-                                記事冒頭の参考情報源セクションのタイトルを設定してください。<br>
-                                <strong>利用可能なプレースホルダー:</strong><br>
-                                <code>{keyword}</code> - 検索キーワード<br>
-                                <code>{date}</code> - 2025年7月6日<br>
-                                <code>{date_short}</code> - 7月6日<br>
-                                <code>{date_en}</code> - July 6, 2025<br>
-                                <code>{date_iso}</code> - 2025-07-06<br>
-                                <code>{today}</code> - 今日<br>
-                                <code>{year}</code> - 2025<br>
-                                <code>{month}</code> - 7月<br>
-                                <code>{day}</code> - 6日<br>
-                                <small>例: 「{date}の{keyword}関連のニュース」→「2025年7月6日のアウトドア関連のニュース」</small>
-                            </p>
-                        </td>
-                    </tr>
-                    -->
-                </table>
-                
-                <!-- ===== スケジュール・投稿設定 ===== -->
-                <h2 class="ai-news-section-title">⏰ スケジュール・投稿設定</h2>
-                <table class="ai-news-form-table">
-                    <tr>
-                        <th scope="row">自動投稿</th>
-                        <td>
-                            <label>
-                                <input type="checkbox" id="auto-publish-toggle" name="auto_publish" <?php checked($settings['auto_publish'] ?? false); ?> />
-                                自動投稿を有効にする
-                            </label>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">投稿開始時刻</th>
-                        <td>
-                            <input type="time" id="schedule_time" name="schedule_time" value="<?php echo esc_attr($settings['schedule_time'] ?? '06:00'); ?>" />
-                            <p class="ai-news-form-description">
-                                <strong>自動投稿の仕組み：</strong><br>
-                                開始時刻から1時間おきに投稿されます。<br>
-                                例：開始時刻06:00、最大投稿数3の場合 → 06:00、07:00、08:00に投稿
-                            </p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">1日の最大投稿数</th>
-                        <td>
-                            <input type="number" id="max_posts_per_day" name="max_posts_per_day" value="<?php echo esc_attr($settings['max_posts_per_day'] ?? 1); ?>" min="1" max="5" />
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">投稿カテゴリ</th>
-                        <td>
-                            <select name="post_category">
-                                <?php foreach ($categories as $category): ?>
-                                    <option value="<?php echo $category->term_id; ?>" <?php selected($settings['post_category'] ?? '', $category->term_id); ?>>
-                                        <?php echo esc_html($category->name); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">投稿ステータス</th>
-                        <td>
-                            <select name="post_status">
-                                <option value="publish" <?php selected($settings['post_status'] ?? 'publish', 'publish'); ?>>公開</option>
-                                <option value="draft" <?php selected($settings['post_status'] ?? 'publish', 'draft'); ?>>下書き</option>
-                                <option value="pending" <?php selected($settings['post_status'] ?? 'publish', 'pending'); ?>>承認待ち</option>
-                            </select>
-                        </td>
-                    </tr>
-                    
-                </table>
-                
-                <!-- ===== その他設定 ===== -->
-                <h2 class="ai-news-section-title">⚙️ その他設定</h2>
-                <table class="ai-news-form-table">
-                    <tr>
-                        <th scope="row">ニュースソース（RSS）</th>
-                        <td>
-                            <div class="ai-news-sources-container">
-                                <div class="ai-news-source-group">
-                                    <h4>日本語ニュースソース</h4>
-                                    <textarea name="news_sources_japanese" rows="3" class="large-text"><?php echo esc_textarea(implode("\n", $settings['news_sources']['japanese'] ?? array())); ?></textarea>
-                                </div>
-                                
-                                <div class="ai-news-source-group">
-                                    <h4>英語ニュースソース</h4>
-                                    <textarea name="news_sources_english" rows="3" class="large-text"><?php echo esc_textarea(implode("\n", $settings['news_sources']['english'] ?? array())); ?></textarea>
-                                </div>
-                                
-                                <div class="ai-news-source-group">
-                                    <h4>中国語ニュースソース</h4>
-                                    <textarea name="news_sources_chinese" rows="3" class="large-text"><?php echo esc_textarea(implode("\n", $settings['news_sources']['chinese'] ?? array())); ?></textarea>
-                                </div>
-                            </div>
-                            <p class="ai-news-form-description">
-                                <strong>実ニュース取得用のRSSフィードURLを設定します。</strong><br>
-                                各言語のRSSフィードURLを1行につき1つ入力してください。<br>
-                                これらのRSSフィードからニュースを取得し、AIが関連記事を生成します。<br>
-                                <small>例：ITメディア、ZDNet、AI関連ニュースサイトなど。デフォルトでAI関連のRSSフィードが設定されています。</small>
-                            </p>
-                        </td>
-                    </tr>
-                </table>
+                <!-- 定型プロンプト設定タブ -->
+                <div id="tab-normal-settings" class="ai-news-tab-content">
+                    <div class="ai-news-normal-settings">
+                        <!-- ===== キーワード設定 ===== -->
+                        <h2 class="ai-news-section-title">🔍 キーワード設定</h2>
+                        <table class="ai-news-form-table">
+                            <tr>
+                                <th scope="row">検索キーワード</th>
+                                <td>
+                                    <input type="text" name="search_keywords" value="<?php echo esc_attr($settings['search_keywords'] ?? 'AIニュース'); ?>" class="regular-text">
+                                    <p class="ai-news-form-description">
+                                        ニュース検索やコンテンツ生成のベースとなるキーワードを設定します。<br>
+                                        例：「AIニュース」「機械学習」「ChatGPT」など
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">SEOフォーカスキーワード</th>
+                                <td>
+                                    <input type="text" name="seo_focus_keyword" value="<?php echo esc_attr($settings['seo_focus_keyword'] ?? 'AI ニュース'); ?>" class="regular-text">
+                                    <p class="ai-news-form-description">
+                                        SEO最適化のためのメインキーワードを設定します。<br>
+                                        記事タイトルや本文に自然に含まれるよう最適化されます。
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">メタディスクリプションテンプレート</th>
+                                <td>
+                                    <textarea name="meta_description_template" rows="2" class="large-text"><?php echo esc_textarea($settings['meta_description_template'] ?? '最新の業界ニュースをお届けします。{title}について詳しく解説いたします。'); ?></textarea>
+                                    <p class="ai-news-form-description">
+                                        メタディスクリプション用のテンプレートを設定します。<br>
+                                        <strong>利用可能なプレースホルダー：</strong> {title}, {keyword}, {date}
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                        
+                        <!-- ===== 記事生成設定 ===== -->
+                        <h2 class="ai-news-section-title">📝 記事生成設定</h2>
+                        <table class="ai-news-form-table">
+                            <tr>
+                                <th scope="row">文体スタイル</th>
+                                <td>
+                                    <select name="writing_style" class="regular-text">
+                                        <option value="夏目漱石" <?php selected($settings['writing_style'] ?? '夏目漱石', '夏目漱石'); ?>>夏目漱石（格調高い）</option>
+                                        <option value="ビジネス記事" <?php selected($settings['writing_style'] ?? '夏目漱石', 'ビジネス記事'); ?>>ビジネス記事</option>
+                                        <option value="技術記事" <?php selected($settings['writing_style'] ?? '夏目漱石', '技術記事'); ?>>技術記事</option>
+                                        <option value="カジュアル" <?php selected($settings['writing_style'] ?? '夏目漱石', 'カジュアル'); ?>>カジュアル</option>
+                                        <option value="学術論文" <?php selected($settings['writing_style'] ?? '夏目漱石', '学術論文'); ?>>学術論文</option>
+                                    </select>
+                                    <p class="ai-news-form-description">
+                                        生成される記事の文体スタイルを選択してください。
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">記事文字数</th>
+                                <td>
+                                    <input type="number" name="article_word_count" value="<?php echo esc_attr($settings['article_word_count'] ?? 5000); ?>" min="1000" max="50000" class="regular-text">
+                                    <p class="ai-news-form-description">
+                                        生成する記事の目標文字数を設定します。（1,000～50,000文字）<br>
+                                        実際の文字数は±20%程度の誤差が生じる場合があります。
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">記事生成数</th>
+                                <td>
+                                    <input type="number" name="article_count" value="<?php echo esc_attr($settings['article_count'] ?? 1); ?>" min="1" max="10" class="regular-text">
+                                    <p class="ai-news-form-description">
+                                        一度に生成する記事数を設定します。（1～10記事）<br>
+                                        複数記事を生成する場合、各記事は関連性を持ちながら異なる視点で構成されます。
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">ニュース収集言語</th>
+                                <td>
+                                    <div class="ai-news-checkbox-group">
+                                        <label><input type="checkbox" name="news_languages[]" value="japanese" <?php checked(in_array('japanese', $settings['news_languages'] ?? array('japanese', 'english'))); ?>> 日本語</label>
+                                        <label><input type="checkbox" name="news_languages[]" value="english" <?php checked(in_array('english', $settings['news_languages'] ?? array('japanese', 'english'))); ?>> 英語</label>
+                                        <label><input type="checkbox" name="news_languages[]" value="chinese" <?php checked(in_array('chinese', $settings['news_languages'] ?? array('japanese', 'english'))); ?>> 中国語</label>
+                                    </div>
+                                    <p class="ai-news-form-description">
+                                        ニュース収集の対象言語を選択してください。（複数選択可能）
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">出力言語</th>
+                                <td>
+                                    <select name="output_language" class="regular-text">
+                                        <option value="japanese" <?php selected($settings['output_language'] ?? 'japanese', 'japanese'); ?>>日本語</option>
+                                        <option value="english" <?php selected($settings['output_language'] ?? 'japanese', 'english'); ?>>英語</option>
+                                        <option value="chinese" <?php selected($settings['output_language'] ?? 'japanese', 'chinese'); ?>>中国語</option>
+                                    </select>
+                                    <p class="ai-news-form-description">
+                                        生成される記事の言語を選択してください。
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                        
+                        <!-- ===== ニュースソース設定 ===== -->
+                        <h2 class="ai-news-section-title">📰 ニュースソース設定</h2>
+                        <table class="ai-news-form-table">
+                            <tr>
+                                <th scope="row">ニュースソース（RSS）</th>
+                                <td>
+                                    <div class="ai-news-sources-container">
+                                        <div class="ai-news-source-group">
+                                            <h4>日本語ニュースソース</h4>
+                                            <textarea name="news_sources_japanese" rows="3" class="large-text"><?php echo esc_textarea(implode("\n", $settings['news_sources']['japanese'] ?? array())); ?></textarea>
+                                        </div>
+                                        
+                                        <div class="ai-news-source-group">
+                                            <h4>英語ニュースソース</h4>
+                                            <textarea name="news_sources_english" rows="3" class="large-text"><?php echo esc_textarea(implode("\n", $settings['news_sources']['english'] ?? array())); ?></textarea>
+                                        </div>
+                                        
+                                        <div class="ai-news-source-group">
+                                            <h4>中国語ニュースソース</h4>
+                                            <textarea name="news_sources_chinese" rows="3" class="large-text"><?php echo esc_textarea(implode("\n", $settings['news_sources']['chinese'] ?? array())); ?></textarea>
+                                        </div>
+                                    </div>
+                                    <p class="ai-news-form-description">
+                                        <strong>実ニュース取得用のRSSフィードURLを設定します。</strong><br>
+                                        各言語のRSSフィードURLを1行につき1つ入力してください。<br>
+                                        これらのRSSフィードからニュースを取得し、AIが関連記事を生成します。<br>
+                                        <small>例：ITメディア、ZDNet、AI関連ニュースサイトなど。デフォルトでAI関連のRSSフィードが設定されています。</small>
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
                     </div><!-- .ai-news-normal-settings -->
                 </div><!-- #tab-normal-settings -->
                 

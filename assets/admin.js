@@ -918,11 +918,11 @@
             const mode = $('input[name="prompt_mode"]:checked').val();
             
             if (mode === 'free') {
-                // フリープロンプトモードの場合、通常の設定を非表示
+                // フリープロンプトモードの場合、定型プロンプト設定を非表示
                 $('.ai-news-normal-settings').hide();
                 $('.ai-news-free-prompt-container').show();
             } else {
-                // 通常モードの場合
+                // 定型プロンプトモードの場合
                 $('.ai-news-normal-settings').show();
                 $('.ai-news-free-prompt-container').hide();
             }
