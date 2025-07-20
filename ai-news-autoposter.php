@@ -361,7 +361,12 @@ class AINewsAutoPoster {
                     'news_sources' => $this->parse_news_sources($_POST),
                     'custom_prompt' => sanitize_textarea_field($_POST['custom_prompt'] ?? ''),
                     'prompt_mode' => sanitize_text_field($_POST['prompt_mode'] ?? 'normal'),
-                    'free_prompt' => sanitize_textarea_field($_POST['free_prompt'] ?? '')
+                    'free_prompt' => sanitize_textarea_field($_POST['free_prompt'] ?? ''),
+                    // 個別設定項目
+                    'free_prompt_writing_style' => sanitize_text_field($_POST['free_prompt_writing_style'] ?? ''),
+                    'free_prompt_include_charts_tables' => isset($_POST['free_prompt_include_charts_tables']),
+                    'url_articles_writing_style' => sanitize_text_field($_POST['url_articles_writing_style'] ?? '新聞記事風'),
+                    'url_articles_include_charts_tables' => isset($_POST['url_articles_include_charts_tables'])
                 );
                 
                 // 開始時刻から1時間おきのスケジュールを自動生成
@@ -410,26 +415,14 @@ class AINewsAutoPoster {
             <!-- タブナビゲーション -->
             <div class="ai-news-tabs-nav">
                 <button type="button" class="ai-news-tab-button active" data-tab="tab-common-settings">共通設定</button>
-                <button type="button" class="ai-news-tab-button" data-tab="tab-normal-settings">定型プロンプト設定</button>
-                <button type="button" class="ai-news-tab-button" data-tab="tab-free-prompt">フリープロンプト設定</button>
-                <button type="button" class="ai-news-tab-button" data-tab="tab-url-scraping">URLスクレイピング</button>
+                <button type="button" class="ai-news-tab-button" data-tab="tab-keyword-articles">キーワード記事自動作成</button>
+                <button type="button" class="ai-news-tab-button" data-tab="tab-free-prompt">フリープロンプト</button>
+                <button type="button" class="ai-news-tab-button" data-tab="tab-url-articles">URL記事作成</button>
             </div>
             
             <form method="post" action="" id="ai-news-settings-form">
                 <?php wp_nonce_field('ai_news_autoposter_settings', 'ai_news_autoposter_nonce'); ?>
                 
-                <!-- モード選択 -->
-                <div class="ai-news-mode-selector">
-                    <h3>プロンプトモード選択</h3>
-                    <div class="ai-news-mode-option">
-                        <input type="radio" id="prompt_mode_normal" name="prompt_mode" value="normal" <?php checked($settings['prompt_mode'] ?? 'normal', 'normal'); ?> />
-                        <label for="prompt_mode_normal">定型プロンプトモード（設定値を使用してプロンプトを自動生成）</label>
-                    </div>
-                    <div class="ai-news-mode-option">
-                        <input type="radio" id="prompt_mode_free" name="prompt_mode" value="free" <?php checked($settings['prompt_mode'] ?? 'normal', 'free'); ?> />
-                        <label for="prompt_mode_free">フリープロンプトモード（完全にカスタマイズしたプロンプトを使用）</label>
-                    </div>
-                </div>
                 
                 <!-- 共通設定タブ -->
                 <div id="tab-common-settings" class="ai-news-tab-content active">
@@ -598,9 +591,13 @@ class AINewsAutoPoster {
                     </div><!-- .ai-news-common-settings -->
                 </div><!-- #tab-common-settings -->
                 
-                <!-- 定型プロンプト設定タブ -->
-                <div id="tab-normal-settings" class="ai-news-tab-content">
-                    <div class="ai-news-normal-settings">
+                <!-- キーワード記事自動作成タブ -->
+                <div id="tab-keyword-articles" class="ai-news-tab-content">
+                    <div class="ai-news-keyword-settings">
+                        <h3 class="ai-news-tab-description">
+                            🔍 指定したキーワードに関連するニュースを自動検索し、AIが記事を生成します
+                        </h3>
+                        
                         <!-- ===== キーワード設定 ===== -->
                         <h2 class="ai-news-section-title">🔍 キーワード設定</h2>
                         <table class="ai-news-form-table">
@@ -786,35 +783,112 @@ class AINewsAutoPoster {
                                 </td>
                             </tr>
                         </table>
-                    </div><!-- .ai-news-normal-settings -->
-                </div><!-- #tab-normal-settings -->
+                        
+                        <!-- キーワード記事生成ボタン -->
+                        <div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                            <h4 style="margin-top: 0; color: #2c3e50;">🔍 キーワード記事生成</h4>
+                            <p style="margin-bottom: 15px; color: #666;">設定したキーワードで最新ニュースを検索し、AI記事を生成します。</p>
+                            <button type="button" id="generate-keyword-article" class="ai-news-button-primary" style="font-size: 16px; padding: 12px 24px;">
+                                📝 キーワード記事を生成
+                            </button>
+                        </div>
+                    </div><!-- .ai-news-keyword-settings -->
+                </div><!-- #tab-keyword-articles -->
                 
                 <!-- フリープロンプト設定タブ -->
                 <div id="tab-free-prompt" class="ai-news-tab-content">
                     <div class="ai-news-free-prompt-container">
-                        <h4>フリープロンプト設定</h4>
-                        <p class="ai-news-form-description">
-                            このモードでは、設定値に関係なく、以下のプロンプトをそのままAIに送信します。<br>
-                            記事本文として生成したい内容を自由に記述してください。
-                        </p>
-                        <textarea name="free_prompt" class="ai-news-free-prompt-textarea" placeholder="例：最新のAI技術についての詳細な解説記事を書いてください。以下の要素を含めてください：&#10;1. 最新のトレンド&#10;2. 実用例&#10;3. 将来の展望&#10;&#10;文字数は3000文字程度で、読みやすい構成にしてください。"><?php echo esc_textarea($settings['free_prompt'] ?? ''); ?></textarea>
-                        <p class="ai-news-form-description">
-                            <strong>注意事項：</strong><br>
-                            • フリープロンプトモードでは、タイトルや抜粋も含めて生成するようプロンプトに記載してください<br>
-                            • HTML形式で出力させたい場合は、プロンプトに明記してください<br>
-                            • 画像生成設定は通常通り動作します
-                        </p>
+                        <h3 class="ai-news-tab-description">
+                            ✍️ 完全にカスタマイズした自由なプロンプトでAIに記事を生成させます
+                        </h3>
+                        
+                        <!-- ===== フリープロンプト設定 ===== -->
+                        <h2 class="ai-news-section-title">✍️ フリープロンプト設定</h2>
+                        <table class="ai-news-form-table">
+                            <tr>
+                                <th scope="row">カスタムプロンプト</th>
+                                <td>
+                                    <textarea name="free_prompt" class="ai-news-free-prompt-textarea" rows="10" placeholder="例：最新のAI技術についての詳細な解説記事を書いてください。以下の要素を含めてください：&#10;1. 最新のトレンド&#10;2. 実用例&#10;3. 将来の展望&#10;&#10;文字数は3000文字程度で、読みやすい構成にしてください。"><?php echo esc_textarea($settings['free_prompt'] ?? ''); ?></textarea>
+                                    <p class="ai-news-form-description">
+                                        このプロンプトがそのままAIに送信されます。記事として生成したい内容を自由に記述してください。<br>
+                                        <strong>ヒント：</strong> タイトル生成、文字数、構成、文体などもプロンプトに明記すると効果的です。
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                        
+                        <!-- ===== 個別設定 ===== -->
+                        <h2 class="ai-news-section-title">⚙️ フリープロンプト個別設定</h2>
+                        <table class="ai-news-form-table">
+                            <tr>
+                                <th scope="row">文体スタイル補助</th>
+                                <td>
+                                    <select name="free_prompt_writing_style" class="regular-text">
+                                        <option value="">プロンプトのみ（補助なし）</option>
+                                        <option value="新聞記事風" <?php selected($settings['free_prompt_writing_style'] ?? '', '新聞記事風'); ?>>新聞記事風（客観的・事実重視）</option>
+                                        <option value="夏目漱石風" <?php selected($settings['free_prompt_writing_style'] ?? '', '夏目漱石風'); ?>>夏目漱石風（格調高い文学的表現）</option>
+                                        <option value="森鴎外風" <?php selected($settings['free_prompt_writing_style'] ?? '', '森鴎外風'); ?>>森鴎外風（理知的・簡潔）</option>
+                                        <option value="太宰治風" <?php selected($settings['free_prompt_writing_style'] ?? '', '太宰治風'); ?>>太宰治風（感情豊か・親しみやすい）</option>
+                                        <option value="芥川龍之介風" <?php selected($settings['free_prompt_writing_style'] ?? '', '芥川龍之介風'); ?>>芥川龍之介風（簡潔・鋭利）</option>
+                                        <option value="ビジネス記事風" <?php selected($settings['free_prompt_writing_style'] ?? '', 'ビジネス記事風'); ?>>ビジネス記事風（実用的・分析的）</option>
+                                        <option value="技術記事風" <?php selected($settings['free_prompt_writing_style'] ?? '', '技術記事風'); ?>>技術記事風（専門的・詳細）</option>
+                                        <option value="カジュアル風" <?php selected($settings['free_prompt_writing_style'] ?? '', 'カジュアル風'); ?>>カジュアル風（親しみやすい・会話調）</option>
+                                        <option value="学術論文風" <?php selected($settings['free_prompt_writing_style'] ?? '', '学術論文風'); ?>>学術論文風（厳密・論理的）</option>
+                                    </select>
+                                    <p class="ai-news-form-description">
+                                        選択すると、プロンプトに加えて文体指示が自動追加されます。プロンプト内で文体を指定している場合は「プロンプトのみ」を選択してください。
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">視覚要素の挿入</th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" name="free_prompt_include_charts_tables" value="1" <?php checked($settings['free_prompt_include_charts_tables'] ?? false, true); ?>>
+                                        記事に図表・グラフ・表を挿入する
+                                    </label>
+                                    <p class="ai-news-form-description">
+                                        チェックすると、プロンプトに加えて図表挿入指示が自動追加されます。
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                        
+                        <div class="ai-news-notice" style="background: #f0f8ff; border-left: 4px solid #0073aa; padding: 15px; margin: 20px 0;">
+                            <h4 style="margin-top: 0;">💡 フリープロンプト活用のコツ</h4>
+                            <ul style="margin-bottom: 0;">
+                                <li><strong>具体的な指示：</strong> 文字数、構成、含めるべき情報を明確に記載</li>
+                                <li><strong>出力形式：</strong> HTML形式やマークダウン形式などの指定</li>
+                                <li><strong>タイトル生成：</strong> 記事本文と一緒にタイトルも生成するよう指示</li>
+                                <li><strong>例：</strong> 「以下の形式で出力してください：タイトル: [記事タイトル] 本文: [記事内容]」</li>
+                            </ul>
+                        </div>
+                        
+                        <!-- フリープロンプト生成ボタン -->
+                        <div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                            <h4 style="margin-top: 0; color: #2c3e50;">📝 フリープロンプト記事生成</h4>
+                            <p style="margin-bottom: 15px; color: #666;">設定したフリープロンプトを使用して記事を生成します。</p>
+                            <button type="button" id="generate-free-prompt-article" class="ai-news-button-primary" style="font-size: 16px; padding: 12px 24px;">
+                                ✍️ フリープロンプトで記事を生成
+                            </button>
+                        </div>
                     </div>
                 </div><!-- #tab-free-prompt -->
                 
-                <!-- URLスクレイピングタブ -->
-                <div id="tab-url-scraping" class="ai-news-tab-content">
-                    <div class="ai-news-url-scraping-container">
-                        <h4>URLスクレイピング機能 <span style="color: #3498db; font-size: 12px;">(Powered by Gemini 2.5 Flash Lite)</span></h4>
-                        <p class="ai-news-form-description">
-                            <strong>AI検索による高精度なURL検索:</strong> Gemini 2.5 Flash Lite + Google Search Grounding を使用して、指定キーワードに関連する最新ニュース・解説記事を自動検索し、まとめ記事を生成します。<br>
-                            <strong style="color: #e74c3c;">注意:</strong> この機能にはGemini APIキーが必要です。共通設定タブでGemini APIキーを設定してください。
-                        </p>
+                <!-- URL記事作成タブ -->
+                <div id="tab-url-articles" class="ai-news-tab-content">
+                    <div class="ai-news-url-articles-container">
+                        <h3 class="ai-news-tab-description">
+                            🔗 指定キーワードでAIがWeb検索し、見つけた記事URLから要約記事を生成します
+                        </h3>
+                        
+                        <div class="ai-news-notice" style="background: #e8f4fd; border-left: 4px solid #3498db; padding: 15px; margin: 20px 0;">
+                            <h4 style="margin-top: 0; color: #3498db;">🤖 AI検索による高精度なURL検索</h4>
+                            <p style="margin-bottom: 0;">
+                                <strong>Gemini 2.5 Flash Lite + Google Search Grounding</strong> を使用して、指定キーワードに関連する最新ニュース・解説記事を自動検索し、選択した記事から高品質なまとめ記事を生成します。<br>
+                                <strong style="color: #e74c3c;">注意:</strong> この機能にはGemini APIキーが必要です。
+                            </p>
+                        </div>
                         
                         <?php 
                         $gemini_api_key = $settings['gemini_api_key'] ?? '';
@@ -942,8 +1016,44 @@ class AINewsAutoPoster {
                             </div>
                             <p id="scraping-status">初期化中...</p>
                         </div>
+                        
+                        <!-- ===== URL記事作成個別設定 ===== -->
+                        <h2 class="ai-news-section-title">⚙️ URL記事作成個別設定</h2>
+                        <table class="ai-news-form-table">
+                            <tr>
+                                <th scope="row">文体スタイル</th>
+                                <td>
+                                    <select name="url_articles_writing_style" class="regular-text">
+                                        <option value="新聞記事風" <?php selected($settings['url_articles_writing_style'] ?? '新聞記事風', '新聞記事風'); ?>>新聞記事風（客観的・事実重視）</option>
+                                        <option value="夏目漱石風" <?php selected($settings['url_articles_writing_style'] ?? '新聞記事風', '夏目漱石風'); ?>>夏目漱石風（格調高い文学的表現）</option>
+                                        <option value="森鴎外風" <?php selected($settings['url_articles_writing_style'] ?? '新聞記事風', '森鴎外風'); ?>>森鴎外風（理知的・簡潔）</option>
+                                        <option value="太宰治風" <?php selected($settings['url_articles_writing_style'] ?? '新聞記事風', '太宰治風'); ?>>太宰治風（感情豊か・親しみやすい）</option>
+                                        <option value="芥川龍之介風" <?php selected($settings['url_articles_writing_style'] ?? '新聞記事風', '芥川龍之介風'); ?>>芥川龍之介風（簡潔・鋭利）</option>
+                                        <option value="ビジネス記事風" <?php selected($settings['url_articles_writing_style'] ?? '新聞記事風', 'ビジネス記事風'); ?>>ビジネス記事風（実用的・分析的）</option>
+                                        <option value="技術記事風" <?php selected($settings['url_articles_writing_style'] ?? '新聞記事風', '技術記事風'); ?>>技術記事風（専門的・詳細）</option>
+                                        <option value="カジュアル風" <?php selected($settings['url_articles_writing_style'] ?? '新聞記事風', 'カジュアル風'); ?>>カジュアル風（親しみやすい・会話調）</option>
+                                        <option value="学術論文風" <?php selected($settings['url_articles_writing_style'] ?? '新聞記事風', '学術論文風'); ?>>学術論文風（厳密・論理的）</option>
+                                    </select>
+                                    <p class="ai-news-form-description">
+                                        URL記事作成で生成される記事の文体スタイルを選択してください。
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">視覚要素の挿入</th>
+                                <td>
+                                    <label>
+                                        <input type="checkbox" name="url_articles_include_charts_tables" value="1" <?php checked($settings['url_articles_include_charts_tables'] ?? false, true); ?>>
+                                        記事に図表・グラフ・表を挿入する
+                                    </label>
+                                    <p class="ai-news-form-description">
+                                        チェックすると、URL記事作成で生成される記事に図表・グラフ・表が自動的に挿入されます。
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
                     </div>
-                </div><!-- #tab-url-scraping -->
+                </div><!-- #tab-url-articles -->
                 
                 <?php submit_button('設定を保存', 'primary', 'submit', true, array('class' => 'ai-news-button-primary')); ?>
             </form>
@@ -7108,11 +7218,24 @@ class AINewsAutoPoster {
                 )
             );
 
-            $post_id = wp_insert_post($post_data);
+            // 投稿データの安全性チェック
+            if (empty($post_data['post_title']) || empty($post_data['post_content'])) {
+                $this->log('error', "投稿データが不完全です。タイトル: " . (empty($post_data['post_title']) ? '空' : '設定済み') . ", コンテンツ: " . (empty($post_data['post_content']) ? '空' : mb_strlen($post_data['post_content']) . '文字'));
+                wp_send_json_error('記事データが不完全です');
+                return;
+            }
+
+            $this->log('info', "記事投稿を実行します。タイトル: " . mb_substr($post_data['post_title'], 0, 50) . "..., コンテンツ長: " . mb_strlen($post_data['post_content']) . "文字");
+            
+            $post_id = wp_insert_post($post_data, true);
 
             if (is_wp_error($post_id)) {
                 $this->log('error', "WordPress投稿作成エラー: " . $post_id->get_error_message());
                 wp_send_json_error('記事の保存に失敗しました: ' . $post_id->get_error_message());
+                return;
+            } elseif ($post_id === 0 || empty($post_id)) {
+                $this->log('error', "wp_insert_postが無効なIDを返しました: " . var_export($post_id, true));
+                wp_send_json_error('記事の保存に失敗しました（無効なID）');
                 return;
             }
 
