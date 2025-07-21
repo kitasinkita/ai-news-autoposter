@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.7.1');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.7.2');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -190,10 +190,109 @@ class AINewsAutoPoster {
      * 管理画面初期化
      */
     public function admin_init() {
-        register_setting('ai_news_autoposter_settings', 'ai_news_autoposter_settings');
+        register_setting('ai_news_autoposter_settings', 'ai_news_autoposter_settings', array($this, 'sanitize_settings'));
         
         // プラグインの管理画面でのみスクリプトを読み込み
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
+    }
+    
+    /**
+     * 設定のサニタイズ・検証
+     */
+    public function sanitize_settings($input) {
+        $sanitized = array();
+        
+        // 既存の設定を取得
+        $current_settings = get_option('ai_news_autoposter_settings', array());
+        
+        // 全ての入力フィールドを処理
+        if (is_array($input)) {
+            foreach ($input as $key => $value) {
+                switch ($key) {
+                    case 'claude_api_key':
+                    case 'gemini_api_key':
+                    case 'openai_api_key':
+                    case 'unsplash_access_key':
+                        $sanitized[$key] = sanitize_text_field($value);
+                        break;
+                    
+                    case 'auto_publish':
+                    case 'enable_tags':
+                    case 'enable_disclaimer':
+                    case 'enable_excerpt':
+                    case 'include_charts_tables':
+                    case 'url_articles_include_charts_tables':
+                        $sanitized[$key] = (bool) $value;
+                        break;
+                    
+                    case 'max_posts_per_day':
+                    case 'word_count':
+                        $sanitized[$key] = intval($value);
+                        break;
+                    
+                    case 'writing_style':
+                    case 'url_articles_writing_style':
+                    case 'claude_model':
+                    case 'gemini_model':
+                    case 'image_generation_type':
+                    case 'url_articles_image_generation_type':
+                        $sanitized[$key] = sanitize_text_field($value);
+                        break;
+                    
+                    case 'search_keywords':
+                    case 'seo_focus_keyword':
+                    case 'post_category':
+                    case 'post_status':
+                    case 'schedule_time':
+                    case 'language':
+                        $sanitized[$key] = sanitize_text_field($value);
+                        break;
+                    
+                    case 'disclaimer_text':
+                    case 'custom_prompt':
+                        $sanitized[$key] = sanitize_textarea_field($value);
+                        break;
+                    
+                    case 'url_scraping':
+                        // URL scraping settings
+                        if (is_array($value)) {
+                            $sanitized[$key] = array();
+                            foreach ($value as $sub_key => $sub_value) {
+                                switch ($sub_key) {
+                                    case 'search_keyword':
+                                    case 'search_language':
+                                        $sanitized[$key][$sub_key] = sanitize_text_field($sub_value);
+                                        break;
+                                    case 'max_urls':
+                                    case 'summary_word_count':
+                                        $sanitized[$key][$sub_key] = intval($sub_value);
+                                        break;
+                                    default:
+                                        $sanitized[$key][$sub_key] = sanitize_text_field($sub_value);
+                                        break;
+                                }
+                            }
+                        }
+                        break;
+                    
+                    default:
+                        // その他のフィールドは基本的にテキストとしてサニタイズ
+                        if (is_string($value)) {
+                            $sanitized[$key] = sanitize_text_field($value);
+                        } elseif (is_array($value)) {
+                            $sanitized[$key] = $value; // 配列はそのまま保持
+                        } else {
+                            $sanitized[$key] = $value;
+                        }
+                        break;
+                }
+            }
+        }
+        
+        // 既存の設定と新しい設定をマージ
+        $sanitized = array_merge($current_settings, $sanitized);
+        
+        return $sanitized;
     }
     
     /**
@@ -282,11 +381,9 @@ class AINewsAutoPoster {
                     </div>
                     
                     <div class="ai-news-status-card">
-                        <h3>手動実行</h3>
-                        <p>記事を手動生成できます。自動投稿は「設定」で登録ください。</p>
+                        <h3>システムテスト</h3>
+                        <p>APIの接続状況やサーバー情報を確認できます。記事生成は各タブで実行してください。</p>
                         <div class="ai-news-button-group">
-                            <button type="button" class="ai-news-button-primary" id="generate-test-article">下書き記事生成</button>
-                            <button type="button" class="ai-news-button-primary" id="manual-post-now">今すぐ投稿</button>
                             <button type="button" class="ai-news-button-secondary" id="test-api-connection">API接続テスト</button>
                             <button type="button" class="ai-news-button-secondary" id="test-cron-execution">Cron実行テスト</button>
                             <button type="button" class="ai-news-button-secondary" id="show-server-info">サーバー情報表示</button>
@@ -366,7 +463,8 @@ class AINewsAutoPoster {
                     'free_prompt_writing_style' => sanitize_text_field($_POST['free_prompt_writing_style'] ?? ''),
                     'free_prompt_include_charts_tables' => isset($_POST['free_prompt_include_charts_tables']),
                     'url_articles_writing_style' => sanitize_text_field($_POST['url_articles_writing_style'] ?? '新聞記事風'),
-                    'url_articles_include_charts_tables' => isset($_POST['url_articles_include_charts_tables'])
+                    'url_articles_include_charts_tables' => isset($_POST['url_articles_include_charts_tables']),
+                    'url_articles_image_generation_type' => sanitize_text_field($_POST['url_articles_image_generation_type'] ?? 'none')
                 );
                 
                 // 開始時刻から1時間おきのスケジュールを自動生成
@@ -1048,6 +1146,19 @@ class AINewsAutoPoster {
                                     </label>
                                     <p class="ai-news-form-description">
                                         チェックすると、URL記事作成で生成される記事に図表・グラフ・表が自動的に挿入されます。
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">アイキャッチ画像</th>
+                                <td>
+                                    <select name="url_articles_image_generation_type" class="regular-text">
+                                        <option value="none" <?php selected($settings['url_articles_image_generation_type'] ?? 'none', 'none'); ?>>なし</option>
+                                        <option value="placeholder" <?php selected($settings['url_articles_image_generation_type'] ?? 'none', 'placeholder'); ?>>プレースホルダー画像</option>
+                                        <option value="unsplash" <?php selected($settings['url_articles_image_generation_type'] ?? 'none', 'unsplash'); ?>>Unsplash画像</option>
+                                    </select>
+                                    <p class="ai-news-form-description">
+                                        URL記事作成で生成される記事に自動設定するアイキャッチ画像の種類を選択してください。
                                     </p>
                                 </td>
                             </tr>
@@ -7267,6 +7378,20 @@ class AINewsAutoPoster {
 
             error_log('[DEBUG] generate_summary_article: WordPress投稿として保存 Post ID: ' . $post_id);
             $this->log('info', "まとめ記事をWordPress投稿として保存: Post ID {$post_id}");
+            
+            // URL記事専用設定でアイキャッチ画像を生成
+            $url_image_type = $settings['url_articles_image_generation_type'] ?? 'none';
+            if ($url_image_type !== 'none') {
+                $this->log('info', 'URL記事用アイキャッチ画像生成を開始します（方式: ' . $url_image_type . '）');
+                try {
+                    // URL記事専用設定を使用してアイキャッチ生成
+                    $url_settings = $settings;
+                    $url_settings['image_generation_type'] = $url_image_type;
+                    $this->generate_featured_image($post_id, $title ?: 'まとめ記事', $content, $url_settings);
+                } catch (Exception $e) {
+                    $this->log('warning', 'URL記事用アイキャッチ画像生成をスキップしました: ' . $e->getMessage());
+                }
+            }
 
             $result = array(
                 'title' => $title ?: 'まとめ記事',
