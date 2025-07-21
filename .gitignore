@@ -1,170 +1,30 @@
-# WordPress Core
-# Note: if you want to stage/commit WP core files
-# you can delete this whole section/until Configuration Files
-/wp-admin/
-/wp-includes/
-/wp-content/index.php
-/wp-content/languages
-/wp-content/plugins/index.php
-/wp-content/themes/index.php
-wp-*.php
-xmlrpc.php
-wp-config-sample.php
+# セキュリティ - APIキーを含むファイル
+.env
+.env.local
+.env.production
 
-# Configuration Files
-wp-config.php
-wp-config-local.php
-wp-config-production.php
-wp-config-staging.php
-wp-config-development.php
-.htaccess
-
-# Sample Permalink structure
-.htaccess
-
-# Plugin related files
-*.log
-*.tmp
-*.temp
-
-# Backup files
-*.sql
-*.tar.gz
-*.zip
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# IDE and editor files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Node modules (if using build tools)
+# Node.js
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Build outputs
-/dist/
-/build/
-*.min.js
-*.min.css
-
-# Local environment variables
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# API Keys (security)
-api-keys.txt
-secrets.json
-private/
-
-# Testing
-/tests/tmp/
-/tests/_output/
-/tests/_support/_generated/
-
-# Composer
-vendor/
-composer.lock
-
-# Logs
-logs/
-*.log
-
-# Runtime data
-pids/
-*.pid
-*.seed
-*.pid.lock
-
-# Coverage directory used by tools like istanbul
-coverage/
-.lcov
-
-# nyc test coverage
-.nyc_output
-
-# Dependency directories
-jspm_packages/
-
-# Optional npm cache directory
-.npm
-
-# Optional eslint cache
-.eslintcache
-
-# Microbundle cache
-.rpt2_cache/
-.rts2_cache_cjs/
-.rts2_cache_es/
-.rts2_cache_umd/
-
-# Optional REPL history
-.node_repl_history
-
-# Output of 'npm pack'
-*.tgz
-
-# Yarn Integrity file
-.yarn-integrity
-
-# parcel-bundler cache (https://parceljs.org/)
-.cache
-.parcel-cache
-
-# Next.js build output
-.next
-
-# Nuxt.js build / generate output
-.nuxt
-dist
-
-# Gatsby files
-.cache/
-public
-
-# Storybook build outputs
-.out
-.storybook-out
-
-# Temporary folders
-tmp/
-temp/
-
-# WordPress specific
+# WordPress
+wp-config.php
 wp-content/uploads/
-wp-content/cache/
-wp-content/backups/
-wp-content/advanced-cache.php
-wp-content/wp-cache-config.php
-wp-content/cache/
 
-# Plugin specific ignores for AI News AutoPoster
-debug.log
-error.log
-ai-news-autoposter-debug.log
+# テスト・デバッグファイル
+*-screenshot.png
+debug-*.png
+error-*.png
 
-# Ignore API keys in any format
-*api-key*
-*secret*
-*token*
-*.key
-*.pem
+# OS生成ファイル
+.DS_Store
+Thumbs.db
 
-# Ignore any local config overrides
-local-config.php
-dev-config.php
+# IDE
+.vscode/
+.idea/
+
+# ログファイル
+*.log

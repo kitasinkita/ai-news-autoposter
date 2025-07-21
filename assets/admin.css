@@ -1,5 +1,48 @@
 /* AI News AutoPoster - Admin Styles */
 
+/* タブ説明文のスタイル */
+.ai-news-tab-description {
+    background: #f8f9fa;
+    border-left: 4px solid #0073aa;
+    padding: 15px;
+    margin: 20px 0;
+    font-size: 16px;
+    font-weight: 500;
+    color: #2c3e50;
+    border-radius: 0 4px 4px 0;
+}
+
+/* 機能別タブのコンテナ */
+.ai-news-keyword-settings,
+.ai-news-free-prompt-container,
+.ai-news-url-articles-container {
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 0;
+}
+
+/* 注意事項ボックスのスタイル */
+.ai-news-notice {
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.ai-news-notice h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 16px;
+}
+
+/* 個別設定セクションのスタイル */
+.ai-news-section-title {
+    border-bottom: 2px solid #e1e5e9;
+    padding-bottom: 8px;
+    margin-bottom: 20px;
+    color: #2c3e50;
+    font-size: 18px;
+    font-weight: 600;
+}
+
 /* 図表・グラフ用のスタイル */
 .data-table {
     width: 100%;
