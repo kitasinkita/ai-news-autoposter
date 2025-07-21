@@ -6909,21 +6909,29 @@ class AINewsAutoPoster {
      * URLスクレイピング機能: まとめ記事生成
      */
     public function generate_summary_article() {
+        error_log('[DEBUG] generate_summary_article: 関数開始');
+        file_put_contents('/tmp/autoposter-debug.log', date('Y-m-d H:i:s') . " generate_summary_article: 関数開始\n", FILE_APPEND);
+        file_put_contents('/tmp/autoposter-debug.log', date('Y-m-d H:i:s') . " POST data: " . print_r($_POST, true) . "\n", FILE_APPEND);
         $this->log('info', 'まとめ記事生成: 開始 - POSTデータ: ' . print_r($_POST, true));
         
         if (!wp_verify_nonce($_POST['nonce'] ?? '', 'ai_news_autoposter_nonce')) {
+            error_log('[DEBUG] generate_summary_article: Nonce検証失敗');
             $this->log('error', 'まとめ記事生成: Nonce検証失敗');
             wp_send_json_error('セキュリティチェックに失敗しました。');
             return;
         }
+        error_log('[DEBUG] generate_summary_article: Nonce検証成功');
 
         $scraped_content_raw = $_POST['scraped_content'] ?? array();
         $word_count = intval($_POST['word_count'] ?? 800);
         $keyword = sanitize_text_field($_POST['keyword'] ?? '');
         $summary_mode = sanitize_text_field($_POST['summary_mode'] ?? 'enhanced_search');
 
-        // scraped_contentがJSON文字列として送信される場合をサポート
-        if (is_string($scraped_content_raw)) {
+        // scraped_content は配列として直接送信される
+        if (is_array($scraped_content_raw)) {
+            $scraped_content = $scraped_content_raw;
+        } elseif (is_string($scraped_content_raw)) {
+            // JSON文字列として送信される場合もサポート
             $scraped_content = json_decode($scraped_content_raw, true);
             if (json_last_error() !== JSON_ERROR_NONE) {
                 $this->log('error', 'まとめ記事生成: scraped_contentのJSONデコードに失敗 - ' . json_last_error_msg());
@@ -6938,10 +6946,12 @@ class AINewsAutoPoster {
         $this->log('info', "まとめ記事生成: word_count: {$word_count}, keyword: {$keyword}, summary_mode: {$summary_mode}");
 
         if (empty($scraped_content) || !is_array($scraped_content)) {
+            error_log('[DEBUG] generate_summary_article: scraped_contentが無効 - ' . print_r($scraped_content, true));
             $this->log('error', 'まとめ記事生成: scraped_contentが無効 - ' . print_r($scraped_content, true));
             wp_send_json_error('スクレイピングしたコンテンツが見つかりません。先にURLからコンテンツを取得してください。');
             return;
         }
+        error_log('[DEBUG] generate_summary_article: scraped_content有効 - ' . count($scraped_content) . '件');
 
         $this->log('info', "URLスクレイピング: まとめ記事生成開始 - " . count($scraped_content) . "件のコンテンツ、文字数: {$word_count}");
 
@@ -7005,9 +7015,9 @@ class AINewsAutoPoster {
                 $prompt .= "- 提供された記事の内容を50%以上反映してください\n\n";
             }
             
-            // 設定から文体スタイルと図表設定を取得
-            $writing_style = $settings['writing_style'] ?? '新聞記事風';
-            $include_charts_tables = $settings['include_charts_tables'] ?? false;
+            // 設定から文体スタイルと図表設定を取得（URL記事専用設定を使用）
+            $writing_style = $settings['url_articles_writing_style'] ?? 'カジュアル風';
+            $include_charts_tables = $settings['url_articles_include_charts_tables'] ?? false;
             
             $prompt .= "要件:\n";
             $prompt .= "- 記事のタイトルと本文を作成\n";
@@ -7187,10 +7197,18 @@ class AINewsAutoPoster {
             // 拡張検索モードの場合のみGrounding情報を参照元に追加
             if ($summary_mode === 'enhanced_search' && !empty($grounding_sources)) {
                 foreach ($grounding_sources as $grounding_source) {
-                    $all_sources[] = array(
-                        'title' => $grounding_source['title'],
-                        'url' => $grounding_source['url']
-                    );
+                    // Gemini APIのレスポンス構造に合わせて柔軟にキーを取得
+                    $url = $grounding_source['link'] ?? $grounding_source['url'] ?? '';
+                    $title = $grounding_source['title'] ?? '';
+                    
+                    if (!empty($url) && !empty($title)) {
+                        // GoogleのリダイレクトURLを解決
+                        $resolved_url = $this->resolve_redirect_url($url);
+                        $all_sources[] = array(
+                            'title' => $title,
+                            'url' => $resolved_url ?: $url
+                        );
+                    }
                 }
                 $this->log('info', 'まとめ記事生成: 拡張検索モードでGrounding情報 ' . count($grounding_sources) . '件を参照元に追加');
             } else {
@@ -7239,6 +7257,7 @@ class AINewsAutoPoster {
                 return;
             }
 
+            error_log('[DEBUG] generate_summary_article: WordPress投稿として保存 Post ID: ' . $post_id);
             $this->log('info', "まとめ記事をWordPress投稿として保存: Post ID {$post_id}");
 
             $result = array(
@@ -7251,6 +7270,7 @@ class AINewsAutoPoster {
                 'status' => 'draft'
             );
 
+            error_log('[DEBUG] generate_summary_article: 記事生成完了 - タイトル: ' . $title . ', Post ID: ' . $post_id);
             $this->log('info', "まとめ記事生成完了: タイトル「{$title}」、文字数: " . mb_strlen($content) . ", Post ID: {$post_id}");
             wp_send_json_success($result);
 

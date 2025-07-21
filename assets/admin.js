@@ -14,6 +14,7 @@
             this.initializeComponents();
             this.checkStatus();
             this.createNotificationContainer();
+            this.initArticleStructure();
             console.log('AINewsAutoPoster init完了');
             
             // ボタンの存在確認
@@ -32,6 +33,10 @@
             // 今すぐ投稿ボタン
             $(document).on('click', '#manual-post-now', this.manualPostNow);
             
+            // 新しいタブ専用の生成ボタン
+            $(document).on('click', '#generate-keyword-article', this.generateKeywordArticle);
+            $(document).on('click', '#generate-free-prompt-article', this.generateFreePromptArticle);
+            
             // Cron実行テストボタン
             $(document).on('click', '#test-cron-execution', this.testCronExecution);
             
@@ -47,6 +52,12 @@
             // ログコピーボタン
             $(document).on('click', '#copy-logs', this.copyAllLogs);
             $(document).on('click', '#copy-latest-logs', this.copyLatestLogs);
+            
+            // URLスクレイピング機能
+            $(document).on('click', '#search-urls-btn', this.searchUrls);
+            $(document).on('click', '#scrape-selected-urls-btn', this.scrapeSelectedUrls);
+            $(document).on('click', '#generate-summary-btn', this.generateSummaryArticle);
+            $(document).on('change', '.url-checkbox', this.updateSelectedUrls);
             
             // 手動記事生成（管理バー）
             $(document).on('click', '#wp-admin-bar-ai-news-generate a', this.generateFromAdminBar);
@@ -954,6 +965,386 @@
             }
         },
         
+        // URLスクレイピング機能 - Gemini AI検索
+        searchUrls: function(e) {
+            e.preventDefault();
+            
+            const keyword = $('#scraping_keyword').val();
+            const language = $('#scraping_language').val();
+            const maxUrls = $('#scraping_max_urls').val();
+            
+            if (!keyword.trim()) {
+                AINewsAutoPoster.showNotification('検索キーワードを入力してください', 'error');
+                return;
+            }
+            
+            AINewsAutoPoster.showProgress('🤖 Gemini AI + Google Searchで記事を検索中...', 30);
+            
+            $.ajax({
+                url: ai_news_autoposter_ajax.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'search_urls',
+                    keyword: keyword,
+                    language: language,
+                    max_urls: maxUrls,
+                    nonce: ai_news_autoposter_ajax.nonce
+                },
+                success: function(response) {
+                    console.log('🎯 Search success response:', response); // デバッグログ
+                    AINewsAutoPoster.hideProgress();
+                    
+                    if (response.success) {
+                        console.log('📋 Found URLs data:', response.data); // デバッグログ
+                        AINewsAutoPoster.displayFoundUrls(response.data);
+                        AINewsAutoPoster.showNotification(`🎉 Gemini AI検索完了！${response.data.length}件の記事が見つかりました`, 'success');
+                    } else {
+                        console.error('❌ Search failed:', response.data);
+                        AINewsAutoPoster.showNotification('AI検索に失敗しました: ' + response.data, 'error');
+                    }
+                },
+                error: function() {
+                    AINewsAutoPoster.hideProgress();
+                    AINewsAutoPoster.showNotification('通信エラーが発生しました', 'error');
+                }
+            });
+        },
+        
+        displayFoundUrls: function(urls) {
+            console.log('📋 displayFoundUrls called with:', urls); // デバッグログ
+            
+            const container = $('#found-urls-list');
+            console.log('📋 Container element:', container); // デバッグログ
+            container.empty();
+            
+            if (!urls || urls.length === 0) {
+                container.html('<p>URLが見つかりませんでした。</p>');
+                $('#found-urls-container').show();
+                console.log('📋 No URLs found, showing empty state'); // デバッグログ
+                return;
+            }
+            
+            console.log(`📋 Processing ${urls.length} URLs`); // デバッグログ
+            
+            urls.forEach(function(urlData, index) {
+                console.log(`📋 Processing URL ${index}:`, urlData); // デバッグログ
+                
+                const urlItem = $(`
+                    <div class="url-item">
+                        <label>
+                            <input type="checkbox" class="url-checkbox" data-url="${urlData.url}" data-title="${urlData.title}">
+                            <strong>${urlData.title}</strong><br>
+                            <a href="${urlData.url}" target="_blank">${urlData.url}</a>
+                            ${urlData.description ? '<p class="url-description">' + urlData.description + '</p>' : ''}
+                        </label>
+                    </div>
+                `);
+                container.append(urlItem);
+            });
+            
+            $('#found-urls-container').show();
+            console.log('📋 URLs displayed, container shown'); // デバッグログ
+        },
+        
+        updateSelectedUrls: function() {
+            const selectedCount = $('.url-checkbox:checked').length;
+            
+            if (selectedCount > 0) {
+                $('#scrape-selected-urls-btn').show().text(`選択したURL（${selectedCount}個）の内容を取得`);
+            } else {
+                $('#scrape-selected-urls-btn').hide();
+            }
+            
+            // 最大3個まで選択可能
+            if (selectedCount >= 3) {
+                $('.url-checkbox:not(:checked)').prop('disabled', true);
+            } else {
+                $('.url-checkbox').prop('disabled', false);
+            }
+        },
+        
+        scrapeSelectedUrls: function(e) {
+            e.preventDefault();
+            
+            console.log('🔍 scrapeSelectedUrls called'); // デバッグログ
+            
+            const selectedUrls = [];
+            $('.url-checkbox:checked').each(function() {
+                const url = $(this).data('url');
+                const title = $(this).data('title');
+                console.log('Selected URL:', url, 'Title:', title); // デバッグログ
+                selectedUrls.push({
+                    url: url,
+                    title: title
+                });
+            });
+            
+            console.log('Selected URLs array:', selectedUrls); // デバッグログ
+            
+            if (selectedUrls.length === 0) {
+                AINewsAutoPoster.showNotification('URLを選択してください', 'error');
+                return;
+            }
+            
+            AINewsAutoPoster.showProgress('📄 選択されたURLのコンテンツを取得中...', 30);
+            
+            $.ajax({
+                url: ai_news_autoposter_ajax.ajax_url,
+                type: 'POST',
+                dataType: 'json',
+                data: {
+                    action: 'scrape_url_content',
+                    urls: selectedUrls,
+                    nonce: ai_news_autoposter_ajax.nonce
+                },
+                success: function(response) {
+                    console.log('📥 Scrape response:', response); // デバッグログ
+                    AINewsAutoPoster.hideProgress();
+                    
+                    if (response.success) {
+                        // スクレイピングデータをグローバル変数に保存
+                        window.scrapedContentData = response.data;
+                        AINewsAutoPoster.displayScrapedContent(response.data);
+                        AINewsAutoPoster.showNotification('✅ コンテンツの取得が完了しました', 'success');
+                    } else {
+                        console.error('❌ Scrape error:', response.data);
+                        AINewsAutoPoster.showNotification('コンテンツの取得に失敗しました: ' + response.data, 'error');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('❌ AJAX error:', xhr, status, error); // デバッグログ
+                    AINewsAutoPoster.hideProgress();
+                    AINewsAutoPoster.showNotification('通信エラーが発生しました: ' + error, 'error');
+                }
+            });
+        },
+        
+        displayScrapedContent: function(contentArray) {
+            console.log('📄 displayScrapedContent called with:', contentArray); // デバッグログ
+            
+            const container = $('#scraped-content-list');
+            container.empty();
+            
+            if (!contentArray || contentArray.length === 0) {
+                container.html('<p>取得できたコンテンツがありませんでした。</p>');
+                $('#scraped-content-preview').show();
+                return;
+            }
+            
+            contentArray.forEach(function(item, index) {
+                console.log(`Content item ${index}:`, item); // デバッグログ
+                
+                const contentPreview = item.content && item.content.length > 200 
+                    ? item.content.substring(0, 200) + '...'
+                    : item.content || '内容を取得できませんでした';
+                
+                const contentItem = $(`
+                    <div class="scraped-content-item">
+                        <h6>${item.title || 'タイトル不明'}</h6>
+                        <p><a href="${item.url}" target="_blank">${item.url}</a></p>
+                        <div class="content-preview">${contentPreview}</div>
+                        <p class="content-length">文字数: ${item.length || item.content?.length || 0}文字</p>
+                    </div>
+                `);
+                container.append(contentItem);
+            });
+            
+            $('#scraped-content-preview').show();
+            console.log('📄 Content display completed');
+        },
+        
+        generateSummaryArticle: function(e) {
+            e.preventDefault();
+            
+            console.log('✍️ generateSummaryArticle called'); // デバッグログ
+            
+            const wordCount = $('#summary_word_count').val();
+            const keyword = $('#scraping_keyword').val();
+            const summaryMode = $('input[name="summary_mode"]:checked').val() || 'enhanced_search';
+            
+            if (!wordCount || wordCount < 500) {
+                AINewsAutoPoster.showNotification('文字数は500文字以上で設定してください', 'error');
+                return;
+            }
+            
+            // スクレイピングされたコンテンツデータの確認
+            if (!window.scrapedContentData || window.scrapedContentData.length === 0) {
+                AINewsAutoPoster.showNotification('スクレイピングしたコンテンツが見つかりません。先にURLコンテンツを取得してください。', 'error');
+                return;
+            }
+            
+            console.log('📄 Using scraped content:', window.scrapedContentData); // デバッグログ
+            console.log('📄 Summary mode selected:', summaryMode); // デバッグログ
+            console.log('📄 JSON stringify test:', JSON.stringify(window.scrapedContentData)); // デバッグログ
+            
+            const progressText = summaryMode === 'selected_only' 
+                ? '🤖 選択記事のみでまとめ記事を生成中...' 
+                : '🤖 拡張検索でまとめ記事を生成中...';
+            AINewsAutoPoster.showProgress(progressText, 60);
+            
+            $.ajax({
+                url: ai_news_autoposter_ajax.ajax_url,
+                type: 'POST',
+                dataType: 'json',
+                timeout: 120000, // 2分のタイムアウト
+                data: {
+                    action: 'generate_summary_article',
+                    scraped_content: window.scrapedContentData,
+                    word_count: wordCount,
+                    keyword: keyword,
+                    summary_mode: summaryMode,
+                    nonce: ai_news_autoposter_ajax.nonce
+                },
+                success: function(response) {
+                    console.log('📖 Summary response:', response); // デバッグログ
+                    console.log('📖 Response type:', typeof response); // デバッグログ
+                    console.log('📖 Response success:', response.success); // デバッグログ
+                    console.log('📖 Response data:', response.data); // デバッグログ
+                    AINewsAutoPoster.hideProgress();
+                    
+                    if (response.success) {
+                        AINewsAutoPoster.displayGeneratedArticle(response.data);
+                        AINewsAutoPoster.showNotification('🎉 まとめ記事の生成が完了しました！', 'success');
+                    } else {
+                        console.error('❌ Summary error:', response.data);
+                        AINewsAutoPoster.showNotification('記事生成に失敗しました: ' + response.data, 'error');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('❌ Summary AJAX error:', xhr, status, error); // デバッグログ
+                    console.error('❌ Response text:', xhr.responseText); // レスポンス詳細
+                    console.error('❌ Status code:', xhr.status); // ステータスコード
+                    AINewsAutoPoster.hideProgress();
+                    
+                    let errorMessage = error;
+                    if (xhr.responseText) {
+                        try {
+                            const errorResponse = JSON.parse(xhr.responseText);
+                            if (errorResponse.data) {
+                                errorMessage = errorResponse.data;
+                            }
+                        } catch (e) {
+                            // JSONパース失敗時はそのまま表示
+                            errorMessage = xhr.responseText.substring(0, 300);
+                        }
+                    }
+                    
+                    AINewsAutoPoster.showNotification('記事生成中にエラーが発生しました: ' + errorMessage, 'error');
+                }
+            });
+        },
+        
+        displayGeneratedArticle: function(articleData) {
+            const container = $('#generated-article-preview');
+            container.html(`
+                <h6>生成されたまとめ記事</h6>
+                <div class="article-preview">
+                    <h4>${articleData.title}</h4>
+                    <div class="article-content">${articleData.content}</div>
+                    <p class="article-stats">文字数: ${articleData.content.length}文字</p>
+                </div>
+                <button type="button" class="ai-news-button-primary" onclick="AINewsAutoPoster.publishGeneratedArticle()">記事を投稿</button>
+            `);
+            $('#scraping-results').show();
+        },
+        
+        publishGeneratedArticle: function() {
+            // 記事投稿機能（既存の投稿機能を流用）
+            AINewsAutoPoster.showNotification('記事投稿機能は既存のテスト記事生成を使用してください', 'info');
+        },
+        
+        showProgress: function(message, percent) {
+            $('#scraping-status').text(message);
+            $('#scraping-progress-fill').css('width', percent + '%');
+            $('#scraping-progress').show();
+        },
+        
+        hideProgress: function() {
+            $('#scraping-progress').hide();
+        },
+        
+        // 記事構成管理機能
+        initArticleStructure: function() {
+            console.log('記事構成管理機能を初期化');
+            
+            // 構成項目追加ボタン
+            $(document).on('click', '#add-structure-item', function(e) {
+                e.preventDefault();
+                AINewsAutoPoster.addStructureItem();
+            });
+            
+            // 構成項目削除ボタン
+            $(document).on('click', '.remove-structure', function(e) {
+                e.preventDefault();
+                $(this).closest('.structure-item').remove();
+                AINewsAutoPoster.updateStructureNumbers();
+            });
+            
+            // デフォルトに戻すボタン
+            $(document).on('click', '#reset-structure', function(e) {
+                e.preventDefault();
+                AINewsAutoPoster.resetToDefaultStructure();
+            });
+        },
+        
+        addStructureItem: function() {
+            const container = $('#article-structure-container');
+            const newItem = $(`
+                <div class="structure-item" style="margin-bottom: 15px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                    <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
+                        <label style="font-weight: bold; width: 80px;">見出し:</label>
+                        <input type="text" name="structure_title[]" value="" style="flex: 1;" placeholder="例: 分析" />
+                        <button type="button" class="button remove-structure" style="background: #dc3545; color: white; border: none;">削除</button>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <label style="font-weight: bold; width: 80px;">説明:</label>
+                        <input type="text" name="structure_description[]" value="" style="flex: 1;" placeholder="この構成の内容説明" />
+                    </div>
+                </div>
+            `);
+            container.append(newItem);
+            
+            // 新しく追加した項目の最初の入力フィールドにフォーカス
+            newItem.find('input[name="structure_title[]"]').focus();
+        },
+        
+        resetToDefaultStructure: function() {
+            const defaultStructure = [
+                { title: '概要', description: '記事の要点と概要' },
+                { title: '背景', description: 'ニュースの背景と文脈' },
+                { title: '課題', description: '現在の課題と問題点' },
+                { title: '今後の展開予想', description: '今後の影響と展開の予想' }
+            ];
+            
+            const container = $('#article-structure-container');
+            container.empty();
+            
+            defaultStructure.forEach(function(section) {
+                const item = $(`
+                    <div class="structure-item" style="margin-bottom: 15px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
+                            <label style="font-weight: bold; width: 80px;">見出し:</label>
+                            <input type="text" name="structure_title[]" value="${section.title}" style="flex: 1;" />
+                            <button type="button" class="button remove-structure" style="background: #dc3545; color: white; border: none;">削除</button>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <label style="font-weight: bold; width: 80px;">説明:</label>
+                            <input type="text" name="structure_description[]" value="${section.description}" style="flex: 1;" placeholder="この構成の内容説明" />
+                        </div>
+                    </div>
+                `);
+                container.append(item);
+            });
+        },
+        
+        updateStructureNumbers: function() {
+            // 構成項目が最低1つは必要
+            const items = $('.structure-item');
+            if (items.length === 0) {
+                this.addStructureItem();
+            }
+        },
+        
     };
 
     // DOM Ready
@@ -965,7 +1356,121 @@
         console.log('AI News AutoPoster: Initialized');
     });
 
+    // 新しいタブ専用の記事生成関数
+    AINewsAutoPoster.generateKeywordArticle = function(e) {
+        e.preventDefault();
+        
+        const $button = $(this);
+        const originalText = $button.text();
+        
+        // 確認ダイアログ
+        if (!confirm('キーワード記事を生成しますか？この処理には時間がかかる場合があります。')) {
+            return;
+        }
+        
+        // ボタンを無効化
+        $button.prop('disabled', true).text('生成中...');
+        
+        console.log('📝 キーワード記事生成開始');
+        
+        // 通常の記事生成APIを呼び出し（prompt_mode=normalで）
+        const data = {
+            action: 'ai_news_autoposter_generate_article',
+            nonce: ai_news_autoposter_ajax.nonce,
+            prompt_mode: 'normal',
+            tab_source: 'keyword-articles'
+        };
+        
+        $.ajax({
+            url: ai_news_autoposter_ajax.ajax_url,
+            type: 'POST',
+            data: data,
+            success: function(response) {
+                console.log('✅ キーワード記事生成成功:', response);
+                if (response.success) {
+                    AINewsAutoPoster.showNotification('キーワード記事が正常に生成されました！', 'success');
+                } else {
+                    AINewsAutoPoster.showNotification('エラー: ' + (response.data?.message || '不明なエラー'), 'error');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('❌ キーワード記事生成エラー:', error);
+                AINewsAutoPoster.showNotification('記事生成中にエラーが発生しました: ' + error, 'error');
+            },
+            complete: function() {
+                // ボタンを復元
+                $button.prop('disabled', false).text(originalText);
+            }
+        });
+    };
+    
+    AINewsAutoPoster.generateFreePromptArticle = function(e) {
+        e.preventDefault();
+        
+        const $button = $(this);
+        const originalText = $button.text();
+        
+        // フリープロンプトが入力されているかチェック
+        const freePrompt = $('textarea[name="free_prompt"]').val().trim();
+        if (!freePrompt) {
+            AINewsAutoPoster.showNotification('フリープロンプトを入力してください', 'error');
+            return;
+        }
+        
+        // 確認ダイアログ
+        if (!confirm('フリープロンプトで記事を生成しますか？この処理には時間がかかる場合があります。')) {
+            return;
+        }
+        
+        // ボタンを無効化
+        $button.prop('disabled', true).text('生成中...');
+        
+        console.log('✍️ フリープロンプト記事生成開始');
+        
+        // フリープロンプトモードで記事生成APIを呼び出し
+        const data = {
+            action: 'ai_news_autoposter_generate_article',
+            nonce: ai_news_autoposter_ajax.nonce,
+            prompt_mode: 'free',
+            tab_source: 'free-prompt'
+        };
+        
+        $.ajax({
+            url: ai_news_autoposter_ajax.ajax_url,
+            type: 'POST',
+            data: data,
+            success: function(response) {
+                console.log('✅ フリープロンプト記事生成成功:', response);
+                if (response.success) {
+                    AINewsAutoPoster.showNotification('フリープロンプト記事が正常に生成されました！', 'success');
+                } else {
+                    AINewsAutoPoster.showNotification('エラー: ' + (response.data?.message || '不明なエラー'), 'error');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('❌ フリープロンプト記事生成エラー:', error);
+                AINewsAutoPoster.showNotification('記事生成中にエラーが発生しました: ' + error, 'error');
+            },
+            complete: function() {
+                // ボタンを復元
+                $button.prop('disabled', false).text(originalText);
+            }
+        });
+    };
+
     // グローバル公開
     window.AINewsAutoPoster = AINewsAutoPoster;
 
 })(jQuery);
+
+// プリセット選択時の最大URL数更新
+function updateMaxUrls() {
+    const preset = document.getElementById('scraping_max_urls_preset');
+    const input = document.getElementById('scraping_max_urls');
+    
+    if (preset && input && preset.value) {
+        input.value = preset.value;
+        // 選択後はプリセットをリセット
+        preset.value = '';
+    }
+}
