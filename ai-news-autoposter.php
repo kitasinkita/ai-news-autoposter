@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.7.0');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.7.1');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -6274,7 +6274,15 @@ class AINewsAutoPoster {
                 $url = $source['link'] ?? $source['url'] ?? null;
                 if (isset($source['title']) && !empty($url)) {
                     $clean_title = trim(strip_tags($source['title']));
-                    $grounding_url = $url;
+                    
+                    // GoogleリダイレクトURLを解決
+                    if (strpos($url, 'vertexaisearch.cloud.google.com/grounding-api-redirect/') !== false) {
+                        $resolved_url = $this->resolve_redirect_url($url);
+                        $grounding_url = $resolved_url ?: $url;
+                        $this->log('info', "リダイレクトURL解決: {$url} -> {$grounding_url}");
+                    } else {
+                        $grounding_url = $url;
+                    }
                     
                     $grounding_list .= '<li><a href="' . esc_url($grounding_url) . '" target="_blank">' . esc_html($clean_title) . '</a></li>' . "\n";
                     $this->log('info', "Grounding URL追加: {$clean_title} -> {$grounding_url}");
