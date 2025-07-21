@@ -1187,9 +1187,17 @@
                 type: 'POST',
                 dataType: 'json',
                 timeout: 120000, // 2分のタイムアウト
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+                },
                 data: {
                     action: 'generate_summary_article',
-                    scraped_content: window.scrapedContentData,
+                    scraped_content: window.scrapedContentData ? window.scrapedContentData.map(item => ({
+                        url: item.url,
+                        title: item.title,
+                        content: item.content ? item.content.substring(0, 1000) : '' // 1000文字に制限
+                    })) : [],
                     word_count: wordCount,
                     keyword: keyword,
                     summary_mode: summaryMode,
