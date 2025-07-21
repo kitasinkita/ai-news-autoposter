@@ -970,11 +970,19 @@
             e.preventDefault();
             
             const keyword = $('#scraping_keyword').val();
-            const language = $('#scraping_language').val();
+            const selectedLanguages = [];
+            $('input[name="search_languages[]"]:checked').each(function() {
+                selectedLanguages.push($(this).val());
+            });
             const maxUrls = $('#scraping_max_urls').val();
             
             if (!keyword.trim()) {
                 AINewsAutoPoster.showNotification('検索キーワードを入力してください', 'error');
+                return;
+            }
+            
+            if (selectedLanguages.length === 0) {
+                AINewsAutoPoster.showNotification('検索言語を1つ以上選択してください', 'error');
                 return;
             }
             
@@ -986,7 +994,7 @@
                 data: {
                     action: 'search_urls',
                     keyword: keyword,
-                    language: language,
+                    languages: selectedLanguages,
                     max_urls: maxUrls,
                     nonce: ai_news_autoposter_ajax.nonce
                 },
@@ -1160,7 +1168,7 @@
             
             const wordCount = $('#summary_word_count').val();
             const keyword = $('#scraping_keyword').val();
-            const summaryMode = $('input[name="summary_mode"]:checked').val() || 'enhanced_search';
+            const summaryMode = $('input[name="summary_mode"]:checked').val() || 'selected_only';
             
             if (!wordCount || wordCount < 500) {
                 AINewsAutoPoster.showNotification('文字数は500文字以上で設定してください', 'error');
@@ -1654,6 +1662,13 @@ const URLArticleWizard = {
 
     executeSearch: function(keyword) {
         const $ = jQuery; // jQuery を明示的に設定
+        
+        // 選択された検索言語を取得
+        const selectedLanguages = [];
+        $('input[name="search_languages[]"]:checked').each(function() {
+            selectedLanguages.push($(this).val());
+        });
+        
         return new Promise((resolve, reject) => {
             $.ajax({
                 url: ai_news_autoposter_ajax.ajax_url,
@@ -1662,7 +1677,8 @@ const URLArticleWizard = {
                     action: 'search_urls',
                     nonce: ai_news_autoposter_ajax.nonce,
                     keyword: keyword,
-                    max_urls: $('#scraping_max_urls').val() || 10
+                    languages: selectedLanguages,
+                    max_urls: $('#scraping_max_urls').val() || 5
                 },
                 success: function(response) {
                     if (response.success) {
@@ -1788,7 +1804,8 @@ const URLArticleWizard = {
                     scraped_content: window.scrapedContentData,
                     word_count: $('#summary_word_count').val() || 3000,
                     keyword: $('#scraping_keyword').val(),
-                    summary_mode: $('input[name="summary_mode"]:checked').val() || 'enhanced_search'
+                    summary_mode: $('input[name="summary_mode"]:checked').val() || 'selected_only',
+                    output_language: $('#output_language').val() || 'japanese'
                 },
                 success: function(response) {
                     if (response.success) {

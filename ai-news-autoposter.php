@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.7.5');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.7.6');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -127,7 +127,7 @@ class AINewsAutoPoster {
                 'url_scraping' => array(
                     'search_keyword' => '',
                     'search_language' => 'japanese',
-                    'max_urls' => 10,
+                    'max_urls' => 5,
                     'summary_word_count' => 3000,
                     'saved_urls' => array(),
                     'selected_urls' => array()
@@ -1049,11 +1049,23 @@ class AINewsAutoPoster {
                                 <tr>
                                     <th>検索言語</th>
                                     <td>
-                                        <select id="scraping_language" name="ai_news_autoposter_settings[url_scraping][search_language]" class="ai-news-select">
-                                            <option value="japanese" <?php selected($settings['url_scraping']['search_language'] ?? 'japanese', 'japanese'); ?>>日本語</option>
-                                            <option value="english" <?php selected($settings['url_scraping']['search_language'] ?? 'japanese', 'english'); ?>>英語</option>
-                                            <option value="chinese" <?php selected($settings['url_scraping']['search_language'] ?? 'japanese', 'chinese'); ?>>中国語</option>
-                                        </select>
+                                        <div class="language-checkboxes" style="display: flex; gap: 15px;">
+                                            <label style="display: flex; align-items: center;">
+                                                <input type="checkbox" name="search_languages[]" value="japanese" checked style="margin-right: 5px;">
+                                                日本語
+                                            </label>
+                                            <label style="display: flex; align-items: center;">
+                                                <input type="checkbox" name="search_languages[]" value="english" style="margin-right: 5px;">
+                                                英語
+                                            </label>
+                                            <label style="display: flex; align-items: center;">
+                                                <input type="checkbox" name="search_languages[]" value="chinese" style="margin-right: 5px;">
+                                                中国語
+                                            </label>
+                                        </div>
+                                        <p class="description" style="margin-top: 5px; font-size: 12px; color: #666;">
+                                            複数選択可能。選択した言語のサイトからURLを検索します。
+                                        </p>
                                     </td>
                                 </tr>
                                 <tr>
@@ -1067,7 +1079,7 @@ class AINewsAutoPoster {
                                             <option value="20">大量収集 (20件)</option>
                                         </select>
                                         <input type="number" id="scraping_max_urls" name="ai_news_autoposter_settings[url_scraping][max_urls]" 
-                                               value="<?php echo esc_attr($settings['url_scraping']['max_urls'] ?? 10); ?>" 
+                                               value="<?php echo esc_attr($settings['url_scraping']['max_urls'] ?? 5); ?>" 
                                                class="ai-news-input" min="1" max="50" style="width: 80px;" />
                                         <span style="color: #666; font-size: 12px;">※精度重視なら3-5件、網羅性重視なら10-20件推奨</span>
                                     </td>
@@ -1138,16 +1150,29 @@ class AINewsAutoPoster {
                                 <p class="ai-news-form-description">取得したコンテンツのプレビュー:</p>
                                 <div id="scraped-content-list"></div>
                                 
+                                <!-- 記事生成言語選択 -->
+                                <div class="ai-news-generation-language" style="margin: 15px 0; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                                    <p class="ai-news-form-description"><strong>記事生成言語：</strong></p>
+                                    <select name="output_language" id="output_language" class="ai-news-select" style="width: 200px;">
+                                        <option value="japanese">日本語</option>
+                                        <option value="english">英語</option>
+                                        <option value="chinese">中国語</option>
+                                    </select>
+                                    <p class="description" style="margin-top: 5px; font-size: 12px; color: #666;">
+                                        最終的に生成される記事の言語を選択します。検索言語と異なる場合は翻訳されます。
+                                    </p>
+                                </div>
+                                
                                 <!-- 生成方式選択オプション -->
                                 <div class="ai-news-generation-options" style="margin: 15px 0; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
                                     <p class="ai-news-form-description"><strong>まとめ記事の生成方式：</strong></p>
                                     <label style="display: block; margin-bottom: 8px;">
-                                        <input type="radio" name="summary_mode" value="selected_only" style="margin-right: 8px;">
-                                        <strong>選択記事のみ</strong> - 上記で取得したコンテンツのみを使用（厳選された情報でまとめ）
+                                        <input type="radio" name="summary_mode" value="selected_only" checked style="margin-right: 8px;">
+                                        <strong>選択記事のみ</strong> - 上記で取得したコンテンツのみを使用（厳選された情報でまとめ・推奨）
                                     </label>
                                     <label style="display: block; margin-bottom: 8px;">
-                                        <input type="radio" name="summary_mode" value="enhanced_search" checked style="margin-right: 8px;">
-                                        <strong>拡張検索あり</strong> - 取得コンテンツ + Web検索で関連情報を追加（推奨）
+                                        <input type="radio" name="summary_mode" value="enhanced_search" style="margin-right: 8px;">
+                                        <strong>拡張検索あり</strong> - 取得コンテンツ + Web検索で関連情報を追加
                                     </label>
                                     <p class="description" style="margin-top: 8px; font-size: 12px; color: #666;">
                                         ※「選択記事のみ」は高品質で特定の情報源に絞ったまとめ、「拡張検索あり」は幅広い最新情報を含むまとめです
@@ -6644,7 +6669,24 @@ class AINewsAutoPoster {
         }
 
         $keyword = sanitize_text_field($_POST['keyword'] ?? '');
-        $language = sanitize_text_field($_POST['language'] ?? 'japanese');
+        $languages_raw = $_POST['languages'] ?? array();
+        $languages = array();
+        
+        // 送信された言語配列をサニタイズ
+        if (is_array($languages_raw)) {
+            foreach ($languages_raw as $lang) {
+                $clean_lang = sanitize_text_field($lang);
+                if (in_array($clean_lang, array('japanese', 'english', 'chinese'))) {
+                    $languages[] = $clean_lang;
+                }
+            }
+        }
+        
+        // デフォルト値を設定
+        if (empty($languages)) {
+            $languages = array('japanese');
+        }
+        
         $count = intval($_POST['max_urls'] ?? 5);
 
         if (empty($keyword)) {
@@ -6652,10 +6694,10 @@ class AINewsAutoPoster {
             return;
         }
 
-        $this->log('info', "URLスクレイピング: Gemini AIでキーワード検索開始 - キーワード: {$keyword}, 言語: {$language}, 件数: {$count}");
+        $this->log('info', "URLスクレイピング: Gemini AIでキーワード検索開始 - キーワード: {$keyword}, 言語: " . implode(',', $languages) . ", 件数: {$count}");
         
         // デバッグ用：直接ファイル出力
-        file_put_contents('/tmp/ai-url-debug.log', date('Y-m-d H:i:s') . " - URL検索開始: {$keyword}, {$language}, {$count}\n", FILE_APPEND);
+        file_put_contents('/tmp/ai-url-debug.log', date('Y-m-d H:i:s') . " - URL検索開始: {$keyword}, " . implode(',', $languages) . ", {$count}\n", FILE_APPEND);
 
         try {
             $settings = get_option('ai_news_autoposter_settings', array());
@@ -6672,10 +6714,15 @@ class AINewsAutoPoster {
                 'english' => '英語',
                 'chinese' => '中国語'
             );
-            $language_name = $language_map[$language] ?? '日本語';
+            
+            // 複数言語をマッピング
+            $language_names = array();
+            foreach ($languages as $lang) {
+                $language_names[] = $language_map[$lang] ?? '日本語';
+            }
 
-            // AI用のURL検索専用プロンプト
-            $prompt = $this->build_url_search_prompt($keyword, $language_name, $count);
+            // AI用のURL検索専用プロンプト（複数言語対応）
+            $prompt = $this->build_url_search_prompt($keyword, $language_names, $count);
 
             // URL検索はGoogle Search Grounding対応のGemini APIのみを使用
             $selected_model = $settings['claude_model'] ?? 'gemini-2.5-flash';
@@ -6798,22 +6845,31 @@ class AINewsAutoPoster {
     /**
      * Gemini AI用URL検索専用プロンプト構築
      */
-    private function build_url_search_prompt($keyword, $language_name, $count) {
-        // 言語別の推奨サイト
-        $site_suggestions = '';
-        switch ($language_name) {
-            case '日本語':
-                $site_suggestions = "- 推奨サイト: NHKニュース、朝日新聞、読売新聞、毎日新聞、日経新聞、Yahoo!ニュース、ITmediaなど\n";
-                break;
-            case '英語':
-                $site_suggestions = "- 推奨サイト: Reuters、BBC、CNN、TechCrunch、The Verge、Wired、Ars Technicaなど\n";
-                break;
-            case '中国語':
-                $site_suggestions = "- 推奨サイト: 新浪新闻、腾讯新闻、网易新闻、36氪、钛媒体など\n";
-                break;
+    private function build_url_search_prompt($keyword, $language_names, $count) {
+        // 複数言語の場合は配列、単一言語の場合は文字列として処理
+        if (!is_array($language_names)) {
+            $language_names = array($language_names);
         }
         
-        $prompt = "Search for {$count} recent articles about \"{$keyword}\" in {$language_name}.\n\n";
+        // 言語別の推奨サイト
+        $site_suggestions_list = array();
+        foreach ($language_names as $language_name) {
+            switch ($language_name) {
+                case '日本語':
+                    $site_suggestions_list[] = "- 日本語サイト: NHKニュース、朝日新聞、読売新聞、毎日新聞、日経新聞、Yahoo!ニュース、ITmediaなど";
+                    break;
+                case '英語':
+                    $site_suggestions_list[] = "- 英語サイト: Reuters、BBC、CNN、TechCrunch、The Verge、Wired、Ars Technicaなど";
+                    break;
+                case '中国語':
+                    $site_suggestions_list[] = "- 中国語サイト: 新浪新闻、腾讯新闻、网易新闻、36氪、钛媒体など";
+                    break;
+            }
+        }
+        $site_suggestions = implode("\n", $site_suggestions_list) . "\n";
+        
+        $languages_text = implode('、', $language_names);
+        $prompt = "Search for {$count} recent articles about \"{$keyword}\" in the following languages: {$languages_text}.\n\n";
         $prompt .= "Please find actual articles from reliable news websites and return them in this exact format:\n\n";
         $prompt .= "出力形式（この形式を厳密に守ってください）:\n";
         $prompt .= "```\n";
@@ -6832,7 +6888,9 @@ class AINewsAutoPoster {
         $prompt .= "- URLは実際にアクセス可能なものを選んでください\n";
         $prompt .= "- 各記事は「{$keyword}」と明確に関連していることを確認してください\n";
         $prompt .= "- できるだけ最新の記事を優先してください\n";
-        $prompt .= "- {$language_name}の記事のみを対象にしてください\n\n";
+        $prompt .= "- 以下の言語の記事を対象にしてください: {$languages_text}\n";
+        $prompt .= "- 各言語から適切に記事を選択してください\n\n";
+        $prompt .= $site_suggestions;
         $prompt .= "Google Search Groundingを使用して、最新で正確な情報を検索してください。";
 
         return $prompt;
@@ -7141,7 +7199,8 @@ class AINewsAutoPoster {
         $scraped_content_raw = $_POST['scraped_content'] ?? array();
         $word_count = intval($_POST['word_count'] ?? 800);
         $keyword = sanitize_text_field($_POST['keyword'] ?? '');
-        $summary_mode = sanitize_text_field($_POST['summary_mode'] ?? 'enhanced_search');
+        $summary_mode = sanitize_text_field($_POST['summary_mode'] ?? 'selected_only');
+        $output_language = sanitize_text_field($_POST['output_language'] ?? 'japanese');
 
         // scraped_content は配列として直接送信される
         if (is_array($scraped_content_raw)) {
@@ -7260,7 +7319,22 @@ class AINewsAutoPoster {
             $prompt .= "- 各段落には内容に応じた自然で魅力的な見出しを付ける（「概要」「背景」などの機械的な見出しは避ける）\n";
             $prompt .= "- 見出しは読者の興味を引く具体的で分かりやすいものにする\n";
             $prompt .= "- 情報を統合し、読みやすい記事にする\n";
-            $prompt .= "- 重複する情報は整理する\n\n";
+            $prompt .= "- 重複する情報は整理する\n";
+            
+            // 出力言語の指示を追加
+            $language_map = array(
+                'japanese' => '日本語',
+                'english' => '英語',
+                'chinese' => '中国語'
+            );
+            $output_language_name = $language_map[$output_language] ?? '日本語';
+            
+            if ($output_language !== 'japanese') {
+                $prompt .= "- **重要：記事は必ず{$output_language_name}で出力してください**\n";
+                $prompt .= "- 元の記事が他の言語で書かれている場合は、{$output_language_name}に翻訳して記事を作成してください\n";
+                $prompt .= "- タイトルと本文の全ての内容を{$output_language_name}で書いてください\n";
+            }
+            $prompt .= "\n";
             $prompt .= "出力形式:\n";
             $prompt .= "タイトル: [記事タイトル]\n";
             $prompt .= "本文: \n\n## [魅力的な見出し1]\n[導入内容]\n\n## [魅力的な見出し2]\n[背景・現状の内容]\n\n## [魅力的な見出し3]\n[詳細・分析の内容]\n\n## [魅力的な見出し4]\n[結論・展望の内容]";
