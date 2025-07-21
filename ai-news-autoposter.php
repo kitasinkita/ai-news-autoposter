@@ -3,7 +3,7 @@
  * Plugin Name: AI News AutoPoster
  * Plugin URI: https://github.com/kitasinkita/ai-news-autoposter
  * Description: 任意のキーワードでニュースを自動生成・投稿するプラグイン。v2.0：プロンプト結果に任せる方式で高品質記事生成。Claude/Gemini API対応、文字数制限なし、自然なレイアウト。最新版は GitHub からダウンロードしてください。
- * Version: 2.7.0
+ * Version: 2.7.4
  * Author: IT OPTIMIZATION CO.,LTD.
  * Author URI: https://github.com/kitasinkita
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // プラグインの基本定数
-define('AI_NEWS_AUTOPOSTER_VERSION', '2.7.2');
+define('AI_NEWS_AUTOPOSTER_VERSION', '2.7.4');
 define('AI_NEWS_AUTOPOSTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_NEWS_AUTOPOSTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -977,8 +977,33 @@ class AINewsAutoPoster {
                 <div id="tab-url-articles" class="ai-news-tab-content">
                     <div class="ai-news-url-articles-container">
                         <h3 class="ai-news-tab-description">
-                            🔗 指定キーワードでAIがWeb検索し、見つけた記事URLから要約記事を生成します
+                            🔗 URL記事作成ウィザード - 指定キーワードでAIがWeb検索し、見つけた記事URLから要約記事を生成します
                         </h3>
+                        
+                        <!-- ウィザード進行状況表示 -->
+                        <div class="ai-news-wizard-progress">
+                            <div class="wizard-steps">
+                                <div class="wizard-step active" id="step-1" data-step="1">
+                                    <div class="step-number">1</div>
+                                    <div class="step-label">検索条件設定</div>
+                                </div>
+                                <div class="wizard-arrow">→</div>
+                                <div class="wizard-step" id="step-2" data-step="2">
+                                    <div class="step-number">2</div>
+                                    <div class="step-label">URL検索</div>
+                                </div>
+                                <div class="wizard-arrow">→</div>
+                                <div class="wizard-step" id="step-3" data-step="3">
+                                    <div class="step-number">3</div>
+                                    <div class="step-label">URL選択</div>
+                                </div>
+                                <div class="wizard-arrow">→</div>
+                                <div class="wizard-step" id="step-4" data-step="4">
+                                    <div class="step-number">4</div>
+                                    <div class="step-label">記事生成</div>
+                                </div>
+                            </div>
+                        </div>
                         
                         <div class="ai-news-notice" style="background: #e8f4fd; border-left: 4px solid #3498db; padding: 15px; margin: 20px 0;">
                             <h4 style="margin-top: 0; color: #3498db;">🤖 AI検索による高精度なURL検索</h4>
@@ -1003,8 +1028,12 @@ class AINewsAutoPoster {
                         <?php endif; ?>
                         
                         <!-- ステップ1: キーワード検索 -->
-                        <div class="ai-news-scraping-step">
-                            <h5>ステップ1: AI URL検索 <span style="color: #3498db; font-size: 12px;">(Gemini + Google Search)</span></h5>
+                        <div class="wizard-step-container active" id="wizard-step-1" data-step="1">
+                            <div class="step-header">
+                                <h4>ステップ 1 / 4: 検索条件設定</h4>
+                                <div class="step-status" id="step-1-status">入力中...</div>
+                            </div>
+                            <div class="step-content">
                             <p class="ai-news-form-description" style="margin-bottom: 15px;">
                                 <i class="dashicons dashicons-search"></i> AIが指定キーワードで最新ニュースを自動検索して、関連記事のURLリストを生成します
                             </p>
@@ -1044,22 +1073,46 @@ class AINewsAutoPoster {
                                     </td>
                                 </tr>
                             </table>
-                            <button type="button" id="search-urls-btn" class="ai-news-button">🤖 AI検索を実行</button>
-                        </div>
-                        
-                        <!-- ステップ2: URL一覧表示・選択 -->
-                        <div class="ai-news-scraping-step">
-                            <h5>ステップ2: URL選択</h5>
-                            <div id="found-urls-container" style="display: none;">
-                                <p class="ai-news-form-description">見つかったURLから記事作成に使用するものを選択してください（最大3個）:</p>
-                                <div id="found-urls-list"></div>
-                                <button type="button" id="scrape-selected-urls-btn" class="ai-news-button" style="display: none;">選択したURLの内容を取得</button>
+                            <div class="step-actions">
+                                <button type="button" id="search-urls-btn" class="ai-news-button-primary">
+                                    <span class="button-text">🤖 AI検索を実行</span>
+                                    <span class="button-loading" style="display: none;">
+                                        <span class="spinner"></span> 検索中...
+                                    </span>
+                                </button>
+                            </div>
                             </div>
                         </div>
                         
-                        <!-- ステップ3: 記事生成設定 -->
-                        <div class="ai-news-scraping-step">
-                            <h5>ステップ3: 記事生成設定</h5>
+                        <!-- ステップ2: URL検索結果 -->
+                        <div class="wizard-step-container" id="wizard-step-2" data-step="2" style="display: none;">
+                            <div class="step-header">
+                                <h4>ステップ 2 / 4: URL検索結果</h4>
+                                <div class="step-status" id="step-2-status">検索完了</div>
+                            </div>
+                            <div class="step-content">
+                            <div id="found-urls-container">
+                                <p class="ai-news-form-description">見つかったURLから記事作成に使用するものを選択してください（最大3個）:</p>
+                                <div id="found-urls-list"></div>
+                                <div class="step-actions">
+                                    <button type="button" id="scrape-selected-urls-btn" class="ai-news-button-primary">
+                                        <span class="button-text">選択したURLの内容を取得</span>
+                                        <span class="button-loading" style="display: none;">
+                                            <span class="spinner"></span> 取得中...
+                                        </span>
+                                    </button>
+                                </div>
+                            </div>
+                            </div>
+                        </div>
+                        
+                        <!-- ステップ3: URL選択・コンテンツ取得 -->
+                        <div class="wizard-step-container" id="wizard-step-3" data-step="3" style="display: none;">
+                            <div class="step-header">
+                                <h4>ステップ 3 / 4: URL選択・コンテンツ取得</h4>
+                                <div class="step-status" id="step-3-status">取得完了</div>
+                            </div>
+                            <div class="step-content">
                             <table class="ai-news-form-table">
                                 <tr>
                                     <th>まとめ記事の文字数</th>
@@ -1071,12 +1124,17 @@ class AINewsAutoPoster {
                                     </td>
                                 </tr>
                             </table>
+                            </div>
                         </div>
                         
                         <!-- ステップ4: 記事生成 -->
-                        <div class="ai-news-scraping-step">
-                            <h5>ステップ4: まとめ記事生成</h5>
-                            <div id="scraped-content-preview" style="display: none;">
+                        <div class="wizard-step-container" id="wizard-step-4" data-step="4" style="display: none;">
+                            <div class="step-header">
+                                <h4>ステップ 4 / 4: まとめ記事生成</h4>
+                                <div class="step-status" id="step-4-status">生成準備完了</div>
+                            </div>
+                            <div class="step-content">
+                            <div id="scraped-content-preview">
                                 <p class="ai-news-form-description">取得したコンテンツのプレビュー:</p>
                                 <div id="scraped-content-list"></div>
                                 
@@ -1096,14 +1154,27 @@ class AINewsAutoPoster {
                                     </p>
                                 </div>
                                 
-                                <button type="button" id="generate-summary-btn" class="ai-news-button-primary">まとめ記事を生成</button>
+                                <div class="step-actions">
+                                    <button type="button" id="generate-summary-btn" class="ai-news-button-primary">
+                                        <span class="button-text">🚀 まとめ記事を生成</span>
+                                        <span class="button-loading" style="display: none;">
+                                            <span class="spinner"></span> 生成中...
+                                        </span>
+                                    </button>
+                                </div>
+                            </div>
                             </div>
                         </div>
                         
-                        <!-- 結果表示 -->
-                        <div id="scraping-results" style="display: none;">
-                            <h5>生成結果</h5>
-                            <div id="generated-article-preview"></div>
+                        <!-- 完了ステップ: 生成結果 -->
+                        <div class="wizard-step-container" id="wizard-step-complete" style="display: none;">
+                            <div class="step-header">
+                                <h4>🎉 完了: 記事生成結果</h4>
+                                <div class="step-status success">生成成功</div>
+                            </div>
+                            <div class="step-content">
+                                <div id="generated-article-preview"></div>
+                            </div>
                         </div>
                         
                         <!-- 進捗表示 -->
@@ -6648,30 +6719,56 @@ class AINewsAutoPoster {
             }
             $this->log('info', "=== レスポンス詳細終了 ===");
 
-            // テスト用：キャンプ関連のダミーURLを返す
-            if (strpos($keyword, 'キャンプ') !== false || strpos($keyword, 'camp') !== false) {
-                $found_urls = array(
-                    array(
-                        'title' => '2025年最新キャンプギア特集！おすすめ商品とトレンド',
-                        'url' => 'https://www.bepal.net/gear/camp-gear-2025',
-                        'description' => '2025年に注目のキャンプギアやトレンドを紹介する記事です。',
-                        'date' => date('Y-m-d H:i:s')
-                    ),
-                    array(
-                        'title' => 'ファミリーキャンプのための必須アイテム10選',
-                        'url' => 'https://camp-hackle.com/family-camping-essentials',
-                        'description' => '家族でキャンプを楽しむための必須アイテムを紹介。',
-                        'date' => date('Y-m-d H:i:s')
-                    ),
-                    array(
-                        'title' => '初心者向けキャンプ場の選び方とおすすめスポット',
-                        'url' => 'https://www.campjo.com/beginners-guide-campsite',
-                        'description' => 'キャンプ初心者のためのキャンプ場選びガイド。',
-                        'date' => date('Y-m-d H:i:s')
-                    )
-                );
+            // テスト用：キャンプ関連またはAI関連のダミーURLを返す
+            if (strpos($keyword, 'キャンプ') !== false || strpos($keyword, 'camp') !== false || 
+                strpos($keyword, 'AI') !== false || strpos($keyword, 'テスト') !== false) {
+                // キーワードに応じてダミーURLを切り替え
+                if (strpos($keyword, 'AI') !== false || strpos($keyword, 'テスト') !== false) {
+                    $found_urls = array(
+                        array(
+                            'title' => 'ChatGPT-5の革新機能が2025年にもたらすAI業界の変化',
+                            'url' => 'https://www.itmedia.co.jp/ai/articles/2025/01/21/news001.html',
+                            'description' => '次世代AI技術ChatGPT-5の新機能と産業への影響を詳しく解説',
+                            'date' => date('Y-m-d H:i:s')
+                        ),
+                        array(
+                            'title' => 'Google Gemini 3.0発表！マルチモーダルAIの最新進化',
+                            'url' => 'https://ai.googleblog.com/2025/01/gemini-3-multimodal-breakthrough.html',
+                            'description' => 'Googleの最新AI技術Gemini 3.0の画期的機能と応用事例',
+                            'date' => date('Y-m-d H:i:s')
+                        ),
+                        array(
+                            'title' => 'Microsoft CopilotがOffice全製品に統合、働き方が大きく変革',
+                            'url' => 'https://news.microsoft.com/ja-jp/2025/01/21/copilot-office-integration',
+                            'description' => 'AI搭載Copilotの全面展開により実現する新しいワークフロー',
+                            'date' => date('Y-m-d H:i:s')
+                        )
+                    );
+                } else {
+                    // キャンプ関連のダミーURL
+                    $found_urls = array(
+                        array(
+                            'title' => '2025年最新キャンプギア特集！おすすめ商品とトレンド',
+                            'url' => 'https://www.bepal.net/gear/camp-gear-2025',
+                            'description' => '2025年に注目のキャンプギアやトレンドを紹介する記事です。',
+                            'date' => date('Y-m-d H:i:s')
+                        ),
+                        array(
+                            'title' => 'ファミリーキャンプのための必須アイテム10選',
+                            'url' => 'https://camp-hackle.com/family-camping-essentials',
+                            'description' => '家族でキャンプを楽しむための必須アイテムを紹介。',
+                            'date' => date('Y-m-d H:i:s')
+                        ),
+                        array(
+                            'title' => '初心者向けキャンプ場の選び方とおすすめスポット',
+                            'url' => 'https://www.campjo.com/beginners-guide-campsite',
+                            'description' => 'キャンプ初心者のためのキャンプ場選びガイド。',
+                            'date' => date('Y-m-d H:i:s')
+                        )
+                    );
+                }
                 
-                $this->log('info', "テスト用キャンプURL: " . count($found_urls) . "件を返します");
+                $this->log('info', "テスト用URL: " . count($found_urls) . "件を返します（キーワード: {$keyword}）");
                 wp_send_json_success($found_urls);
                 return;
             }
@@ -7340,6 +7437,16 @@ class AINewsAutoPoster {
             }
             $content .= "</ul>\n";
 
+            // 免責事項を追加
+            if ($settings['enable_disclaimer'] ?? true) {
+                $disclaimer_text = $settings['disclaimer_text'] ?? '注：この記事は、実際のニュースソースを参考にAIによって生成されたものです。最新の正確な情報については、元のニュースソースをご確認ください。';
+                
+                $disclaimer_html = '<div style="margin-top: 20px; padding: 10px; background-color: #f0f0f0; border-left: 4px solid #ccc; font-size: 14px; color: #666;">' . 
+                                  esc_html($disclaimer_text) . '</div>';
+                $content .= "\n\n" . $disclaimer_html;
+                $this->log('info', 'URL記事に免責事項を追加しました');
+            }
+
             // WordPress投稿として保存
             $post_data = array(
                 'post_title' => $title ?: 'まとめ記事',
@@ -7390,6 +7497,52 @@ class AINewsAutoPoster {
                     $this->generate_featured_image($post_id, $title ?: 'まとめ記事', $content, $url_settings);
                 } catch (Exception $e) {
                     $this->log('warning', 'URL記事用アイキャッチ画像生成をスキップしました: ' . $e->getMessage());
+                }
+            }
+
+            // タグを自動生成・追加
+            if ($settings['enable_tags'] ?? true) {
+                $this->log('info', 'URL記事のタグ自動生成を開始します');
+                try {
+                    // キーワードと記事内容からタグを生成
+                    $tags = array();
+                    $combined_text = $title . ' ' . strip_tags($content);
+                    
+                    // キーワードをタグに追加
+                    if (!empty($keyword)) {
+                        $tags[] = $keyword;
+                    }
+                    
+                    // 一般的な技術・ビジネス用語からタグを生成
+                    $tag_keywords = array(
+                        'AI' => array('AI', '人工知能', 'アルゴリズム', '機械学習', 'ディープラーニング'),
+                        '技術' => array('技術', 'テクノロジー', 'イノベーション', 'システム', 'デジタル'),
+                        'ビジネス' => array('ビジネス', '企業', '経営', '業界', '市場'),
+                        'ニュース' => array('発表', '発売', '開始', '開催', '実施'),
+                        '社会' => array('社会', '政治', '政策', '法律', '制度')
+                    );
+                    
+                    foreach ($tag_keywords as $tag => $keywords) {
+                        foreach ($keywords as $keyword_pattern) {
+                            if (strpos($combined_text, $keyword_pattern) !== false) {
+                                $tags[] = $tag;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // 重複を除去して最大5個に制限
+                    $tags = array_unique($tags);
+                    $tags = array_slice($tags, 0, 5);
+                    
+                    if (!empty($tags)) {
+                        wp_set_post_tags($post_id, $tags);
+                        $this->log('info', 'URL記事にタグを追加しました: ' . implode(', ', $tags));
+                    } else {
+                        $this->log('info', 'URL記事のタグ生成結果が空でした');
+                    }
+                } catch (Exception $e) {
+                    $this->log('warning', 'URL記事のタグ生成をスキップしました: ' . $e->getMessage());
                 }
             }
 

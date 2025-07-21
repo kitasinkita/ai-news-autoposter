@@ -1482,3 +1482,378 @@ function updateMaxUrls() {
         preset.value = '';
     }
 }
+
+// ========================================
+// タブ3ウィザード制御クラス
+// ========================================
+const URLArticleWizard = {
+    currentStep: 1,
+    totalSteps: 4,
+    $: null, // jQuery オブジェクトを保持
+
+    init: function() {
+        this.$ = jQuery; // jQuery を明示的に設定
+        console.log('URLArticleWizard 初期化開始', this.$);
+        
+        // 既存のイベントハンドラーを削除
+        this.unbindWizardEvents();
+        
+        // 新しいイベントハンドラーをバインド
+        this.bindWizardEvents();
+        this.initializeWizardState();
+        console.log('URLArticleWizard 初期化完了');
+    },
+
+    unbindWizardEvents: function() {
+        // 既存のイベントハンドラーを削除（重複回避）
+        jQuery(document).off('click.wizard', '#search-urls-btn');
+        jQuery(document).off('click.wizard', '#scrape-selected-urls-btn'); 
+        jQuery(document).off('click.wizard', '#generate-summary-btn');
+    },
+
+    bindWizardEvents: function() {
+        const self = this;
+        const $ = jQuery; // 明示的にjQueryを$に割り当て
+        console.log('ウィザードイベント バインド開始');
+        
+        // 各ステップのボタンイベント（名前空間付きで重複回避）
+        $(document).on('click.wizard', '#search-urls-btn', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('検索ボタンクリック検出 - ウィザード処理開始');
+            self.handleStep1Action();
+            return false;
+        });
+        
+        $(document).on('click.wizard', '#scrape-selected-urls-btn', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('コンテンツ取得ボタンクリック検出');
+            self.handleStep2Action();
+            return false;
+        });
+        
+        $(document).on('click.wizard', '#generate-summary-btn', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('記事生成ボタンクリック検出');
+            self.handleStep3Action();
+            return false;
+        });
+        
+        console.log('ウィザードイベント バインド完了');
+    },
+
+    initializeWizardState: function() {
+        // 初期状態：ステップ1のみ表示
+        this.showStep(1);
+        this.updateWizardProgress(1);
+    },
+
+    showStep: function(stepNumber) {
+        const $ = this.$;
+        console.log(`ステップ${stepNumber}を表示`);
+        
+        // 全てのステップを非表示
+        $('.wizard-step-container').hide().removeClass('active');
+        
+        // 指定されたステップを表示
+        $(`#wizard-step-${stepNumber}`).show().addClass('active');
+        
+        this.currentStep = stepNumber;
+        this.updateWizardProgress(stepNumber);
+    },
+
+    updateWizardProgress: function(activeStep) {
+        const $ = this.$;
+        console.log(`ウィザード進行状況更新: ステップ${activeStep}`);
+        
+        $('.wizard-step').removeClass('active completed processing');
+        
+        for (let i = 1; i <= this.totalSteps; i++) {
+            const $step = $(`#step-${i}`);
+            
+            if (i < activeStep) {
+                $step.addClass('completed');
+            } else if (i === activeStep) {
+                $step.addClass('active');
+            }
+        }
+    },
+
+    setStepProcessing: function(stepNumber) {
+        const $ = this.$;
+        console.log(`ステップ${stepNumber}を処理中状態に変更`);
+        $(`#step-${stepNumber}`).addClass('processing').removeClass('active');
+    },
+
+    setStepCompleted: function(stepNumber) {
+        const $ = this.$;
+        console.log(`ステップ${stepNumber}を完了状態に変更`);
+        $(`#step-${stepNumber}`).addClass('completed').removeClass('processing active');
+    },
+
+    setStepStatus: function(stepNumber, status, message) {
+        const $ = this.$;
+        console.log(`ステップ${stepNumber}の状態を更新: ${status} - ${message}`);
+        const $statusEl = $(`#step-${stepNumber}-status`);
+        $statusEl.removeClass('success error processing').addClass(status);
+        $statusEl.text(message);
+    },
+
+    showButtonLoading: function($button) {
+        console.log('ボタンローディング状態を表示');
+        $button.prop('disabled', true);
+        $button.find('.button-text').hide();
+        $button.find('.button-loading').show();
+    },
+
+    hideButtonLoading: function($button) {
+        console.log('ボタンローディング状態を非表示');
+        $button.prop('disabled', false);
+        $button.find('.button-text').show();
+        $button.find('.button-loading').hide();
+    },
+
+    handleStep1Action: function() {
+        const $ = jQuery; // jQuery を明示的に設定
+        console.log('ステップ1: URL検索開始');
+        
+        // バリデーション
+        const keyword = $('#scraping_keyword').val().trim();
+        if (!keyword) {
+            alert('キーワードを入力してください。');
+            return;
+        }
+
+        const $button = $('#search-urls-btn');
+        this.showButtonLoading($button);
+        this.setStepProcessing(1);
+        this.setStepStatus(1, 'processing', 'URL検索中...');
+
+        // 既存のURL検索処理を実行
+        const originalSearchFunction = window.AINewsAutoPoster?.searchUrls;
+        if (originalSearchFunction) {
+            // 成功時のコールバックを設定
+            const originalCallback = originalSearchFunction;
+            
+            // URL検索実行
+            this.executeSearch(keyword).then(() => {
+                console.log('🔧 [WIZARD DEBUG] Promise.then 実行開始');
+                this.hideButtonLoading($button);
+                console.log('🔧 [WIZARD DEBUG] ボタンローディング非表示完了');
+                this.setStepCompleted(1);
+                console.log('🔧 [WIZARD DEBUG] ステップ1完了設定');
+                this.setStepStatus(1, 'success', '検索完了');
+                console.log('🔧 [WIZARD DEBUG] ステップ1状態更新');
+                this.showStep(2);
+                console.log('🔧 [WIZARD DEBUG] ステップ2表示実行');
+                this.setStepStatus(2, 'processing', 'URL選択待ち...');
+                console.log('🔧 [WIZARD DEBUG] ステップ2状態更新完了');
+            }).catch((error) => {
+                this.hideButtonLoading($button);
+                this.setStepStatus(1, 'error', '検索失敗');
+                console.error('URL検索エラー:', error);
+            });
+        }
+    },
+
+    executeSearch: function(keyword) {
+        const $ = jQuery; // jQuery を明示的に設定
+        return new Promise((resolve, reject) => {
+            $.ajax({
+                url: ai_news_autoposter_ajax.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'search_urls',
+                    nonce: ai_news_autoposter_ajax.nonce,
+                    keyword: keyword,
+                    max_urls: $('#scraping_max_urls').val() || 10
+                },
+                success: function(response) {
+                    if (response.success) {
+                        console.log('URL検索成功:', response.data);
+                        console.log('🔧 [WIZARD DEBUG] AJAX成功 - displayFoundUrls を呼び出します');
+                        // URL結果を表示
+                        window.AINewsAutoPoster.displayFoundUrls(response.data);
+                        console.log('🔧 [WIZARD DEBUG] displayFoundUrls 呼び出し完了 - resolve します');
+                        resolve(response.data);
+                    } else {
+                        reject(new Error(response.data || 'URL検索に失敗しました'));
+                    }
+                },
+                error: function(xhr, status, error) {
+                    reject(new Error(`AJAX エラー: ${error}`));
+                }
+            });
+        });
+    },
+
+    handleStep2Action: function() {
+        const $ = jQuery; // jQuery を明示的に設定
+        console.log('ステップ2: コンテンツ取得開始');
+
+        const selectedUrls = $('.url-item input:checked');
+        if (selectedUrls.length === 0) {
+            alert('コンテンツを取得するURLを選択してください。');
+            return;
+        }
+
+        const $button = $('#scrape-selected-urls-btn');
+        this.showButtonLoading($button);
+        this.setStepProcessing(2);
+        this.setStepStatus(2, 'processing', 'コンテンツ取得中...');
+
+        // コンテンツ取得実行
+        this.executeContentScraping().then(() => {
+            this.hideButtonLoading($button);
+            this.setStepCompleted(2);
+            this.setStepStatus(2, 'success', '取得完了');
+            this.showStep(4); // ステップ3をスキップしてステップ4へ
+            this.setStepStatus(4, 'processing', '記事生成準備中...');
+        }).catch((error) => {
+            this.hideButtonLoading($button);
+            this.setStepStatus(2, 'error', '取得失敗');
+            console.error('コンテンツ取得エラー:', error);
+        });
+    },
+
+    executeContentScraping: function() {
+        const $ = jQuery; // jQuery を明示的に設定
+        return new Promise((resolve, reject) => {
+            // 既存のスクレイピング処理を実行
+            const selectedData = [];
+            $('.url-item input:checked').each(function() {
+                const item = $(this).closest('.url-item');
+                selectedData.push({
+                    url: item.data('url'),
+                    title: item.find('.url-title').text()
+                });
+            });
+
+            $.ajax({
+                url: ai_news_autoposter_ajax.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'scrape_url_content',
+                    nonce: ai_news_autoposter_ajax.nonce,
+                    urls: selectedData
+                },
+                success: function(response) {
+                    if (response.success) {
+                        console.log('コンテンツ取得成功:', response.data);
+                        window.scrapedContentData = response.data;
+                        // プレビュー表示
+                        window.AINewsAutoPoster.displayScrapedContent(response.data);
+                        resolve(response.data);
+                    } else {
+                        reject(new Error(response.data || 'コンテンツ取得に失敗しました'));
+                    }
+                },
+                error: function(xhr, status, error) {
+                    reject(new Error(`AJAX エラー: ${error}`));
+                }
+            });
+        });
+    },
+
+    handleStep3Action: function() {
+        const $ = jQuery; // jQuery を明示的に設定
+        console.log('ステップ3: 記事生成開始');
+
+        if (!window.scrapedContentData || window.scrapedContentData.length === 0) {
+            alert('記事生成用のデータがありません。前のステップを完了してください。');
+            return;
+        }
+
+        const $button = $('#generate-summary-btn');
+        this.showButtonLoading($button);
+        this.setStepProcessing(4);
+        this.setStepStatus(4, 'processing', '記事生成中...');
+
+        // 記事生成実行
+        this.executeArticleGeneration().then((result) => {
+            this.hideButtonLoading($button);
+            this.setStepCompleted(4);
+            this.setStepStatus(4, 'success', '生成成功');
+            this.showCompletionStep(result);
+        }).catch((error) => {
+            this.hideButtonLoading($button);
+            this.setStepStatus(4, 'error', '生成失敗');
+            console.error('記事生成エラー:', error);
+        });
+    },
+
+    executeArticleGeneration: function() {
+        const $ = jQuery; // jQuery を明示的に設定
+        return new Promise((resolve, reject) => {
+            $.ajax({
+                url: ai_news_autoposter_ajax.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'generate_summary_article',
+                    nonce: ai_news_autoposter_ajax.nonce,
+                    scraped_content: window.scrapedContentData,
+                    word_count: $('#summary_word_count').val() || 3000,
+                    keyword: $('#scraping_keyword').val(),
+                    summary_mode: $('input[name="summary_mode"]:checked').val() || 'enhanced_search'
+                },
+                success: function(response) {
+                    if (response.success) {
+                        console.log('記事生成成功:', response.data);
+                        resolve(response.data);
+                    } else {
+                        reject(new Error(response.data || '記事生成に失敗しました'));
+                    }
+                },
+                error: function(xhr, status, error) {
+                    reject(new Error(`AJAX エラー: ${error}`));
+                }
+            });
+        });
+    },
+
+    showCompletionStep: function(result) {
+        const $ = jQuery; // jQuery を明示的に設定
+        $('#wizard-step-complete').show();
+        $('#generated-article-preview').html(`
+            <div class="article-generation-success">
+                <h4>✅ 記事生成が完了しました！</h4>
+                <div class="result-info">
+                    <p><strong>タイトル:</strong> ${result.title}</p>
+                    <p><strong>文字数:</strong> ${result.word_count}文字</p>
+                    <p><strong>投稿ID:</strong> ${result.post_id}</p>
+                </div>
+                <div class="result-actions">
+                    <a href="${result.edit_url}" target="_blank" class="button button-primary">記事を編集</a>
+                    <button type="button" class="button" onclick="location.reload()">新しい記事を作成</button>
+                </div>
+            </div>
+        `);
+        
+        // 全てのステップを完了状態に
+        $('.wizard-step').removeClass('active processing').addClass('completed');
+    }
+};
+
+// ページ読み込み完了後にウィザードを初期化
+jQuery(document).ready(function($) {
+    // ウィザードをグローバルに公開
+    window.URLArticleWizard = URLArticleWizard;
+    
+    // タブが切り替わった時にウィザードを初期化
+    $(document).on('click', 'button[data-tab="tab-url-articles"]', function() {
+        setTimeout(function() {
+            if ($('#tab-url-articles:visible').length) {
+                console.log('URLArticleWizard 初期化開始');
+                URLArticleWizard.init();
+            }
+        }, 100);
+    });
+    
+    // 既にタブ3が表示されている場合は即座に初期化
+    if ($('#tab-url-articles:visible').length) {
+        console.log('URLArticleWizard 初期化（ページロード時）');
+        URLArticleWizard.init();
+    }
+});
