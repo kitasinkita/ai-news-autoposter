@@ -1639,17 +1639,11 @@ const URLArticleWizard = {
             
             // URL検索実行
             this.executeSearch(keyword).then(() => {
-                console.log('🔧 [WIZARD DEBUG] Promise.then 実行開始');
                 this.hideButtonLoading($button);
-                console.log('🔧 [WIZARD DEBUG] ボタンローディング非表示完了');
                 this.setStepCompleted(1);
-                console.log('🔧 [WIZARD DEBUG] ステップ1完了設定');
                 this.setStepStatus(1, 'success', '検索完了');
-                console.log('🔧 [WIZARD DEBUG] ステップ1状態更新');
                 this.showStep(2);
-                console.log('🔧 [WIZARD DEBUG] ステップ2表示実行');
                 this.setStepStatus(2, 'processing', 'URL選択待ち...');
-                console.log('🔧 [WIZARD DEBUG] ステップ2状態更新完了');
             }).catch((error) => {
                 this.hideButtonLoading($button);
                 this.setStepStatus(1, 'error', '検索失敗');
@@ -1673,10 +1667,8 @@ const URLArticleWizard = {
                 success: function(response) {
                     if (response.success) {
                         console.log('URL検索成功:', response.data);
-                        console.log('🔧 [WIZARD DEBUG] AJAX成功 - displayFoundUrls を呼び出します');
                         // URL結果を表示
                         window.AINewsAutoPoster.displayFoundUrls(response.data);
-                        console.log('🔧 [WIZARD DEBUG] displayFoundUrls 呼び出し完了 - resolve します');
                         resolve(response.data);
                     } else {
                         reject(new Error(response.data || 'URL検索に失敗しました'));
